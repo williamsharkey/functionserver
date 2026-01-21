@@ -6,12 +6,11 @@ A multi-tenant cloud operating system that runs in the browser. Build apps visua
 
 ## Quick Start
 
-```bash
-# Install on any server
-curl -fsSL https://functionserver.com/install | bash
+**[Try the Live Demo](https://functionserver.com/app)** - no install needed
 
-# Or try it live
-https://functionserver.com/app
+Or deploy your own:
+```bash
+curl -fsSL https://functionserver.com/install | bash
 ```
 
 ## What is Function Server?
