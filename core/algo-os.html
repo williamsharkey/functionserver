@@ -61,9 +61,9 @@
 <div id="start-menu">
   <div class="start-sidebar">ALGO98</div>
   <div class="start-items">
-    <div class="start-item has-sub" onclick="toggleSubmenu(event, this)">
+    <div class="start-item has-sub" onclick="toggleSubmenu(event, this)" onmouseenter="openSubmenu(this)" onmouseleave="closeSubmenuDelay(this)">
       <span>📁</span> Programs
-      <div class="start-submenu" id="programs-menu">
+      <div class="start-submenu" id="programs-menu" onmouseenter="if(submenuCloseTimeout){clearTimeout(submenuCloseTimeout);submenuCloseTimeout=null;}" onmouseleave="closeSubmenuDelay(this.parentElement)">
         <div class="start-item" onclick="openNotepad()"><span>📝</span> Notepad</div>
         <div class="start-item" onclick="openJSIDE()"><span>📜</span> JavaScript.IDE</div>
         <div class="start-item" onclick="openBrowser()"><span>🌐</span> Web Browser</div>
@@ -176,6 +176,7 @@ function checkSession() {
 function startAsGuest() {
   currentUser = 'Guest';
   sessionToken = null;
+  hideLogin();
   document.getElementById('user-indicator').textContent = 'Guest (click to login)';
   document.getElementById('user-indicator').style.cursor = 'pointer';
   document.getElementById('user-indicator').onclick = showLogin;
@@ -1527,6 +1528,40 @@ ALGO.createWindow({
 });
 
 console.log('Calculator ready!');`
+  },
+  'counter': {
+    name: 'Counter',
+    code: `// Counter App
+ALGO.app.name = 'Counter';
+ALGO.app.icon = '🔢';
+
+window.counterVal = 0;
+
+window.counterInc = function() {
+  window.counterVal++;
+  document.getElementById('counter-display').innerHTML = '<h1 style="text-align:center;font-size:48px;">' + window.counterVal + '</h1>';
+};
+
+window.counterDec = function() {
+  window.counterVal--;
+  document.getElementById('counter-display').innerHTML = '<h1 style="text-align:center;font-size:48px;">' + window.counterVal + '</h1>';
+};
+
+ALGO.createWindow({
+  title: 'Counter',
+  width: 250,
+  height: 200,
+  content: '<div style="padding:20px;text-align:center;">' +
+    '<div id="counter-display"><h1 style="font-size:48px;">0</h1></div>' +
+    '<div>' +
+      '<button onclick="window.counterDec()" style="padding:10px 20px;font-size:20px;">-</button>' +
+      ' ' +
+      '<button onclick="window.counterInc()" style="padding:10px 20px;font-size:20px;">+</button>' +
+    '</div>' +
+  '</div>'
+});
+
+console.log('Counter app ready!');`
   },
   'filehandler': {
     name: 'File Handler Demo',
@@ -4472,14 +4507,51 @@ function hideStartMenu() {
   document.querySelectorAll('.start-item.submenu-open').forEach(el => el.classList.remove('submenu-open'));
 }
 
-function toggleSubmenu(e, el) {
-  e.stopPropagation();
+let submenuCloseTimeout = null;
+
+function openSubmenu(el) {
+  if (submenuCloseTimeout) {
+    clearTimeout(submenuCloseTimeout);
+    submenuCloseTimeout = null;
+  }
   // Close other submenus
   document.querySelectorAll('.start-item.submenu-open').forEach(item => {
-    if (item !== el) item.classList.remove('submenu-open');
+    if (item !== el) {
+      item.classList.remove('submenu-open');
+      const sub = item.querySelector('.start-submenu');
+      if (sub) sub.style.position = '';
+    }
   });
-  // Toggle this submenu
-  el.classList.toggle('submenu-open');
+  // Open this submenu
+  el.classList.add('submenu-open');
+  const submenu = el.querySelector('.start-submenu');
+  if (submenu) {
+    const rect = el.getBoundingClientRect();
+    submenu.style.position = 'fixed';
+    submenu.style.left = rect.right + 'px';
+    submenu.style.top = 'auto';
+    submenu.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+  }
+}
+
+function closeSubmenuDelay(el) {
+  submenuCloseTimeout = setTimeout(() => {
+    el.classList.remove('submenu-open');
+    const submenu = el.querySelector('.start-submenu');
+    if (submenu) submenu.style.position = '';
+  }, 300);
+}
+
+function toggleSubmenu(e, el) {
+  e.stopPropagation();
+  const isOpen = el.classList.contains('submenu-open');
+  if (isOpen) {
+    el.classList.remove('submenu-open');
+    const submenu = el.querySelector('.start-submenu');
+    if (submenu) submenu.style.position = '';
+  } else {
+    openSubmenu(el);
+  }
 }
 
 // ==================== UTILITIES ====================
