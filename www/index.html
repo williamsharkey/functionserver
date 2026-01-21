@@ -144,16 +144,112 @@ nav a:hover { color: var(--text-dark); }
   color: #fff;
 }
 
-.hero-image {
+/* Animated Terminal */
+.terminal-window {
+  background: #1e1e2e;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  box-shadow: 0 25px 80px rgba(0, 212, 170, 0.15), 0 10px 30px rgba(0,0,0,0.4);
   border: 1px solid #333;
 }
 
-.hero-image img {
-  width: 100%;
-  display: block;
+.terminal-header {
+  background: linear-gradient(180deg, #3a3a4a 0%, #2a2a3a 100%);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-btn.red { background: #ff5f56; }
+.terminal-btn.yellow { background: #ffbd2e; }
+.terminal-btn.green { background: #27ca40; }
+
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  color: #888;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.terminal-body {
+  padding: 20px;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 320px;
+  color: #cdd6f4;
+}
+
+.terminal-line {
+  margin-bottom: 4px;
+  opacity: 0;
+  transform: translateY(5px);
+  animation: fadeInLine 0.3s ease forwards;
+}
+
+.terminal-line.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes fadeInLine {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.prompt { color: var(--accent); }
+.command { color: #fff; }
+.output { color: #888; }
+.success { color: var(--accent); }
+.highlight-text { color: #f9e2af; }
+.dim { color: #585b70; }
+
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--accent);
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.progress-bar {
+  background: #313244;
+  border-radius: 4px;
+  height: 6px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #00ff88);
+  width: 0%;
+  transition: width 0.5s ease;
+  border-radius: 4px;
+}
+
+.ascii-art {
+  color: var(--accent);
+  white-space: pre;
+  font-size: 10px;
+  line-height: 1.2;
+  margin: 8px 0;
 }
 
 /* Flow Section */
@@ -311,6 +407,15 @@ footer a {
   .features-grid {
     grid-template-columns: 1fr;
   }
+
+  .terminal-body {
+    font-size: 12px;
+    min-height: 280px;
+  }
+
+  .ascii-art {
+    font-size: 8px;
+  }
 }
 </style>
 </head>
@@ -337,8 +442,18 @@ footer a {
       <p style="color: #666; font-size: 0.9rem;">Works on Ubuntu, Debian, CentOS, Fedora, Alpine, Arch, macOS</p>
     </div>
 
-    <div class="hero-image">
-      <img src="screenshots/desktop.png" alt="Function Server Desktop">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <div class="terminal-btn red"></div>
+        <div class="terminal-btn yellow"></div>
+        <div class="terminal-btn green"></div>
+        <div class="terminal-title">root@droplet ~ </div>
+      </div>
+      <div class="terminal-body" id="terminal">
+        <div class="terminal-line visible">
+          <span class="prompt">$ </span><span class="command" id="typed-cmd"></span><span class="cursor" id="cursor"></span>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -455,6 +570,93 @@ function copyInstall() {
     document.querySelector('.copy-btn').textContent = 'Copy';
   }, 2000);
 }
+
+// Terminal animation
+const terminal = document.getElementById('terminal');
+const typedCmd = document.getElementById('typed-cmd');
+const cursor = document.getElementById('cursor');
+const command = 'curl -fsSL https://functionserver.com/install | bash';
+
+const outputLines = [
+  { type: 'ascii', text: `
+  ___              _   _            ___
+ | __|  _ _ _  __ | |_(_)___ _ _   / __| ___ _ ___ _____ _ _
+ | _| || | ' \\/ _||  _| / _ \\ ' \\  \\__ \\/ -_) '_\\ V / -_) '_|
+ |_| \\_,_|_||_\\__| \\__|_\\___/_||_| |___/\\___|_|  \\_/\\___|_|` },
+  { type: 'output', text: '' },
+  { type: 'success', text: 'Installing Function Server...' },
+  { type: 'output', text: '' },
+  { type: 'output', text: 'Detecting platform: <span class="highlight-text">linux</span> (ubuntu 24.04)' },
+  { type: 'output', text: 'Checking dependencies...' },
+  { type: 'success', text: '✓ Go 1.22.2 already installed' },
+  { type: 'output', text: '' },
+  { type: 'output', text: 'Downloading Function Server...' },
+  { type: 'progress', percent: 100 },
+  { type: 'output', text: 'Building server...' },
+  { type: 'success', text: '✓ Build complete' },
+  { type: 'output', text: '' },
+  { type: 'output', text: 'Creating systemd service...' },
+  { type: 'success', text: '✓ Service installed' },
+  { type: 'output', text: '' },
+  { type: 'success', text: '════════════════════════════════════════════════════' },
+  { type: 'success', text: '  ⚡ Function Server installed successfully!' },
+  { type: 'success', text: '════════════════════════════════════════════════════' },
+  { type: 'output', text: '' },
+  { type: 'dim', text: '  Start:  sudo systemctl start functionserver' },
+  { type: 'dim', text: '  Access: <span class="highlight-text">http://YOUR_IP</span>' },
+];
+
+let charIndex = 0;
+let lineIndex = 0;
+
+function typeCommand() {
+  if (charIndex < command.length) {
+    typedCmd.textContent += command[charIndex];
+    charIndex++;
+    setTimeout(typeCommand, 30 + Math.random() * 40);
+  } else {
+    cursor.style.display = 'none';
+    setTimeout(showOutput, 400);
+  }
+}
+
+function showOutput() {
+  if (lineIndex < outputLines.length) {
+    const line = outputLines[lineIndex];
+    const div = document.createElement('div');
+    div.className = 'terminal-line';
+
+    if (line.type === 'ascii') {
+      div.innerHTML = `<span class="ascii-art">${line.text}</span>`;
+    } else if (line.type === 'progress') {
+      div.innerHTML = `<div class="progress-bar"><div class="progress-fill" id="progress-${lineIndex}"></div></div>`;
+      terminal.appendChild(div);
+      setTimeout(() => div.classList.add('visible'), 50);
+      setTimeout(() => {
+        document.getElementById(`progress-${lineIndex}`).style.width = line.percent + '%';
+      }, 100);
+      lineIndex++;
+      setTimeout(showOutput, 600);
+      return;
+    } else if (line.type === 'success') {
+      div.innerHTML = `<span class="success">${line.text}</span>`;
+    } else if (line.type === 'dim') {
+      div.innerHTML = `<span class="dim">${line.text}</span>`;
+    } else {
+      div.innerHTML = `<span class="output">${line.text}</span>`;
+    }
+
+    terminal.appendChild(div);
+    setTimeout(() => div.classList.add('visible'), 50);
+
+    lineIndex++;
+    const delay = line.type === 'ascii' ? 100 : (line.text === '' ? 50 : 120 + Math.random() * 80);
+    setTimeout(showOutput, delay);
+  }
+}
+
+// Start animation when page loads, with a slight delay
+setTimeout(typeCommand, 800);
 </script>
 
 </body>
