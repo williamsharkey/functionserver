@@ -499,11 +499,12 @@ func handleFileList(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveOS(w http.ResponseWriter, r *http.Request) {
-	// Try to find os.html
+	// Try to find algo-os.html (full ALGO OS) or fallback to os.html
 	paths := []string{
+		"../core/algo-os.html",
+		"./core/algo-os.html",
 		"../core/os.html",
 		"./core/os.html",
-		"./os.html",
 	}
 
 	var content []byte
