@@ -1,0 +1,16 @@
+{
+  "name": "cecilia-os",
+  "version": "1.0.0",
+  "description": "Multi-tenant web-based operating system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

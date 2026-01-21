@@ -1,0 +1,11 @@
+{
+  "name": "cecilia-tests",
+  "version": "1.0.0",
+  "description": "Tests for Cecilia OS",
+  "scripts": {
+    "test": "node test-os.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0"
+  }
+}

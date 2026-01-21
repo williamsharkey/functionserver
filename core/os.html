@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>{{OS_NAME}}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #008080;
+  min-height: 100vh;
+  font-family: 'MS Sans Serif', 'Segoe UI', Tahoma, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  font-size: 11px;
+}
+#desktop {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  bottom: 32px;
+  padding: 10px;
+}
+.desktop-icon {
+  position: absolute;
+  width: 64px;
+  text-align: center;
+  cursor: pointer;
+  padding: 4px;
+}
+.desktop-icon:hover { background: rgba(255,255,255,0.2); }
+.desktop-icon.selected { background: rgba(0,0,128,0.5); color: white; }
+.desktop-icon .icon { font-size: 32px; display: block; margin-bottom: 4px; }
+.desktop-icon .label { color: white; text-shadow: 1px 1px 1px black; font-size: 11px; word-wrap: break-word; }
+
+/* Taskbar */
+#taskbar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 32px;
+  background: #c0c0c0;
+  border-top: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  z-index: 9999;
+}
+#start-btn {
+  padding: 2px 8px;
+  font-weight: bold;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#start-btn:active { border-style: inset; }
+#taskbar-windows { flex: 1; display: flex; gap: 2px; margin-left: 4px; overflow: hidden; }
+.taskbar-btn {
+  padding: 2px 8px;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  cursor: pointer;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.taskbar-btn.active { border-style: inset; background: #fff; }
+#clock {
+  padding: 2px 8px;
+  background: #c0c0c0;
+  border: 2px inset #808080;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Start Menu */
+#start-menu {
+  position: fixed;
+  bottom: 32px;
+  left: 0;
+  width: 200px;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  display: none;
+  z-index: 10000;
+}
+#start-menu.show { display: block; }
+.start-menu-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.start-menu-item:hover { background: #000080; color: white; }
+.start-menu-separator { height: 1px; background: #808080; margin: 2px 4px; }
+
+/* Windows */
+.window {
+  position: absolute;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  min-width: 200px;
+  min-height: 100px;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+}
+.window-header {
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: white;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  cursor: move;
+}
+.window-header .title { flex: 1; font-weight: bold; display: flex; align-items: center; gap: 4px; }
+.window-btn {
+  width: 16px; height: 14px;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  font-size: 10px;
+  line-height: 10px;
+  text-align: center;
+  cursor: pointer;
+  margin-left: 2px;
+}
+.window-btn:active { border-style: inset; }
+.window-content {
+  padding: 0;
+  overflow: auto;
+  background: #fff;
+}
+.window.maximized {
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: calc(100% - 32px) !important;
+}
+.window-resize {
+  position: absolute;
+  right: 0; bottom: 0;
+  width: 16px; height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, #808080 50%, transparent 60%, #808080 70%);
+}
+
+/* Terminal */
+.terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0c0c0c;
+  font-family: 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+}
+.terminal-output {
+  flex: 1;
+  padding: 8px;
+  overflow-y: auto;
+  color: #33ff33;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.terminal-input-line {
+  display: flex;
+  padding: 4px 8px;
+  background: #1a1a1a;
+  border-top: 1px solid #333;
+}
+.terminal-prompt { color: #33ff33; margin-right: 8px; }
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #33ff33;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.terminal-output .error { color: #ff5555; }
+.terminal-output .info { color: #5555ff; }
+.terminal-output .success { color: #55ff55; }
+
+/* Login Dialog */
+#login-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+#login-overlay.hidden { display: none; }
+.login-dialog {
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  padding: 20px;
+  width: 320px;
+}
+.login-dialog h2 {
+  text-align: center;
+  margin-bottom: 15px;
+  color: #000080;
+}
+.login-dialog label { display: block; margin: 10px 0 4px; }
+.login-dialog input {
+  width: 100%;
+  padding: 4px;
+  border: 2px inset #808080;
+}
+.login-dialog .buttons {
+  margin-top: 15px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.login-dialog button {
+  padding: 4px 16px;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  cursor: pointer;
+}
+.login-dialog button:active { border-style: inset; }
+.login-dialog .error { color: red; font-size: 11px; margin-top: 8px; text-align: center; }
+.login-dialog .tabs { display: flex; margin-bottom: 15px; }
+.login-dialog .tab {
+  flex: 1;
+  padding: 6px;
+  text-align: center;
+  background: #e0e0e0;
+  cursor: pointer;
+  border: 1px solid #808080;
+}
+.login-dialog .tab.active { background: #c0c0c0; border-bottom: none; }
+
+/* User indicator */
+#user-indicator {
+  position: fixed;
+  top: 4px;
+  right: 4px;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  padding: 2px 8px;
+  font-size: 10px;
+  border-radius: 2px;
+  z-index: 9998;
+}
+</style>
+</head>
+<body>
+<div id="desktop"></div>
+
+<div id="taskbar">
+  <div id="start-btn"><span style="font-size:16px;">{{OS_ICON}}</span> Start</div>
+  <div id="taskbar-windows"></div>
+  <div id="clock">12:00</div>
+</div>
+
+<div id="start-menu">
+  <div class="start-menu-item" onclick="openTerminal()"><span>{{TERMINAL_ICON}}</span> Terminal</div>
+  <div class="start-menu-item" onclick="openFileManager()"><span>{{FOLDER_ICON}}</span> Files</div>
+  <div class="start-menu-item" onclick="openSettings()"><span>{{SETTINGS_ICON}}</span> Settings</div>
+  <div class="start-menu-separator"></div>
+  <div class="start-menu-item" onclick="logout()"><span>{{LOGOUT_ICON}}</span> Log Out</div>
+</div>
+
+<div id="user-indicator"></div>
+
+<div id="login-overlay">
+  <div class="login-dialog">
+    <h2>{{OS_ICON}} {{OS_NAME}}</h2>
+    <div class="tabs">
+      <div class="tab active" data-tab="login">Login</div>
+      <div class="tab" data-tab="register">Register</div>
+    </div>
+    <div id="login-form">
+      <label>Username:</label>
+      <input type="text" id="login-username" autocomplete="username">
+      <label>Password:</label>
+      <input type="password" id="login-password" autocomplete="current-password">
+      <div class="buttons">
+        <button onclick="doLogin()">Login</button>
+      </div>
+    </div>
+    <div id="register-form" style="display:none;">
+      <label>Username:</label>
+      <input type="text" id="reg-username" autocomplete="username">
+      <label>Password:</label>
+      <input type="password" id="reg-password" autocomplete="new-password">
+      <label>Confirm Password:</label>
+      <input type="password" id="reg-confirm" autocomplete="new-password">
+      <div class="buttons">
+        <button onclick="doRegister()">Create Account</button>
+      </div>
+    </div>
+    <div id="login-error" class="error"></div>
+  </div>
+</div>
+
+<script>
+// Configuration - replaced at runtime
+const OS_NAME = '{{OS_NAME}}';
+const OS_ICON = '{{OS_ICON}}';
+const API_BASE = '{{API_BASE}}';
+
+// State
+let currentUser = null;
+let sessionToken = null;
+let windows = [];
+let winId = 1;
+let zIndex = 100;
+let dragWindow = null;
+let dragOffset = { x: 0, y: 0 };
+let resizeWindow = null;
+
+// ==================== AUTH ====================
+function checkSession() {
+  const token = localStorage.getItem('session_token');
+  const user = localStorage.getItem('username');
+  if (token && user) {
+    fetch(API_BASE + '/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, username: user })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.valid) {
+        loginSuccess(user, token);
+      } else {
+        showLogin();
+      }
+    })
+    .catch(() => showLogin());
+  } else {
+    showLogin();
+  }
+}
+
+function showLogin() {
+  document.getElementById('login-overlay').classList.remove('hidden');
+}
+
+function hideLogin() {
+  document.getElementById('login-overlay').classList.add('hidden');
+}
+
+function loginSuccess(username, token) {
+  currentUser = username;
+  sessionToken = token;
+  localStorage.setItem('session_token', token);
+  localStorage.setItem('username', username);
+  hideLogin();
+  document.getElementById('user-indicator').textContent = username + '@' + OS_NAME;
+  createDesktopIcons();
+}
+
+function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!username || !password) {
+    errorEl.textContent = 'Please enter username and password';
+    return;
+  }
+
+  fetch(API_BASE + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      loginSuccess(data.username, data.token);
+    } else {
+      errorEl.textContent = data.error || 'Login failed';
+    }
+  })
+  .catch(e => {
+    errorEl.textContent = 'Connection error';
+  });
+}
+
+function doRegister() {
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm = document.getElementById('reg-confirm').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!username || !password) {
+    errorEl.textContent = 'Please fill all fields';
+    return;
+  }
+  if (password !== confirm) {
+    errorEl.textContent = 'Passwords do not match';
+    return;
+  }
+  if (username.length < 3 || !/^[a-z][a-z0-9_]*$/.test(username)) {
+    errorEl.textContent = 'Username must be 3+ chars, start with letter, lowercase alphanumeric';
+    return;
+  }
+
+  fetch(API_BASE + '/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      loginSuccess(data.username, data.token);
+    } else {
+      errorEl.textContent = data.error || 'Registration failed';
+    }
+  })
+  .catch(e => {
+    errorEl.textContent = 'Connection error';
+  });
+}
+
+function logout() {
+  localStorage.removeItem('session_token');
+  localStorage.removeItem('username');
+  currentUser = null;
+  sessionToken = null;
+  location.reload();
+}
+
+// Tab switching
+document.querySelectorAll('.login-dialog .tab').forEach(tab => {
+  tab.onclick = function() {
+    document.querySelectorAll('.login-dialog .tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+    const tabName = this.dataset.tab;
+    document.getElementById('login-form').style.display = tabName === 'login' ? 'block' : 'none';
+    document.getElementById('register-form').style.display = tabName === 'register' ? 'block' : 'none';
+    document.getElementById('login-error').textContent = '';
+  };
+});
+
+// ==================== WINDOWS ====================
+function createWindow(opts) {
+  hideStartMenu();
+  const id = winId++;
+  const w = document.createElement('div');
+  w.className = 'window';
+  w.id = 'window-' + id;
+  w.style.width = (opts.width || 400) + 'px';
+  w.style.height = (opts.height || 300) + 'px';
+  w.style.left = (50 + (id % 10) * 20) + 'px';
+  w.style.top = (50 + (id % 10) * 20) + 'px';
+  w.style.zIndex = ++zIndex;
+
+  w.innerHTML = `
+    <div class="window-header" data-winid="${id}">
+      <div class="title"><span>${opts.icon || ''}</span> ${escapeHtml(opts.title || 'Window')}</div>
+      <div class="window-btn" onclick="minimizeWindow(${id})">_</div>
+      <div class="window-btn" onclick="maximizeWindow(${id})">[]</div>
+      <div class="window-btn" onclick="closeWindow(${id})">X</div>
+    </div>
+    <div class="window-content" style="height:calc(100% - 24px);">${opts.content || ''}</div>
+    <div class="window-resize" data-winid="${id}"></div>
+  `;
+
+  document.getElementById('desktop').appendChild(w);
+
+  const winObj = { id, title: opts.title, icon: opts.icon, el: w, minimized: false, maximized: false };
+  windows.push(winObj);
+
+  addTaskbarBtn(winObj);
+
+  // Drag handling
+  w.querySelector('.window-header').addEventListener('mousedown', e => {
+    if (e.target.classList.contains('window-btn')) return;
+    dragWindow = winObj;
+    dragOffset.x = e.clientX - w.offsetLeft;
+    dragOffset.y = e.clientY - w.offsetTop;
+    w.style.zIndex = ++zIndex;
+    e.preventDefault();
+  });
+
+  // Resize handling
+  w.querySelector('.window-resize').addEventListener('mousedown', e => {
+    resizeWindow = winObj;
+    e.preventDefault();
+  });
+
+  w.addEventListener('mousedown', () => {
+    w.style.zIndex = ++zIndex;
+    updateTaskbarActive(id);
+  });
+
+  if (opts.onInit) setTimeout(opts.onInit, 0);
+
+  return id;
+}
+
+function closeWindow(id) {
+  const idx = windows.findIndex(w => w.id === id);
+  if (idx !== -1) {
+    windows[idx].el.remove();
+    windows.splice(idx, 1);
+    document.getElementById('taskbar-btn-' + id)?.remove();
+  }
+}
+
+function minimizeWindow(id) {
+  const win = windows.find(w => w.id === id);
+  if (win) {
+    win.minimized = !win.minimized;
+    win.el.style.display = win.minimized ? 'none' : 'block';
+    updateTaskbarActive(win.minimized ? -1 : id);
+  }
+}
+
+function maximizeWindow(id) {
+  const win = windows.find(w => w.id === id);
+  if (win) {
+    win.maximized = !win.maximized;
+    win.el.classList.toggle('maximized', win.maximized);
+  }
+}
+
+function addTaskbarBtn(win) {
+  const btn = document.createElement('div');
+  btn.className = 'taskbar-btn active';
+  btn.id = 'taskbar-btn-' + win.id;
+  btn.textContent = (win.icon || '') + ' ' + (win.title || 'Window');
+  btn.onclick = () => {
+    if (win.minimized) minimizeWindow(win.id);
+    win.el.style.zIndex = ++zIndex;
+    updateTaskbarActive(win.id);
+  };
+  document.getElementById('taskbar-windows').appendChild(btn);
+}
+
+function updateTaskbarActive(id) {
+  document.querySelectorAll('.taskbar-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === 'taskbar-btn-' + id);
+  });
+}
+
+// Mouse events for drag/resize
+document.addEventListener('mousemove', e => {
+  if (dragWindow) {
+    dragWindow.el.style.left = (e.clientX - dragOffset.x) + 'px';
+    dragWindow.el.style.top = (e.clientY - dragOffset.y) + 'px';
+  }
+  if (resizeWindow) {
+    const rect = resizeWindow.el.getBoundingClientRect();
+    resizeWindow.el.style.width = Math.max(200, e.clientX - rect.left) + 'px';
+    resizeWindow.el.style.height = Math.max(100, e.clientY - rect.top) + 'px';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  dragWindow = null;
+  resizeWindow = null;
+});
+
+// ==================== TERMINAL ====================
+function openTerminal() {
+  hideStartMenu();
+  const id = createWindow({
+    title: 'Terminal',
+    icon: '{{TERMINAL_ICON}}',
+    width: 700,
+    height: 450,
+    content: `
+      <div class="terminal-container">
+        <div class="terminal-output" id="term-out-${winId}"></div>
+        <div class="terminal-input-line">
+          <span class="terminal-prompt">${currentUser}@${OS_NAME}:~$</span>
+          <input type="text" class="terminal-input" id="term-in-${winId}" autofocus>
+        </div>
+      </div>
+    `
+  });
+
+  const termId = winId - 1;
+  const input = document.getElementById('term-in-' + termId);
+  const output = document.getElementById('term-out-' + termId);
+  let cwd = '~';
+  let history = [];
+  let historyIdx = -1;
+
+  function termPrint(text, cls) {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = text;
+    output.appendChild(line);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  function termPrintHtml(html) {
+    const line = document.createElement('div');
+    line.innerHTML = html;
+    output.appendChild(line);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  termPrint('Welcome to ' + OS_NAME + ' Terminal');
+  termPrint('Type "help" for available commands.\n');
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const cmd = input.value.trim();
+      input.value = '';
+      if (cmd) {
+        history.push(cmd);
+        historyIdx = history.length;
+        termPrint(currentUser + '@' + OS_NAME + ':' + cwd + '$ ' + cmd);
+        executeCommand(cmd, termPrint, termPrintHtml, (newCwd) => { cwd = newCwd; updatePrompt(); });
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (historyIdx > 0) {
+        historyIdx--;
+        input.value = history[historyIdx];
+      }
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      if (historyIdx < history.length - 1) {
+        historyIdx++;
+        input.value = history[historyIdx];
+      } else {
+        historyIdx = history.length;
+        input.value = '';
+      }
+      e.preventDefault();
+    }
+  });
+
+  function updatePrompt() {
+    input.previousElementSibling.textContent = currentUser + '@' + OS_NAME + ':' + cwd + '$ ';
+  }
+}
+
+async function executeCommand(cmd, print, printHtml, setCwd) {
+  const parts = cmd.split(/\s+/);
+  const command = parts[0].toLowerCase();
+  const args = parts.slice(1);
+
+  const builtins = {
+    help: () => {
+      print('Available commands:');
+      print('  help      - Show this help');
+      print('  ls        - List files');
+      print('  cd <dir>  - Change directory');
+      print('  pwd       - Print working directory');
+      print('  cat <file>- View file contents');
+      print('  mkdir <d> - Create directory');
+      print('  rm <file> - Remove file');
+      print('  touch <f> - Create empty file');
+      print('  echo <t>  - Print text');
+      print('  clear     - Clear terminal');
+      print('  whoami    - Show current user');
+      print('  uname     - Show system info');
+      print('  claude    - Start Claude Code');
+      print('  exit      - Close terminal');
+    },
+    clear: () => {
+      const output = print.toString().includes('term-out') ?
+        document.querySelector('.terminal-output:last-of-type') :
+        document.querySelector('.terminal-output');
+      if (output) output.innerHTML = '';
+    },
+    whoami: () => print(currentUser),
+    uname: () => print(OS_NAME + ' 1.0 ' + navigator.platform),
+    echo: () => print(args.join(' ')),
+    exit: () => {
+      const win = windows.find(w => w.title === 'Terminal');
+      if (win) closeWindow(win.id);
+    }
+  };
+
+  if (builtins[command]) {
+    builtins[command]();
+    return;
+  }
+
+  // Server-side commands
+  try {
+    const resp = await fetch(API_BASE + '/terminal/exec', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + sessionToken
+      },
+      body: JSON.stringify({ command: cmd, username: currentUser })
+    });
+    const data = await resp.json();
+
+    if (data.output) {
+      print(data.output);
+    }
+    if (data.error) {
+      print(data.error, 'error');
+    }
+    if (data.cwd) {
+      setCwd(data.cwd);
+    }
+  } catch (e) {
+    print('Error: ' + e.message, 'error');
+  }
+}
+
+// ==================== FILE MANAGER ====================
+function openFileManager() {
+  hideStartMenu();
+  createWindow({
+    title: 'Files',
+    icon: '{{FOLDER_ICON}}',
+    width: 500,
+    height: 400,
+    content: '<div style="padding:15px;"><p>File manager coming soon...</p></div>'
+  });
+}
+
+// ==================== SETTINGS ====================
+function openSettings() {
+  hideStartMenu();
+  createWindow({
+    title: 'Settings',
+    icon: '{{SETTINGS_ICON}}',
+    width: 400,
+    height: 300,
+    content: `
+      <div style="padding:15px;">
+        <h3 style="margin-bottom:15px;">User Settings</h3>
+        <p><strong>Username:</strong> ${currentUser}</p>
+        <p><strong>Home:</strong> /home/${currentUser}</p>
+        <hr style="margin:15px 0;">
+        <button onclick="logout()" style="padding:4px 12px;">Log Out</button>
+      </div>
+    `
+  });
+}
+
+// ==================== DESKTOP ====================
+function createDesktopIcons() {
+  const desktop = document.getElementById('desktop');
+  desktop.innerHTML = '';
+
+  const icons = [
+    { name: 'Terminal', icon: '{{TERMINAL_ICON}}', action: 'openTerminal()' },
+    { name: 'Files', icon: '{{FOLDER_ICON}}', action: 'openFileManager()' }
+  ];
+
+  icons.forEach((ic, i) => {
+    const el = document.createElement('div');
+    el.className = 'desktop-icon';
+    el.style.left = '10px';
+    el.style.top = (10 + i * 80) + 'px';
+    el.innerHTML = `<span class="icon">${ic.icon}</span><span class="label">${ic.name}</span>`;
+    el.ondblclick = () => eval(ic.action);
+    desktop.appendChild(el);
+  });
+}
+
+// ==================== START MENU ====================
+function hideStartMenu() {
+  document.getElementById('start-menu').classList.remove('show');
+}
+
+document.getElementById('start-btn').onclick = () => {
+  document.getElementById('start-menu').classList.toggle('show');
+};
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#start-menu') && !e.target.closest('#start-btn')) {
+    hideStartMenu();
+  }
+});
+
+// ==================== CLOCK ====================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ==================== UTILITIES ====================
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ==================== INIT ====================
+checkSession();
+</script>
+</body>
+</html>
