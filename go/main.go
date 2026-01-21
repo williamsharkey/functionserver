@@ -535,6 +535,18 @@ func main() {
 		handleFileList(w, r)
 	})
 
+	// Serve install script (proxy from GitHub)
+	mux.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
+		resp, err := http.Get("https://raw.githubusercontent.com/williamsharkey/cecilia/go-only/install/install.sh")
+		if err != nil {
+			http.Error(w, "Failed to fetch install script", 500)
+			return
+		}
+		defer resp.Body.Close()
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		io.Copy(w, resp.Body)
+	})
+
 	// Serve OS
 	mux.HandleFunc("/", serveOS)
 
