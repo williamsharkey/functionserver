@@ -797,6 +797,19 @@ func main() {
 	mux.HandleFunc("/app", serveOS)
 	mux.HandleFunc("/app/", serveOS)
 
+	// Serve OS CSS
+	mux.HandleFunc("/algo-os.css", func(w http.ResponseWriter, r *http.Request) {
+		paths := []string{"../core/algo-os.css", "./core/algo-os.css"}
+		for _, p := range paths {
+			if content, err := os.ReadFile(p); err == nil {
+				w.Header().Set("Content-Type", "text/css")
+				w.Write(content)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	// Serve static files from www directory (screenshots, etc)
 	wwwPaths := []string{"../www", "./www"}
 	var wwwDir string
