@@ -2557,15 +2557,37 @@ window.ALGO = {
     }
   },
 
-  // Save file to desktop
+  // Save file to server
   saveFile: function(name, content, type) {
-    if (window.savedFiles) {
-      window.savedFiles.push({ name: name, content: content, type: type || 'text' });
-      if (window.saveState) window.saveState();
-      if (window.createDesktopIcons) window.createDesktopIcons();
-      return true;
-    }
-    return false;
+    // Save to server
+    fetch(API_BASE + '/files/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + sessionToken
+      },
+      body: JSON.stringify({ path: name, content: content, type: type || 'text' })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        // Also keep in local array for desktop icons
+        if (window.savedFiles) {
+          const existing = window.savedFiles.findIndex(f => f.name === name);
+          if (existing >= 0) {
+            window.savedFiles[existing] = { name, content, type: type || 'text' };
+          } else {
+            window.savedFiles.push({ name, content, type: type || 'text' });
+          }
+          if (window.createDesktopIcons) window.createDesktopIcons();
+        }
+        console.log('File saved:', data.path);
+      } else {
+        console.error('Save failed:', data.error);
+      }
+    })
+    .catch(e => console.error('Save error:', e));
+    return true;
   },
 
   // Show notification
@@ -6704,8 +6726,44 @@ function getWindowByTitle(title) {
 }
 
 // ==================== PERSISTENCE ====================
+async function loadFilesFromServer() {
+  if (!sessionToken) return;
+  try {
+    const resp = await fetch(API_BASE + '/files/list?path=~', {
+      headers: { 'Authorization': 'Bearer ' + sessionToken }
+    });
+    const data = await resp.json();
+    if (data.files) {
+      savedFiles = [];
+      for (const file of data.files) {
+        if (file.type === 'file') {
+          // Load file content
+          const contentResp = await fetch(API_BASE + '/files/get?path=~/' + encodeURIComponent(file.name), {
+            headers: { 'Authorization': 'Bearer ' + sessionToken }
+          });
+          const contentData = await contentResp.json();
+          if (contentData.content !== undefined) {
+            // Detect type from extension
+            let type = 'text';
+            if (file.name.endsWith('.html')) type = 'html';
+            else if (file.name.endsWith('.js')) type = 'javascript';
+            else if (file.name.endsWith('.css')) type = 'css';
+            else if (file.name.endsWith('.json')) type = 'json';
+            else if (file.name.match(/\.(png|jpg|jpeg|gif|webp)$/i)) type = 'image';
+            savedFiles.push({ name: file.name, content: contentData.content, type });
+          }
+        }
+      }
+      if (window.createDesktopIcons) createDesktopIcons();
+    }
+  } catch (e) {
+    console.error('Failed to load files from server:', e);
+  }
+}
+
 function saveState() {
-  localStorage.setItem('algo-files', JSON.stringify(savedFiles));
+  // Files are saved to server individually via ALGO.saveFile()
+  // Keep other state in localStorage
   localStorage.setItem('algo-programs', JSON.stringify(installedPrograms));
   localStorage.setItem('algo-rooms', JSON.stringify(roomFolders));
   localStorage.setItem('algo-windows', JSON.stringify(windowStates));
@@ -6714,7 +6772,9 @@ function saveState() {
 
 function loadState() {
   try {
-    savedFiles = JSON.parse(localStorage.getItem('algo-files') || '[]');
+    // Load files from server
+    loadFilesFromServer();
+    // Load other state from localStorage
     installedPrograms = JSON.parse(localStorage.getItem('algo-programs') || '[]');
     roomFolders = JSON.parse(localStorage.getItem('algo-rooms') || '[]');
     windowStates = JSON.parse(localStorage.getItem('algo-windows') || '{}');

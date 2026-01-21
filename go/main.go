@@ -498,6 +498,158 @@ func handleFileList(w http.ResponseWriter, r *http.Request) {
 	}, 200)
 }
 
+func handleFileSave(w http.ResponseWriter, r *http.Request) {
+	username := requireAuth(r)
+	if username == "" {
+		jsonResponse(w, map[string]string{"error": "Authorization required"}, 401)
+		return
+	}
+
+	var req struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+		Type    string `json:"type"` // text, html, etc.
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonResponse(w, map[string]string{"error": "Invalid request"}, 400)
+		return
+	}
+
+	if req.Path == "" {
+		jsonResponse(w, map[string]string{"error": "Path required"}, 400)
+		return
+	}
+
+	homeDir := filepath.Join(config.HomesDir, username)
+	os.MkdirAll(homeDir, 0755)
+
+	// Resolve path
+	filePath := req.Path
+	if strings.HasPrefix(filePath, "~/") {
+		filePath = filepath.Join(homeDir, filePath[2:])
+	} else if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(homeDir, filePath)
+	}
+
+	resolved, err := filepath.Abs(filePath)
+	if err != nil || !strings.HasPrefix(resolved, homeDir) {
+		jsonResponse(w, map[string]string{"error": "Access denied"}, 403)
+		return
+	}
+
+	// Create parent directory if needed
+	os.MkdirAll(filepath.Dir(resolved), 0755)
+
+	// Write file
+	if err := os.WriteFile(resolved, []byte(req.Content), 0644); err != nil {
+		jsonResponse(w, map[string]string{"error": "Failed to save file"}, 500)
+		return
+	}
+
+	displayPath := strings.Replace(resolved, homeDir, "~", 1)
+	jsonResponse(w, map[string]interface{}{
+		"success": true,
+		"path":    displayPath,
+	}, 200)
+}
+
+func handleFileGet(w http.ResponseWriter, r *http.Request) {
+	username := requireAuth(r)
+	if username == "" {
+		jsonResponse(w, map[string]string{"error": "Authorization required"}, 401)
+		return
+	}
+
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		jsonResponse(w, map[string]string{"error": "Path required"}, 400)
+		return
+	}
+
+	homeDir := filepath.Join(config.HomesDir, username)
+
+	// Resolve path
+	filePath := path
+	if strings.HasPrefix(filePath, "~/") {
+		filePath = filepath.Join(homeDir, filePath[2:])
+	} else if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(homeDir, filePath)
+	}
+
+	resolved, err := filepath.Abs(filePath)
+	if err != nil || !strings.HasPrefix(resolved, homeDir) {
+		jsonResponse(w, map[string]string{"error": "Access denied"}, 403)
+		return
+	}
+
+	content, err := os.ReadFile(resolved)
+	if err != nil {
+		jsonResponse(w, map[string]string{"error": "File not found"}, 404)
+		return
+	}
+
+	info, _ := os.Stat(resolved)
+	displayPath := strings.Replace(resolved, homeDir, "~", 1)
+	jsonResponse(w, map[string]interface{}{
+		"path":     displayPath,
+		"content":  string(content),
+		"size":     info.Size(),
+		"modified": info.ModTime().Unix(),
+	}, 200)
+}
+
+func handleFileDelete(w http.ResponseWriter, r *http.Request) {
+	username := requireAuth(r)
+	if username == "" {
+		jsonResponse(w, map[string]string{"error": "Authorization required"}, 401)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonResponse(w, map[string]string{"error": "Invalid request"}, 400)
+		return
+	}
+
+	if req.Path == "" {
+		jsonResponse(w, map[string]string{"error": "Path required"}, 400)
+		return
+	}
+
+	homeDir := filepath.Join(config.HomesDir, username)
+
+	// Resolve path
+	filePath := req.Path
+	if strings.HasPrefix(filePath, "~/") {
+		filePath = filepath.Join(homeDir, filePath[2:])
+	} else if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(homeDir, filePath)
+	}
+
+	resolved, err := filepath.Abs(filePath)
+	if err != nil || !strings.HasPrefix(resolved, homeDir) {
+		jsonResponse(w, map[string]string{"error": "Access denied"}, 403)
+		return
+	}
+
+	// Don't allow deleting home directory itself
+	if resolved == homeDir {
+		jsonResponse(w, map[string]string{"error": "Cannot delete home directory"}, 403)
+		return
+	}
+
+	if err := os.RemoveAll(resolved); err != nil {
+		jsonResponse(w, map[string]string{"error": "Failed to delete"}, 500)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{"success": true}, 200)
+}
+
 func serveOS(w http.ResponseWriter, r *http.Request) {
 	// Try to find algo-os.html (full ALGO OS) or fallback to os.html
 	paths := []string{
@@ -592,6 +744,36 @@ func main() {
 			return
 		}
 		handleFileList(w, r)
+	})
+
+	mux.HandleFunc("/api/files/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			return
+		}
+		handleFileSave(w, r)
+	})
+
+	mux.HandleFunc("/api/files/get", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			return
+		}
+		handleFileGet(w, r)
+	})
+
+	mux.HandleFunc("/api/files/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			return
+		}
+		handleFileDelete(w, r)
 	})
 
 	// Serve install script (proxy from GitHub)
