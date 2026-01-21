@@ -1,0 +1,245 @@
+#!/bin/bash
+#
+# Function Server Installer
+# https://functionserver.com
+#
+# Usage: curl -fsSL https://functionserver.com/install | bash
+#
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# Defaults
+INSTALL_DIR="/opt/functionserver"
+REPO_URL="https://github.com/williamsharkey/functionserver"
+BRANCH="go-only"
+
+echo ""
+echo -e "${CYAN}${BOLD}Function Server Installer${NC}"
+echo -e "${CYAN}=========================${NC}"
+echo ""
+
+# Detect OS
+detect_os() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        OS="linux"
+        if command -v apt-get &> /dev/null; then
+            PKG_MANAGER="apt"
+        elif command -v dnf &> /dev/null; then
+            PKG_MANAGER="dnf"
+        elif command -v yum &> /dev/null; then
+            PKG_MANAGER="yum"
+        elif command -v pacman &> /dev/null; then
+            PKG_MANAGER="pacman"
+        elif command -v apk &> /dev/null; then
+            PKG_MANAGER="apk"
+        else
+            PKG_MANAGER="unknown"
+        fi
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        OS="macos"
+        PKG_MANAGER="brew"
+    else
+        OS="unknown"
+        PKG_MANAGER="unknown"
+    fi
+
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "x86_64" ]]; then
+        ARCH="amd64"
+    elif [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
+        ARCH="arm64"
+    fi
+}
+
+# Check if running as root
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        if command -v sudo &> /dev/null; then
+            SUDO="sudo"
+        else
+            echo -e "${RED}Error: This script requires root privileges.${NC}"
+            echo "Please run: sudo bash -c \"\$(curl -fsSL https://functionserver.com/install)\""
+            exit 1
+        fi
+    else
+        SUDO=""
+    fi
+}
+
+# Check for required tools
+check_dependencies() {
+    local missing=()
+
+    if ! command -v git &> /dev/null; then
+        missing+=("git")
+    fi
+
+    if ! command -v go &> /dev/null; then
+        missing+=("go")
+    fi
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo -e "${YELLOW}Installing missing dependencies: ${missing[*]}${NC}"
+
+        case $PKG_MANAGER in
+            apt)
+                $SUDO apt-get update -qq
+                $SUDO apt-get install -y -qq "${missing[@]}" 2>/dev/null
+                if [[ " ${missing[*]} " =~ " go " ]]; then
+                    $SUDO apt-get install -y -qq golang-go 2>/dev/null || install_go_manually
+                fi
+                ;;
+            dnf|yum)
+                $SUDO $PKG_MANAGER install -y -q "${missing[@]}" 2>/dev/null
+                if [[ " ${missing[*]} " =~ " go " ]]; then
+                    $SUDO $PKG_MANAGER install -y -q golang 2>/dev/null || install_go_manually
+                fi
+                ;;
+            pacman)
+                $SUDO pacman -Sy --noconfirm "${missing[@]}" 2>/dev/null
+                ;;
+            apk)
+                $SUDO apk add --quiet "${missing[@]}" 2>/dev/null
+                ;;
+            brew)
+                for pkg in "${missing[@]}"; do
+                    brew install -q "$pkg" 2>/dev/null
+                done
+                ;;
+            *)
+                echo -e "${RED}Cannot install dependencies automatically.${NC}"
+                echo "Please install: ${missing[*]}"
+                exit 1
+                ;;
+        esac
+    fi
+}
+
+# Install Go manually if package manager version is too old
+install_go_manually() {
+    echo -e "${YELLOW}Installing Go manually...${NC}"
+    GO_VERSION="1.21.5"
+
+    if [[ "$OS" == "linux" ]]; then
+        GO_URL="https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz"
+    elif [[ "$OS" == "macos" ]]; then
+        GO_URL="https://go.dev/dl/go${GO_VERSION}.darwin-${ARCH}.tar.gz"
+    fi
+
+    curl -fsSL "$GO_URL" -o /tmp/go.tar.gz
+    $SUDO rm -rf /usr/local/go
+    $SUDO tar -C /usr/local -xzf /tmp/go.tar.gz
+    rm /tmp/go.tar.gz
+
+    export PATH=$PATH:/usr/local/go/bin
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.profile
+}
+
+# Clone and build
+install_functionserver() {
+    echo -e "${BLUE}Downloading Function Server...${NC}"
+
+    # Create install directory
+    $SUDO mkdir -p "$INSTALL_DIR"
+
+    # Clone repository
+    if [[ -d "$INSTALL_DIR/.git" ]]; then
+        echo "Updating existing installation..."
+        cd "$INSTALL_DIR"
+        $SUDO git fetch origin
+        $SUDO git checkout "$BRANCH"
+        $SUDO git pull origin "$BRANCH"
+    else
+        echo "Cloning repository..."
+        $SUDO git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR" 2>/dev/null
+    fi
+
+    # Build
+    echo -e "${BLUE}Building...${NC}"
+    cd "$INSTALL_DIR/go"
+    $SUDO /usr/local/go/bin/go build -o functionserver . 2>/dev/null || $SUDO go build -o functionserver .
+
+    # Create symlink
+    $SUDO ln -sf "$INSTALL_DIR/go/functionserver" /usr/local/bin/functionserver 2>/dev/null || true
+}
+
+# Create systemd service (Linux only)
+setup_systemd() {
+    if [[ "$OS" == "linux" ]] && command -v systemctl &> /dev/null; then
+        echo -e "${BLUE}Setting up systemd service...${NC}"
+
+        $SUDO tee /etc/systemd/system/functionserver.service > /dev/null << EOF
+[Unit]
+Description=Function Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$INSTALL_DIR/go
+ExecStart=$INSTALL_DIR/go/functionserver
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        $SUDO systemctl daemon-reload
+        $SUDO systemctl enable functionserver 2>/dev/null || true
+
+        echo -e "${GREEN}Systemd service created.${NC}"
+        echo "  Start:   sudo systemctl start functionserver"
+        echo "  Stop:    sudo systemctl stop functionserver"
+        echo "  Status:  sudo systemctl status functionserver"
+    fi
+}
+
+# Print success message
+print_success() {
+    echo ""
+    echo -e "${GREEN}${BOLD}✓ Function Server installed!${NC}"
+    echo ""
+    echo -e "${BOLD}To start the server:${NC}"
+    echo ""
+    echo "  cd $INSTALL_DIR/go"
+    echo "  ./functionserver"
+    echo ""
+    echo -e "Then open ${CYAN}http://localhost:8080${NC} in your browser."
+    echo ""
+
+    if [[ "$OS" == "linux" ]] && command -v systemctl &> /dev/null; then
+        echo -e "${BOLD}Or use systemd:${NC}"
+        echo ""
+        echo "  sudo systemctl start functionserver"
+        echo ""
+    fi
+
+    echo -e "Documentation: ${CYAN}https://github.com/williamsharkey/functionserver${NC}"
+    echo ""
+}
+
+# Main
+main() {
+    detect_os
+
+    echo -e "OS:   ${BOLD}$OS${NC} ($ARCH)"
+    echo -e "Pkg:  ${BOLD}$PKG_MANAGER${NC}"
+    echo ""
+
+    check_root
+    check_dependencies
+    install_functionserver
+    setup_systemd
+    print_success
+}
+
+main

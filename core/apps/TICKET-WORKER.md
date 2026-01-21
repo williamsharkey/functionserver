@@ -61,7 +61,7 @@ ssh root@functionserver.com "cd /opt/functionserver/go && go build -o functionse
 ```
 [TICKET-REPLY:TICKET_ID] Your message here [STATUS:status]
 
-#algo-world:dolphin42
+#general
 ```
 
 Status options: `open`, `working`, `complete`

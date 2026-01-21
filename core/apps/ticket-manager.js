@@ -122,15 +122,8 @@ function _tm_select(ticketId) {
 }
 
 function _tm_claim(ticketId) {
-  const text = '[TICKET-REPLY:' + ticketId + '] Working on this now. [STATUS:working]\n\n#algo-world:dolphin42';
-  fetch('/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'text=' + encodeURIComponent(text)
-  }).then(() => {
-    ALGO.notify('Claimed ticket!');
-    setTimeout(_tm_refresh, 1000);
-  });
+  // For now, just show a notification - full claim API can be added later
+  ALGO.notify('Ticket claim feature coming soon!');
 }
 
 // Lazy-load the worker instructions
@@ -163,7 +156,7 @@ ${ticket.description || 'No description provided'}
 \`\`\`
 [TICKET-REPLY:${ticketId}] Your message here [STATUS:status]
 
-#algo-world:dolphin42
+#general
 \`\`\`
 
 ---
@@ -222,19 +215,22 @@ function _tm_submit() {
   const status = document.getElementById('tm-status');
   if (status) status.textContent = 'Submitting...';
 
-  let postContent = '[TICKET] ' + title;
-  if (desc) postContent += '\n' + desc;
-  postContent += '\n\n#algo-world:dolphin42';
-
-  fetch('/', {
+  fetch('/api/tickets', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'yo=489&text=' + encodeURIComponent(postContent) + '&save=POST'
-  }).then(() => {
-    _tm_hideNew();
-    _tm_refresh();
-    ALGO.notify('Ticket submitted! ALGO will review it.');
-  }).catch(() => {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: title, description: desc })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      _tm_hideNew();
+      _tm_refresh();
+      ALGO.notify('Ticket submitted!');
+    } else {
+      if (status) status.textContent = 'Error';
+    }
+  })
+  .catch(() => {
     if (status) status.textContent = 'Error';
   });
 }

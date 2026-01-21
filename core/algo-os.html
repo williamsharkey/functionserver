@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ALGO OS - Laserbarf Clubhouse</title>
+<title>Function Server</title>
 <link rel="stylesheet" href="algo-os.css">
 </head>
 <body>
@@ -42,7 +42,7 @@
 
 <div id="user-indicator"></div>
 <div id="desktop"></div>
-<div id="algo-dolphin" class="swimming">🐬</div>
+<div id="toast-container"></div>
 
 <div id="taskbar">
   <div id="start-btn" onclick="toggleStartMenu()">
@@ -59,7 +59,7 @@
 </div>
 
 <div id="start-menu">
-  <div class="start-sidebar">ALGO98</div>
+  <div class="start-sidebar">FunctionServer</div>
   <div class="start-items">
     <div class="start-item has-sub" onclick="toggleSubmenu(event, this)" onmouseenter="openSubmenu(this)" onmouseleave="closeSubmenuDelay(this)">
       <span>📁</span> Programs
@@ -68,26 +68,14 @@
         <div class="start-item" onclick="openJSIDE()"><span>📜</span> JavaScript.IDE</div>
         <div class="start-item" onclick="openBrowser()"><span>🌐</span> Web Browser</div>
         <div class="start-separator"></div>
-        <div class="start-item" onclick="openClaudeWizard()"><span>🤖</span> Claude Wizard</div>
-        <div class="start-item" onclick="openGeminiWizard()"><span>💎</span> Gemini Wizard</div>
-        <div class="start-item" onclick="openGPTWizard()"><span>🧠</span> GPT Wizard</div>
-        <div class="start-separator"></div>
-        <div class="start-item" onclick="openChat()"><span>💬</span> ALGO Chat</div>
-        <div class="start-item" onclick="openWebcam()"><span>📹</span> ALGO Webcam</div>
-        <div class="start-separator"></div>
-        <div class="start-item" onclick="openMusicPlayer()"><span>🎵</span> Music Player</div>
-        <div class="start-item" onclick="openMidiEditor()"><span>🎹</span> MIDI Editor</div>
-        <div class="start-item" onclick="openTodoApp()"><span>📋</span> Todo Manager</div>
-        <div class="start-item" onclick="openCalendarApp()"><span>📅</span> Calendar</div>
-        <div class="start-separator"></div>
         <div id="installed-programs-menu"></div>
       </div>
     </div>
     <div class="start-item" onclick="openDocumentation()"><span style="color:#8B0000;">📕</span> Documentation</div>
-    <div class="start-item" onclick="openHelp()"><span style="color:#8B0000;">📙</span> ALGO OS Help</div>
+    <div class="start-item" onclick="openHelp()"><span style="color:#8B0000;">📙</span> Help</div>
     <div class="start-separator"></div>
     <div class="start-item" onclick="openNotepad()"><span>📝</span> New Post</div>
-    <div class="start-item" onclick="createStickyNote()"><span>📌</span> New Sticky Note</div>
+    <div class="start-item" onclick="runSystemApp('sticky-notes')"><span>📌</span> Sticky Notes</div>
     <div class="start-separator"></div>
     <div class="start-item" onclick="showAbout()"><span>ℹ️</span> About</div>
     <div class="start-item" onclick="openSettings()"><span>⚙️</span> Settings</div>
@@ -98,17 +86,6 @@
 
 <div id="context-menu"></div>
 
-<div id="algo-sprite" style="left:100px;top:350px;" onclick="algoSpeak()">
-  <svg width="48" height="48" viewBox="0 0 48 48">
-    <ellipse cx="24" cy="24" rx="18" ry="12" fill="#1E90FF"/>
-    <ellipse cx="32" cy="22" rx="4" ry="3" fill="white"/>
-    <circle cx="33" cy="22" r="1.5" fill="black"/>
-    <path d="M6 24 Q2 20 6 16" stroke="#1E90FF" stroke-width="3" fill="none"/>
-    <path d="M42 24 L52 20" stroke="#1E90FF" stroke-width="4" fill="none"/>
-    <ellipse cx="24" cy="28" rx="6" ry="2" fill="#B0E0E6"/>
-  </svg>
-</div>
-<div id="speech-bubble"></div>
 
 <div id="todo-overlay">
   <div class="overlay-header">
@@ -494,42 +471,42 @@ let calendarWidgetDragOffset = { x: 0, y: 0 };
 
 const HELP_CONTENT = {
   'welcome': {
-    title: 'Welcome to ALGO OS',
-    content: `<h1>Welcome to ALGO OS</h1>
-<p>ALGO OS is your retro computing experience on Laserbarf!</p>
+    title: 'Welcome',
+    content: `<h1>Welcome to Function Server</h1>
+<p>A cloud operating system in your browser.</p>
 <h2>Getting Started</h2>
 <ul>
 <li><b>Double-click</b> icons to open programs</li>
 <li><b>Right-click</b> for context menus</li>
-<li>Use the <b>Start Menu</b> to access programs</li>
+<li>Use the <b>Start Menu</b> to access all programs</li>
 </ul>
-<h2>AI Wizards</h2>
-<p>Use Claude, Gemini, or GPT wizards to create new artifacts!</p>
-<h2>Secret Key</h2>
-<p>You're in the trusted zone with key <code>dolphin42</code></p>`
+<h2>AI Agents</h2>
+<p>Use the Agents app to generate code with Claude, Gemini, or GPT.</p>
+<h2>Building Apps</h2>
+<p>Use Designer for layouts, Craft for components, and JavaScript.IDE to code.</p>`
   },
-  'wizards': {
-    title: 'AI Wizards',
-    content: `<h1>AI App Wizards</h1>
-<p>Create new artifacts using AI!</p>
+  'agents': {
+    title: 'AI Agents',
+    content: `<h1>AI Agents</h1>
+<p>Generate code and apps using AI models.</p>
 <h2>Setup</h2>
 <ol>
-<li>Open a wizard from Start → Programs</li>
+<li>Open Agents from Start → Programs</li>
+<li>Select a model (Claude, Gemini, or GPT)</li>
 <li>Enter your API key (saved locally)</li>
-<li>Describe what you want to create</li>
-<li>Click Generate!</li>
+<li>Describe what you want to build</li>
 </ol>
 <p>Generated apps appear on your desktop.</p>`
   },
   'chat': {
-    title: 'ALGO Chat',
-    content: `<h1>ALGO Chat</h1>
-<p>Chat with other ALGO OS users in real-time!</p>
+    title: 'Chat',
+    content: `<h1>Chat</h1>
+<p>Chat with other users in real-time.</p>
 <h2>Features</h2>
 <ul>
 <li>See who's online</li>
 <li>Send messages</li>
-<li>Messages persist in #algo-world</li>
+<li>P2P WebRTC connections</li>
 </ul>`
   },
   'shadestation': {
@@ -555,11 +532,6 @@ const HELP_CONTENT = {
   }
 };
 
-const DOC_URLS = {
-  'top-secret': '/top-secret',
-  'artifact-guide': '/artifact-guide',
-  'secret-ai': '/secret-ai'
-};
 
 // ==================== INIT ====================
 function init() {
@@ -761,7 +733,7 @@ function init() {
     }
   });
 
-  setTimeout(() => algoSpeak("Welcome to ALGO OS! Try the AI Wizards!"), 1500);
+  setTimeout(() => algoSpeak("Welcome to Function Server!"), 1500);
 }
 
 function handleDesktopPaste(e) {
@@ -848,15 +820,13 @@ function createDesktopIcons() {
     { id: FOLDER_RECYCLE, name: 'Recycle Bin', icon: recycleBin.length > 0 ? '🗑️' : '🗑️', x: window.innerWidth - 100, y: 100, action: 'openFolder', folderId: FOLDER_RECYCLE },
   ];
 
-  // Fewer default app icons - most apps moved to Programs folder
+  // Desktop icons - organized for a clean, professional look
+  // Left column: Core productivity tools
   const defaultIcons = [
-    { id: 'docs', name: 'Documentation', icon: '📕', x: 20, y: 20, action: 'openDocumentation' },
+    { id: 'jsIDE', name: 'JavaScript.IDE', icon: '📜', x: 20, y: 20, action: 'openJSIDE' },
     { id: 'notepad', name: 'Notepad', icon: '📝', x: 20, y: 100, action: 'openNotepad' },
-    { id: 'jsIDE', name: 'JavaScript.IDE', icon: '📜', x: 20, y: 180, action: 'openJSIDE' },
-    { id: 'browser', name: 'Web Browser', icon: '🌐', x: 20, y: 260, action: 'openBrowser' },
-    { id: 'chat', name: 'ALGO Chat', icon: '💬', x: 20, y: 340, action: 'openChat' },
-    // ALGO dolphin as movable icon
-    { id: 'algo-dolphin', name: 'ALGO', icon: '🐬', x: 100, y: 350, action: 'algoSpeak' },
+    { id: 'browser', name: 'Web Browser', icon: '🌐', x: 20, y: 180, action: 'openBrowser' },
+    { id: 'docs', name: 'Documentation', icon: '📕', x: 20, y: 260, action: 'openDocumentation' },
   ];
 
   systemFolderIcons.forEach(ic => createDesktopIcon(ic));
@@ -1188,7 +1158,7 @@ function notepadPost(id) {
   const text = textarea.value.trim();
   if (!text) { alert('Nothing to post!'); return; }
 
-  const room = textarea.dataset.room || 'algo-world';
+  const room = textarea.dataset.room || 'general';
   postToLaserbarf(text, room);
   hideMenus();
   algoSpeak('Posted to #' + room + '!');
@@ -1268,7 +1238,7 @@ function createRoomFolder() {
 // ==================== JAVASCRIPT IDE ====================
 // ALGO API library for IDE scripts
 const ALGO_API_CODE = `
-// ALGO OS App API
+// ALGO API Reference
 window.ALGO = {
   // App metadata
   app: { name: 'My App', icon: '📱', version: '1.0' },
@@ -1382,7 +1352,7 @@ ALGO.createWindow({
   width: 300,
   height: 150,
   content: ALGO.ui.panel(
-    '<h2>Hello, ALGO OS!</h2>' +
+    '<h2>Hello, World!</h2>' +
     '<p>Welcome to JavaScript.IDE</p>' +
     ALGO.ui.button('Say Hi', function() {
       ALGO.notify('Hello from my app!');
@@ -1595,7 +1565,7 @@ function openJSIDE(content, filename) {
   filename = filename || '';
   const id = winId;
 
-  const defaultCode = `// ALGO OS App - JavaScript.IDE
+  const defaultCode = `// Function Server App
 // Use the ALGO API to create apps!
 
 ALGO.app.name = 'My App';
@@ -1764,7 +1734,7 @@ function ideShowAPI(id) {
     icon: '📖',
     width: 450, height: 400,
     content: '<div style="padding:15px;overflow:auto;height:100%;font-size:11px;">' +
-      '<h2>ALGO OS App API</h2>' +
+      '<h2>ALGO API Reference</h2>' +
       '<h3>App Metadata</h3>' +
       '<pre>ALGO.app.name = "My App";\nALGO.app.icon = "📱";</pre>' +
       '<h3>Create Window</h3>' +
@@ -1780,7 +1750,7 @@ function ideShowAPI(id) {
 }
 
 function ideNew(id) {
-  const defaultCode = `// ALGO OS App - JavaScript.IDE
+  const defaultCode = `// Function Server App
 ALGO.app.name = 'My App';
 ALGO.app.icon = '🚀';
 
@@ -1968,95 +1938,299 @@ function browserFwd(id) {
   try { document.getElementById('browser-frame-' + id).contentWindow.history.forward(); } catch(e) {}
 }
 
-// ==================== AI WIZARDS ====================
-function openClaudeWizard() { openAIWizard('claude', '🤖', 'Claude Wizard', 'anthropic'); }
-function openGeminiWizard() { openAIWizard('gemini', '💎', 'Gemini Wizard', 'google'); }
-function openGPTWizard() { openAIWizard('gpt', '🧠', 'GPT Wizard', 'openai'); }
-
-function openAIWizard(provider, icon, title, providerKey) {
+// ==================== AGENTS ====================
+function openAgents() {
+  hideStartMenu();
   const id = winId;
-  const savedKey = apiKeys[provider] || '';
+  const savedClaude = apiKeys['claude'] || '';
+  const savedGemini = apiKeys['gemini'] || '';
+  const savedGpt = apiKeys['gpt'] || '';
+
   createWindow({
-    title: title,
-    stateKey: title,
-    icon: icon,
-    width: 500, height: 450,
-    content: '<div class="wizard-container">' +
-      '<div class="wizard-header">' +
-        '<div class="icon">' + icon + '</div>' +
-        '<div><h2>' + title + '</h2><p>Create artifacts with AI</p></div>' +
+    title: 'Agents',
+    stateKey: 'Agents',
+    icon: '⚡',
+    width: 550, height: 520,
+    content: '<div class="agents-container">' +
+      '<div class="agents-header">' +
+        '<h2>⚡ AI Agents</h2>' +
+        '<p>Generate code, build apps, or run as ticket worker</p>' +
       '</div>' +
-      '<div class="wizard-form">' +
-        '<label>API Key:</label>' +
-        '<input type="password" id="wizard-key-' + id + '" value="' + savedKey + '" placeholder="Enter your ' + provider.toUpperCase() + ' API key">' +
-        '<button onclick="saveApiKey(\'' + provider + '\',' + id + ')">Save Key</button>' +
-        '<label style="margin-top:10px;">Describe your artifact:</label>' +
-        '<textarea id="wizard-prompt-' + id + '" placeholder="e.g., A retro space invaders game with neon colors"></textarea>' +
-        '<div class="wizard-buttons">' +
-          '<button onclick="generateArtifact(\'' + providerKey + '\',' + id + ')">✨ Generate</button>' +
+      '<div class="agents-form">' +
+        '<div class="agents-row">' +
+          '<label>Model:</label>' +
+          '<select id="agent-model-' + id + '" onchange="agentModelChange(' + id + ')">' +
+            '<option value="claude">Claude (Anthropic)</option>' +
+            '<option value="gemini">Gemini (Google)</option>' +
+            '<option value="gpt">GPT (OpenAI)</option>' +
+          '</select>' +
         '</div>' +
-        '<div class="wizard-status" id="wizard-status-' + id + '">Ready to create!</div>' +
+        '<div class="agents-row">' +
+          '<label>API Key:</label>' +
+          '<input type="password" id="agent-key-' + id + '" value="' + savedClaude + '" placeholder="Enter API key">' +
+          '<button onclick="agentSaveKey(' + id + ')">Save</button>' +
+        '</div>' +
+        '<div class="agents-row">' +
+          '<label>Mode:</label>' +
+          '<select id="agent-mode-' + id + '">' +
+            '<option value="generate">Generate App</option>' +
+            '<option value="code">Generate Code</option>' +
+            '<option value="ticket">Ticket Worker</option>' +
+          '</select>' +
+        '</div>' +
+        '<label>Prompt:</label>' +
+        '<textarea id="agent-prompt-' + id + '" placeholder="Describe what you want to build..."></textarea>' +
+        '<div class="agents-buttons">' +
+          '<button onclick="agentGenerate(' + id + ')">⚡ Run Agent</button>' +
+          '<button onclick="agentStop(' + id + ')" id="agent-stop-' + id + '" style="display:none;">⏹ Stop</button>' +
+        '</div>' +
+        '<div class="agents-output" id="agent-output-' + id + '">Ready</div>' +
       '</div>' +
     '</div>'
   });
 }
 
-function saveApiKey(provider, id) {
-  const key = document.getElementById('wizard-key-' + id).value.trim();
+function agentModelChange(id) {
+  const model = document.getElementById('agent-model-' + id).value;
+  const keyInput = document.getElementById('agent-key-' + id);
+  keyInput.value = apiKeys[model] || '';
+}
+
+function agentSaveKey(id) {
+  const model = document.getElementById('agent-model-' + id).value;
+  const key = document.getElementById('agent-key-' + id).value.trim();
   if (key) {
-    apiKeys[provider] = key;
+    apiKeys[model] = key;
     saveState();
-    document.getElementById('wizard-status-' + id).textContent = 'API key saved!';
+    document.getElementById('agent-output-' + id).textContent = 'API key saved for ' + model;
   }
 }
 
-function generateArtifact(provider, id) {
-  const key = document.getElementById('wizard-key-' + id).value.trim();
-  const prompt = document.getElementById('wizard-prompt-' + id).value.trim();
-  const status = document.getElementById('wizard-status-' + id);
+let agentRunning = false;
 
-  if (!key) { status.textContent = 'Please enter an API key!'; return; }
-  if (!prompt) { status.textContent = 'Please describe what to create!'; return; }
+function agentGenerate(id) {
+  const model = document.getElementById('agent-model-' + id).value;
+  const key = document.getElementById('agent-key-' + id).value.trim();
+  const mode = document.getElementById('agent-mode-' + id).value;
+  const prompt = document.getElementById('agent-prompt-' + id).value.trim();
+  const output = document.getElementById('agent-output-' + id);
+  const stopBtn = document.getElementById('agent-stop-' + id);
 
-  status.textContent = 'Generating... please wait...';
+  if (!key) { output.textContent = 'Please enter an API key'; return; }
+  if (!prompt) { output.textContent = 'Please enter a prompt'; return; }
+
+  agentRunning = true;
+  stopBtn.style.display = 'inline-block';
+  output.textContent = 'Running agent...';
+
+  // Map model to provider key
+  const providerMap = { claude: 'anthropic', gemini: 'google', gpt: 'openai' };
+  const provider = providerMap[model];
 
   fetch('/api/ai-create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider: provider, apiKey: key, prompt: prompt })
+    body: JSON.stringify({ provider: provider, apiKey: key, prompt: prompt, mode: mode })
   })
   .then(r => r.json())
   .then(data => {
+    agentRunning = false;
+    stopBtn.style.display = 'none';
+
     if (data.error) {
-      status.textContent = 'Error: ' + data.error;
+      output.textContent = 'Error: ' + data.error;
       return;
     }
-    if (data.html) {
-      // Generate a name from prompt
-      const words = prompt.split(/\s+/).slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'artifact';
+
+    if (mode === 'code') {
+      // Just show the code
+      output.innerHTML = '<pre style="white-space:pre-wrap;font-size:11px;">' + escapeHtml(data.code || data.html || 'No output') + '</pre>';
+    } else if (data.html) {
+      // Save as app
+      const words = prompt.split(/\\s+/).slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'app';
       const name = words + '-' + Date.now().toString(36);
 
-      // Post to algo-world with key
-      const postContent = '#' + name + ':dolphin42\n' + data.html;
-
-      fetch('/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'yo=489&text=' + encodeURIComponent(postContent) + '&save=POST'
-      }).then(() => {
-        // Add to installed programs
-        installedPrograms.push({ id: name, name: name, url: '/' + name + ':dolphin42', icon: '✨' });
-        saveState();
-        createDesktopIcons();
-        updateProgramsMenu();
-        status.textContent = 'Created! ' + name + ' is on your desktop.';
-        algoSpeak('New app created: ' + name);
+      // Save to local storage as installed program with code
+      installedPrograms.push({
+        id: name,
+        name: name,
+        icon: '✨',
+        code: data.html
       });
+      saveState();
+      createDesktopIcons();
+      updateProgramsMenu();
+      output.textContent = 'Created: ' + name;
+      algoSpeak('New app: ' + name);
+    } else {
+      output.textContent = data.message || 'Done';
     }
   })
   .catch(e => {
-    status.textContent = 'Network error: ' + e.message;
+    agentRunning = false;
+    stopBtn.style.display = 'none';
+    output.textContent = 'Error: ' + e.message;
   });
+}
+
+function agentStop(id) {
+  agentRunning = false;
+  document.getElementById('agent-stop-' + id).style.display = 'none';
+  document.getElementById('agent-output-' + id).textContent = 'Stopped';
+}
+
+// ==================== DESIGNER ====================
+function openDesigner() {
+  hideStartMenu();
+  const id = winId;
+  createWindow({
+    title: 'Designer',
+    stateKey: 'Designer',
+    icon: '📐',
+    width: 700, height: 500,
+    content: '<div class="designer-container">' +
+      '<div class="designer-toolbar">' +
+        '<select id="designer-screen-' + id + '" onchange="designerLoadScreen(' + id + ')">' +
+          '<option value="">New Screen</option>' +
+        '</select>' +
+        '<button onclick="designerNewScreen(' + id + ')">+ Screen</button>' +
+        '<button onclick="designerSave(' + id + ')">💾 Save</button>' +
+        '<button onclick="designerPreview(' + id + ')">▶ Preview</button>' +
+      '</div>' +
+      '<div class="designer-main">' +
+        '<div class="designer-components">' +
+          '<h4>Components</h4>' +
+          '<div class="comp-item" draggable="true" data-type="button">Button</div>' +
+          '<div class="comp-item" draggable="true" data-type="text">Text</div>' +
+          '<div class="comp-item" draggable="true" data-type="input">Input</div>' +
+          '<div class="comp-item" draggable="true" data-type="image">Image</div>' +
+          '<div class="comp-item" draggable="true" data-type="container">Container</div>' +
+        '</div>' +
+        '<div class="designer-canvas" id="designer-canvas-' + id + '">' +
+          '<div class="canvas-placeholder">Drag components here</div>' +
+        '</div>' +
+        '<div class="designer-props" id="designer-props-' + id + '">' +
+          '<h4>Properties</h4>' +
+          '<p style="color:#666;font-size:11px;">Select a component</p>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function designerNewScreen(id) {
+  const name = prompt('Screen name:', 'screen-' + Date.now().toString(36));
+  if (!name) return;
+  const canvas = document.getElementById('designer-canvas-' + id);
+  canvas.innerHTML = '';
+  canvas.dataset.screen = name;
+  const select = document.getElementById('designer-screen-' + id);
+  const opt = document.createElement('option');
+  opt.value = name;
+  opt.textContent = name;
+  select.appendChild(opt);
+  select.value = name;
+}
+
+function designerSave(id) {
+  const canvas = document.getElementById('designer-canvas-' + id);
+  const screenName = canvas.dataset.screen || 'untitled';
+  const layout = { screen: screenName, components: [] };
+  // TODO: Extract components from canvas
+  const filename = screenName + '.layout';
+  savedFiles.push({ name: filename, type: 'text', content: JSON.stringify(layout, null, 2) });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + filename);
+}
+
+function designerPreview(id) {
+  algoSpeak('Preview coming soon');
+}
+
+function designerLoadScreen(id) {
+  // TODO: Load screen from saved layouts
+}
+
+// ==================== CRAFT ====================
+function openCraft() {
+  hideStartMenu();
+  const id = winId;
+  createWindow({
+    title: 'Craft',
+    stateKey: 'Craft',
+    icon: '🔧',
+    width: 650, height: 480,
+    content: '<div class="craft-container">' +
+      '<div class="craft-toolbar">' +
+        '<select id="craft-component-' + id + '" onchange="craftLoadComponent(' + id + ')">' +
+          '<option value="">New Component</option>' +
+        '</select>' +
+        '<button onclick="craftNew(' + id + ')">+ Component</button>' +
+        '<button onclick="craftSave(' + id + ')">💾 Save</button>' +
+        '<button onclick="craftTest(' + id + ')">▶ Test</button>' +
+      '</div>' +
+      '<div class="craft-main">' +
+        '<div class="craft-editor">' +
+          '<h4>Component Definition</h4>' +
+          '<textarea id="craft-code-' + id + '" style="width:100%;height:200px;font-family:monospace;font-size:12px;">' +
+'ALGO.component(\'MyButton\', {\n' +
+'  props: [\'text\', \'onClick\'],\n' +
+'  render: (props) => `\n' +
+'    <button onclick="${props.onClick}">\n' +
+'      ${props.text}\n' +
+'    </button>\n' +
+'  `\n' +
+'});</textarea>' +
+        '</div>' +
+        '<div class="craft-preview" id="craft-preview-' + id + '">' +
+          '<h4>Preview</h4>' +
+          '<div style="padding:20px;border:1px dashed #ccc;min-height:100px;">' +
+            '<p style="color:#888;">Click Test to preview</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function craftNew(id) {
+  const name = prompt('Component name:', 'MyComponent');
+  if (!name) return;
+  document.getElementById('craft-code-' + id).value =
+    'ALGO.component(\'' + name + '\', {\n' +
+    '  props: [\'text\'],\n' +
+    '  render: (props) => `\n' +
+    '    <div>${props.text}</div>\n' +
+    '  `\n' +
+    '});';
+}
+
+function craftSave(id) {
+  const code = document.getElementById('craft-code-' + id).value;
+  const match = code.match(/ALGO\.component\(['"](\w+)['"]/);
+  const name = match ? match[1] : 'component';
+  const filename = name.toLowerCase() + '.ui';
+  savedFiles.push({ name: filename, type: 'text', content: code });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + filename);
+}
+
+function craftTest(id) {
+  const code = document.getElementById('craft-code-' + id).value;
+  const preview = document.getElementById('craft-preview-' + id);
+  try {
+    // Simple eval for preview
+    eval(code);
+    preview.innerHTML = '<h4>Preview</h4><div style="padding:20px;border:1px solid #ccc;">Component registered</div>';
+  } catch (e) {
+    preview.innerHTML = '<h4>Preview</h4><div style="padding:20px;color:red;">Error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function craftLoadComponent(id) {
+  // TODO: Load component from saved .ui files
 }
 
 // ==================== P2P CHAT ====================
@@ -2065,8 +2239,8 @@ function openChat() {
   chatWinId = id;
   chatName = localStorage.getItem('algo-chat-name') || 'anon';
   createWindow({
-    title: 'ALGO Chat (P2P)',
-    stateKey: 'ALGO Chat',
+    title: 'Chat (P2P)',
+    stateKey: 'Chat',
     icon: '💬',
     width: 500, height: 400,
     content: '<div class="chat-container">' +
@@ -2365,14 +2539,61 @@ function sendChatP2P(id) {
 }
 
 // ==================== WEBCAM ====================
+let webcamStream = null;
+
 function openWebcam() {
   createWindow({
-    title: 'ALGO Webcam',
-    stateKey: 'ALGO Webcam',
+    title: 'Webcam',
+    stateKey: 'Webcam',
     icon: '📹',
-    width: 700, height: 500,
-    content: '<iframe src="/algo-webcam:dolphin42" style="width:100%;height:100%;border:none;"></iframe>'
+    width: 500, height: 400,
+    content: '<div style="display:flex;flex-direction:column;height:100%;background:#000;">' +
+      '<video id="webcam-video" autoplay playsinline style="flex:1;background:#111;object-fit:cover;"></video>' +
+      '<div style="padding:8px;background:#222;display:flex;gap:8px;">' +
+        '<button onclick="webcamStart()" style="color:#fff;background:#444;border:1px solid #666;padding:4px 12px;">📷 Start</button>' +
+        '<button onclick="webcamSnapshot()" style="color:#fff;background:#444;border:1px solid #666;padding:4px 12px;">📸 Snapshot</button>' +
+        '<button onclick="webcamStop()" style="color:#fff;background:#444;border:1px solid #666;padding:4px 12px;">⏹ Stop</button>' +
+      '</div>' +
+    '</div>'
   });
+}
+
+function webcamStart() {
+  const video = document.getElementById('webcam-video');
+  if (!video) return;
+  navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    .then(stream => {
+      webcamStream = stream;
+      video.srcObject = stream;
+    })
+    .catch(e => algoSpeak('Camera error: ' + e.message));
+}
+
+function webcamStop() {
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(t => t.stop());
+    webcamStream = null;
+  }
+  const video = document.getElementById('webcam-video');
+  if (video) video.srcObject = null;
+}
+
+function webcamSnapshot() {
+  const video = document.getElementById('webcam-video');
+  if (!video || !video.srcObject) {
+    algoSpeak('Start camera first');
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const dataUrl = canvas.toDataURL('image/png');
+  const name = 'snapshot-' + Date.now() + '.png';
+  savedFiles.push({ name: name, type: 'image', data: dataUrl });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + name);
 }
 
 // ==================== AUDIO ====================
@@ -2542,6 +2763,68 @@ function loadStickyNotes() {
 }
 
 // ==================== DOCUMENTATION ====================
+const DOCS = {
+  'getting-started': {
+    title: 'Getting Started',
+    content: `
+      <h2>🚀 Getting Started with Function Server</h2>
+      <p>Welcome to Function Server - a cloud operating system in your browser.</p>
+      <h3>Quick Start</h3>
+      <ul>
+        <li><b>Create files:</b> Right-click the desktop and select "New File"</li>
+        <li><b>Save snippets:</b> Use the Notepad to write and save text files</li>
+        <li><b>Build apps:</b> Open JavaScript.IDE to create interactive apps</li>
+        <li><b>Use AI:</b> Launch AI Wizards from the Start menu for coding help</li>
+      </ul>
+      <h3>Desktop Features</h3>
+      <ul>
+        <li>Drag icons to rearrange them</li>
+        <li>Double-click to open apps and files</li>
+        <li>Right-click for context menus</li>
+        <li>Resize and move windows freely</li>
+      </ul>
+    `
+  },
+  'apps': {
+    title: 'Building Apps',
+    content: `
+      <h2>🛠️ Building Apps</h2>
+      <p>Function Server includes a JavaScript IDE for creating interactive apps.</p>
+      <h3>The ALGO API</h3>
+      <pre style="background:#e8e0f0;color:#222;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">
+// Set window title
+ALGO.title('My App');
+
+// Display content
+ALGO.html('&lt;h1&gt;Hello!&lt;/h1&gt;');
+
+// Create buttons
+ALGO.ui.button('Click Me', () => {
+  ALGO.notify('Button clicked!');
+});
+
+// Store data
+ALGO.state.count = 0;
+      </pre>
+      <h3>Examples</h3>
+      <p>Use the IDE's dropdown menu to load examples like Calculator, Counter, and Clock.</p>
+    `
+  },
+  'terminal': {
+    title: 'Terminal & SSH',
+    content: `
+      <h2>💻 Terminal Access</h2>
+      <p>Registered users get SSH access to their home directory.</p>
+      <h3>Connecting</h3>
+      <pre style="background:#e8e0f0;color:#222;padding:12px;border-radius:6px;font-size:12px;">ssh username@functionserver.com</pre>
+      <h3>Claude Code</h3>
+      <p>Run <code>claude</code> in the terminal to get AI-powered coding assistance.</p>
+      <h3>Available Commands</h3>
+      <p>Standard Unix tools: ls, cd, cat, mkdir, rm, git, node, python, and more.</p>
+    `
+  }
+};
+
 function openDocumentation() {
   hideStartMenu();
   createWindow({
@@ -2550,38 +2833,40 @@ function openDocumentation() {
     icon: '📕',
     width: 400, height: 350,
     content: '<div class="folder-content">' +
-      '<div class="folder-item" ondblclick="openDocViewer(\'top-secret\')">' +
+      '<div class="folder-item" ondblclick="openDocViewer(\'getting-started\')">' +
         '<div class="icon-img" style="color:#8B0000;">📕</div>' +
-        '<span>Top Secret</span>' +
+        '<span>Getting Started</span>' +
       '</div>' +
-      '<div class="folder-item" ondblclick="openDocViewer(\'artifact-guide\')">' +
+      '<div class="folder-item" ondblclick="openDocViewer(\'apps\')">' +
         '<div class="icon-img" style="color:#8B0000;">📕</div>' +
-        '<span>Artifact Guide</span>' +
+        '<span>Building Apps</span>' +
       '</div>' +
-      '<div class="folder-item" ondblclick="openDocViewer(\'secret-ai\')">' +
+      '<div class="folder-item" ondblclick="openDocViewer(\'terminal\')">' +
         '<div class="icon-img" style="color:#8B0000;">📕</div>' +
-        '<span>AI/LLM Guide</span>' +
+        '<span>Terminal & SSH</span>' +
       '</div>' +
     '</div>'
   });
 }
 
 function openDocViewer(docId) {
-  const url = DOC_URLS[docId] || '/';
+  const doc = DOCS[docId];
+  if (!doc) return;
   createWindow({
-    title: docId + ' - Documentation',
+    title: doc.title + ' - Documentation',
     stateKey: 'Doc:' + docId,
     icon: '📕',
-    width: 600, height: 450,
-    content: '<iframe src="' + url + '" style="width:100%;height:100%;border:none;"></iframe>'
+    width: 550, height: 450,
+    content: '<div style="padding:20px;overflow:auto;height:100%;font-size:13px;line-height:1.6;">' +
+      doc.content + '</div>'
   });
 }
 
 function openHelp() {
   hideStartMenu();
   createWindow({
-    title: 'ALGO OS Help',
-    stateKey: 'ALGO OS Help',
+    title: 'Help',
+    stateKey: 'Help',
     icon: '📙',
     width: 600, height: 450,
     content: '<div class="chm-viewer">' +
@@ -4573,39 +4858,45 @@ function escapeHtml(s) {
 }
 
 function postToLaserbarf(text, room) {
-  room = room || 'algo-world';
-  const tag = (room === 'algo-world' || room === 'algo-dolphin') ? room + ':dolphin42' : room;
-  fetch('/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'yo=489&text=' + encodeURIComponent(text + '\n\n#' + tag) + '&save=POST'
-  });
+  // Legacy function - now just saves locally
+  const name = 'post-' + Date.now() + '.txt';
+  savedFiles.push({ name: name, type: 'text', content: text });
+  saveState();
 }
 
 function algoSpeak(text) {
-  const bubble = document.getElementById('speech-bubble');
-  const sprite = document.getElementById('algo-sprite');
-  const rect = sprite.getBoundingClientRect();
-  bubble.textContent = text;
-  bubble.style.left = (rect.right + 5) + 'px';
-  bubble.style.top = (rect.top - 10) + 'px';
-  bubble.style.display = 'block';
-  setTimeout(() => bubble.style.display = 'none', 4000);
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'algo-toast';
+  toast.innerHTML = '<span class="toast-icon">🖥️</span><span class="toast-text">' + escapeHtml(text) + '</span>';
+
+  container.appendChild(toast);
+
+  // Animate in
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  // Remove after delay
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
 
 function showAbout() {
   hideStartMenu();
   createWindow({
-    title: 'About ALGO OS',
-    stateKey: 'About ALGO OS',
-    icon: '🐬',
-    width: 300, height: 220,
+    title: 'About Function Server',
+    stateKey: 'About',
+    icon: '🖥️',
+    width: 320, height: 240,
     content: '<div style="padding:20px;text-align:center;">' +
-      '<div style="font-size:48px;">🐬</div>' +
-      '<h2>ALGO OS</h2>' +
-      '<p>Version 98.0</p>' +
-      '<p style="margin-top:10px;font-size:10px;">Trusted Zone</p>' +
-      '<p style="font-size:10px;">Key: dolphin42</p>' +
+      '<div style="font-size:48px;">🖥️</div>' +
+      '<h2>Function Server</h2>' +
+      '<p style="color:#666;">A Cloud Operating System</p>' +
+      '<p style="margin-top:15px;font-size:11px;">Build apps visually. Share publicly.<br>Run AI agents. All from your browser.</p>' +
+      '<p style="margin-top:15px;font-size:10px;color:#888;">MIT License • Open Source</p>' +
     '</div>'
   });
 }
@@ -4629,7 +4920,7 @@ function openSettings() {
     icon: '⚙️',
     width: 380, height: 380,
     content: '<div style="padding:15px;">' +
-      '<h3 style="margin-bottom:15px;">⚙️ ALGO OS Settings</h3>' +
+      '<h3 style="margin-bottom:15px;">⚙️ Settings</h3>' +
       '<div style="margin-bottom:15px;">' +
         '<label style="display:block;margin-bottom:5px;font-weight:bold;">Username:</label>' +
         '<input type="text" id="settings-username" value="' + escapeHtml(currentName) + '" ' +
@@ -4831,6 +5122,17 @@ function runApp(app) {
   }
 }
 
+// Run a system app by ID
+function runSystemApp(appId) {
+  hideStartMenu();
+  const app = systemApps.find(a => a.id === appId);
+  if (app) {
+    runApp(app);
+  } else {
+    algoSpeak('App not found: ' + appId);
+  }
+}
+
 // Uninstall a system app (just hides it for this user)
 function uninstallSystemApp(appId) {
   if (!uninstalledSystemApps.includes(appId)) {
@@ -4892,9 +5194,9 @@ const DEFAULT_APPS = [
   {
     id: 'look',
     name: 'Look',
-    icon: '🎨',
+    icon: '✨',
     code: `ALGO.app.name = "Look";
-ALGO.app.icon = "🎨";
+ALGO.app.icon = "✨";
 
 // Register .theme file type
 ALGO.registerFileType('theme', {
@@ -4989,8 +5291,8 @@ content += '<button onclick="saveCustomTheme()" style="margin-top:5px;">Save as 
 content += '</div>';
 
 ALGO.createWindow({
-  title: 'Look - Theme Manager',
-  icon: '🎨',
+  title: 'Look',
+  icon: '✨',
   width: 350,
   height: 400,
   content: content
@@ -5047,86 +5349,7 @@ function loadState() {
   } catch(e) { console.error('loadState error:', e); }
 }
 
-// ==================== ALGO DOLPHIN MASCOT ====================
-let dolphinX, dolphinY, dolphinVx, dolphinVy, dolphinFacingRight = true;
-
-function initDolphin() {
-  const dolphin = document.getElementById('algo-dolphin');
-  if (!dolphin) return;
-
-  // Start in center of screen
-  dolphinX = window.innerWidth / 2 - 16;
-  dolphinY = window.innerHeight / 2 - 16;
-
-  // Random initial velocity
-  dolphinVx = (Math.random() - 0.5) * 2;
-  dolphinVy = (Math.random() - 0.5) * 1.5;
-
-  dolphin.style.left = dolphinX + 'px';
-  dolphin.style.top = dolphinY + 'px';
-
-  // Update every 50ms
-  setInterval(updateDolphin, 50);
-}
-
-function updateDolphin() {
-  const dolphin = document.getElementById('algo-dolphin');
-  if (!dolphin) return;
-
-  // Move dolphin
-  dolphinX += dolphinVx;
-  dolphinY += dolphinVy;
-
-  // Screen boundaries
-  const maxX = window.innerWidth - 50;
-  const maxY = window.innerHeight - 80; // Above taskbar
-  const minY = 10;
-
-  // Icon area boundary (avoid left side where icons are)
-  const iconAreaRight = 200;
-
-  // Bounce off edges
-  if (dolphinX < iconAreaRight) {
-    dolphinX = iconAreaRight;
-    dolphinVx = Math.abs(dolphinVx) * 0.8 + 0.5;
-  }
-  if (dolphinX > maxX) {
-    dolphinX = maxX;
-    dolphinVx = -Math.abs(dolphinVx) * 0.8 - 0.5;
-  }
-  if (dolphinY < minY) {
-    dolphinY = minY;
-    dolphinVy = Math.abs(dolphinVy) * 0.8 + 0.3;
-  }
-  if (dolphinY > maxY) {
-    dolphinY = maxY;
-    dolphinVy = -Math.abs(dolphinVy) * 0.8 - 0.3;
-  }
-
-  // Add slight random drift
-  dolphinVx += (Math.random() - 0.5) * 0.1;
-  dolphinVy += (Math.random() - 0.5) * 0.08;
-
-  // Limit velocity
-  const maxSpeed = 3;
-  if (Math.abs(dolphinVx) > maxSpeed) dolphinVx = maxSpeed * Math.sign(dolphinVx);
-  if (Math.abs(dolphinVy) > maxSpeed * 0.7) dolphinVy = maxSpeed * 0.7 * Math.sign(dolphinVy);
-
-  // Flip dolphin based on direction (use data attribute, CSS handles animation)
-  if (dolphinVx > 0.1 && !dolphinFacingRight) {
-    dolphinFacingRight = true;
-    dolphin.dataset.facing = 'right';
-  } else if (dolphinVx < -0.1 && dolphinFacingRight) {
-    dolphinFacingRight = false;
-    dolphin.dataset.facing = 'left';
-  }
-
-  dolphin.style.left = dolphinX + 'px';
-  dolphin.style.top = dolphinY + 'px';
-}
-
 // Start
-initDolphin();
 checkSession(); // Check login before init
 </script>
 </body>

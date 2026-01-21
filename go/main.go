@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -102,6 +103,27 @@ type TokenPayload struct {
 	Exp      int64  `json:"exp"`
 	Rand     string `json:"rand"`
 }
+
+// Ticket represents a task/issue
+type Ticket struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Status      string   `json:"status"`
+	Created     string   `json:"created"`
+	Replies     []Reply  `json:"replies,omitempty"`
+}
+
+type Reply struct {
+	Date string `json:"date"`
+	Text string `json:"text"`
+}
+
+var (
+	tickets     []Ticket
+	ticketMutex sync.RWMutex
+	ticketID    int
+)
 
 func generateToken(username string) (string, error) {
 	randBytes := make([]byte, 16)
@@ -781,6 +803,51 @@ func main() {
 		handleFileDelete(w, r)
 	})
 
+	// Tickets API
+	mux.HandleFunc("/api/tickets", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method == "OPTIONS" {
+			return
+		}
+
+		if r.Method == "POST" {
+			var req struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Title == "" {
+				http.Error(w, `{"error":"title required"}`, 400)
+				return
+			}
+			ticketMutex.Lock()
+			ticketID++
+			t := Ticket{
+				ID:          fmt.Sprintf("T%d", ticketID),
+				Title:       req.Title,
+				Description: req.Description,
+				Status:      "open",
+				Created:     time.Now().Format("2006-01-02 15:04"),
+			}
+			tickets = append(tickets, t)
+			ticketMutex.Unlock()
+			json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "ticket": t})
+			return
+		}
+
+		// GET - return tickets
+		ticketMutex.RLock()
+		result := tickets
+		if result == nil {
+			result = []Ticket{}
+		}
+		ticketMutex.RUnlock()
+		json.NewEncoder(w).Encode(map[string]interface{}{"tickets": result})
+	})
+
 	// Serve system apps list
 	mux.HandleFunc("/api/system-apps", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -844,16 +911,17 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]interface{}{"apps": apps})
 	})
 
-	// Serve install script (proxy from GitHub)
+	// Serve install script from www folder
 	mux.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
-		resp, err := http.Get("https://raw.githubusercontent.com/williamsharkey/functionserver/go-only/install/install.sh")
-		if err != nil {
-			http.Error(w, "Failed to fetch install script", 500)
-			return
+		installPaths := []string{"../www/install", "./www/install"}
+		for _, p := range installPaths {
+			if content, err := os.ReadFile(p); err == nil {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Write(content)
+				return
+			}
 		}
-		defer resp.Body.Close()
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		io.Copy(w, resp.Body)
+		http.NotFound(w, r)
 	})
 
 	// Serve OS at /app
