@@ -191,7 +191,7 @@ cd "$INSTALL_DIR"
 if [ -d ".git" ]; then
     git pull
 else
-    git clone --depth 1 -b go-only https://github.com/williamsharkey/cecilia.git .
+    git clone --depth 1 -b go-only https://github.com/williamsharkey/functionserver.git .
 fi
 
 # Build

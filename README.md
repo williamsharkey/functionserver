@@ -50,7 +50,7 @@ Options:
 ## Manual Installation
 
 ```bash
-git clone https://github.com/williamsharkey/cecilia.git
+git clone https://github.com/williamsharkey/functionserver.git
 cd cecilia/go
 go build -o functionserver main.go
 ./functionserver
