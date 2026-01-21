@@ -1086,6 +1086,7 @@ body {
   overflow-y: auto;
 }
 .start-item:hover > .start-submenu { display: block; }
+.start-item.has-sub.submenu-open > .start-submenu { display: block; }
 .start-item.has-sub::after { content: '▶'; position: absolute; right: 6px; font-size: 8px; }
 
 /* Context Menu */
@@ -1443,7 +1444,7 @@ body {
 <!-- Login Overlay -->
 <div id="login-overlay">
   <div class="login-dialog">
-    <h2>⚡ Function Server</h2>
+    <h2>🖥️ Function Server</h2>
     <div class="tabs">
       <div class="tab active" data-tab="login" onclick="showLoginTab('login')">Login</div>
       <div class="tab" data-tab="register" onclick="showLoginTab('register')">Register</div>
@@ -1493,7 +1494,7 @@ body {
 <div id="start-menu">
   <div class="start-sidebar">ALGO98</div>
   <div class="start-items">
-    <div class="start-item has-sub">
+    <div class="start-item has-sub" onclick="toggleSubmenu(event, this)">
       <span>📁</span> Programs
       <div class="start-submenu" id="programs-menu">
         <div class="start-item" onclick="openNotepad()"><span>📝</span> Notepad</div>
@@ -1527,7 +1528,7 @@ body {
     <div class="start-item" onclick="openNotepad()"><span>📝</span> New Post</div>
     <div class="start-item" onclick="createStickyNote()"><span>📌</span> New Sticky Note</div>
     <div class="start-separator"></div>
-    <div class="start-item" onclick="showAbout()"><span>⚡</span> About</div>
+    <div class="start-item" onclick="showAbout()"><span>ℹ️</span> About</div>
     <div class="start-item" onclick="openSettings()"><span>⚙️</span> Settings</div>
     <div class="start-separator"></div>
     <div class="start-item" onclick="logout()"><span>🚪</span> Log Out</div>
@@ -1739,6 +1740,150 @@ let dragStickyNote = null;
 let dragIcon = null;
 let iconDragOffset = {x:0, y:0};
 let iconPositions = {}; // iconId -> {x, y}
+const GRID_SIZE = 80; // Snap-to-grid size
+
+// Folder System
+let folders = []; // { id, name, parent, items: [] }
+let recycleBin = []; // { originalItem, originalParent, deletedAt }
+
+// Special folder IDs
+const FOLDER_DESKTOP = 'desktop';
+const FOLDER_PROGRAMS = 'programs';
+const FOLDER_RECYCLE = 'recycle-bin';
+
+// File Type Registry - apps register file types they handle
+// inputIcon takes priority over outputIcon for display
+let fileTypeRegistry = {
+  // ext -> { inputIcon, outputIcon, inputApp, outputApp, description }
+  'txt': { outputIcon: '📄', outputApp: 'Notepad', description: 'Text Document' },
+  'html': { outputIcon: '🌐', outputApp: 'JavaScript.IDE', description: 'HTML Document' },
+  'js': { outputIcon: '📜', outputApp: 'JavaScript.IDE', description: 'JavaScript' },
+  'shader': { inputIcon: '✨', outputIcon: '✨', inputApp: 'Shade Station', outputApp: 'Shade Station', description: 'GLSL Shader' },
+  'mid': { inputIcon: '🎹', outputIcon: '🎹', inputApp: 'MIDI Editor', outputApp: 'MIDI Editor', description: 'MIDI File' },
+  'json': { outputIcon: '📋', outputApp: 'Notepad', description: 'JSON Data' },
+  'css': { outputIcon: '🎨', outputApp: 'Notepad', description: 'Stylesheet' },
+  'theme': { inputIcon: '🖌️', outputIcon: '🖌️', inputApp: 'Look', outputApp: 'Look', description: 'Theme File' },
+};
+
+// Custom CSS injected by apps (like Look)
+let injectedCSS = {};
+
+// ALGO API for external apps
+const ALGO = {
+  app: { name: 'App', icon: '📱' },
+
+  // Register a file type handler
+  registerFileType: function(ext, opts) {
+    const existing = fileTypeRegistry[ext] || {};
+    if (opts.inputIcon) {
+      existing.inputIcon = opts.inputIcon;
+      existing.inputApp = opts.appName || ALGO.app.name;
+    }
+    if (opts.outputIcon) {
+      existing.outputIcon = opts.outputIcon;
+      existing.outputApp = opts.appName || ALGO.app.name;
+    }
+    if (opts.description) existing.description = opts.description;
+    fileTypeRegistry[ext] = existing;
+    createDesktopIcons(); // Refresh icons
+  },
+
+  // Get icon for a file (input takes priority)
+  getFileIcon: function(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const reg = fileTypeRegistry[ext];
+    if (reg) return reg.inputIcon || reg.outputIcon || '📄';
+    return '📄';
+  },
+
+  // Inject custom CSS (for theming)
+  injectCSS: function(id, css) {
+    // Remove old style if exists
+    const oldStyle = document.getElementById('injected-css-' + id);
+    if (oldStyle) oldStyle.remove();
+
+    if (css) {
+      const style = document.createElement('style');
+      style.id = 'injected-css-' + id;
+      style.textContent = css;
+      document.head.appendChild(style);
+      injectedCSS[id] = css;
+    } else {
+      delete injectedCSS[id];
+    }
+  },
+
+  // Remove injected CSS
+  removeCSS: function(id) {
+    ALGO.injectCSS(id, null);
+  },
+
+  // Create a window
+  createWindow: function(opts) {
+    return createWindow(opts);
+  },
+
+  // UI helpers
+  ui: {
+    button: (label, onclick) => `<button onclick="${onclick}">${label}</button>`,
+    input: (id, placeholder, value) => `<input id="${id}" placeholder="${placeholder || ''}" value="${value || ''}">`,
+    select: (id, options) => `<select id="${id}">${options.map(o =>
+      typeof o === 'string' ? `<option>${o}</option>` : `<option value="${o.value}">${o.label}</option>`
+    ).join('')}</select>`,
+    label: (text) => `<label>${text}</label>`,
+    panel: (content) => `<div style="padding:10px;background:#f5f5f5;border:1px solid #ccc;margin:4px;">${content}</div>`,
+    row: (content) => `<div style="display:flex;gap:8px;margin:4px 0;align-items:center;">${content}</div>`,
+    colorPicker: (id, value) => `<input type="color" id="${id}" value="${value || '#000000'}">`
+  },
+
+  // Get/set values
+  getValue: (id) => document.getElementById(id)?.value,
+  setValue: (id, val) => { const el = document.getElementById(id); if(el) el.value = val; },
+  getElement: (id) => document.getElementById(id),
+
+  // Notifications
+  notify: (msg) => algoSpeak(msg),
+
+  // File operations
+  saveFile: function(name, content, type) {
+    // Delegate to the global saveFile function
+    if (window.saveFileToServer) {
+      return saveFileToServer(name, content, type);
+    }
+    // Fallback to localStorage
+    const existing = savedFiles.findIndex(f => f.name === name);
+    if (existing >= 0) {
+      savedFiles[existing] = { name, content, type: type || 'text' };
+    } else {
+      savedFiles.push({ name, content, type: type || 'text' });
+    }
+    createDesktopIcons();
+    return true;
+  },
+
+  loadFile: function(name) {
+    const file = savedFiles.find(f => f.name === name);
+    return file ? file.content : null;
+  },
+
+  // List files
+  listFiles: function(ext) {
+    if (ext) {
+      return savedFiles.filter(f => f.name.endsWith('.' + ext));
+    }
+    return savedFiles;
+  },
+
+  // Get current user
+  getUser: function() {
+    return currentUser || localStorage.getItem('guest-username') || null;
+  },
+
+  // Check if logged in
+  isLoggedIn: function() {
+    return !!sessionToken;
+  }
+};
 
 // Todo State
 let todoLists = []; // { id, name, items: [{ id, text, done, created }] }
@@ -2103,33 +2248,53 @@ function generatePasteFilename(prefix, ext) {
 
 function createDesktopIcons() {
   const desktop = document.getElementById('desktop');
-  desktop.innerHTML = '';
+  // Keep windows, don't clear them
+  desktop.querySelectorAll('.desktop-icon').forEach(el => el.remove());
 
+  // Initialize folders if needed
+  initFolders();
+
+  // System folders at top-right (Programs and Recycle Bin)
+  const systemFolderIcons = [
+    { id: FOLDER_PROGRAMS, name: 'Programs', icon: '📁', x: window.innerWidth - 100, y: 20, action: 'openFolder', folderId: FOLDER_PROGRAMS },
+    { id: FOLDER_RECYCLE, name: 'Recycle Bin', icon: recycleBin.length > 0 ? '🗑️' : '🗑️', x: window.innerWidth - 100, y: 100, action: 'openFolder', folderId: FOLDER_RECYCLE },
+  ];
+
+  // Fewer default app icons - most apps moved to Programs folder
   const defaultIcons = [
     { id: 'docs', name: 'Documentation', icon: '📕', x: 20, y: 20, action: 'openDocumentation' },
     { id: 'notepad', name: 'Notepad', icon: '📝', x: 20, y: 100, action: 'openNotepad' },
     { id: 'jsIDE', name: 'JavaScript.IDE', icon: '📜', x: 20, y: 180, action: 'openJSIDE' },
     { id: 'browser', name: 'Web Browser', icon: '🌐', x: 20, y: 260, action: 'openBrowser' },
-    { id: 'claude', name: 'Claude Wizard', icon: '🤖', x: 20, y: 340, action: 'openClaudeWizard' },
-    { id: 'gemini', name: 'Gemini Wizard', icon: '💎', x: 20, y: 420, action: 'openGeminiWizard' },
-    { id: 'gpt', name: 'GPT Wizard', icon: '🧠', x: 100, y: 20, action: 'openGPTWizard' },
-    { id: 'chat', name: 'ALGO Chat', icon: '💬', x: 100, y: 100, action: 'openChat' },
-    { id: 'webcam', name: 'ALGO Webcam', icon: '📹', x: 100, y: 180, action: 'openWebcam' },
-    { id: 'photobooth', name: 'Photobooth', icon: '📸', x: 100, y: 260, action: 'openPhotobooth' },
-    { id: 'tickets', name: 'Ticket Manager', icon: '🎫', x: 100, y: 340, action: 'openTicketManager' },
-    { id: 'music', name: 'Music Player', icon: '🎵', x: 100, y: 420, action: 'openMusicPlayer' },
-    { id: 'video', name: 'Video Player', icon: '📺', x: 180, y: 20, action: 'openVideoPlayer' },
+    { id: 'chat', name: 'ALGO Chat', icon: '💬', x: 20, y: 340, action: 'openChat' },
+    // ALGO dolphin as movable icon
+    { id: 'algo-dolphin', name: 'ALGO', icon: '🐬', x: 100, y: 350, action: 'algoSpeak' },
   ];
 
+  systemFolderIcons.forEach(ic => createDesktopIcon(ic));
   defaultIcons.forEach(ic => createDesktopIcon(ic));
 
-  // Saved files - only show files NOT in a room folder on desktop
-  const desktopFiles = savedFiles.filter(f => !f.room);
+  // User-created folders on desktop
+  const desktopFolders = folders.filter(f => f.parent === FOLDER_DESKTOP && !f.isSystem);
+  desktopFolders.forEach((f, i) => {
+    createDesktopIcon({
+      id: f.id,
+      name: f.name,
+      icon: f.icon || '📁',
+      x: 100 + (i % 4) * 80,
+      y: 20 + Math.floor(i / 4) * 80,
+      action: 'openFolder',
+      folderId: f.id
+    });
+  });
+
+  // Saved files - only show files NOT in a folder (desktop level)
+  const desktopFiles = savedFiles.filter(f => !f.room && (!f.parent || f.parent === FOLDER_DESKTOP));
   desktopFiles.forEach((f, i) => {
     const fileIdx = savedFiles.indexOf(f);
-    let icon = '📄';
-    if (f.name.endsWith('.js')) icon = '📜';
-    else if (f.type === 'image' || f.name.endsWith('.png') || f.name.endsWith('.jpg')) icon = '🖼️';
+    // Use file type registry for icons
+    let icon = ALGO.getFileIcon(f.name);
+    if (f.type === 'image' || f.name.endsWith('.png') || f.name.endsWith('.jpg') || f.name.endsWith('.gif')) icon = '🖼️';
     createDesktopIcon({
       id: 'file-' + fileIdx,
       name: f.name,
@@ -2142,7 +2307,7 @@ function createDesktopIcons() {
     });
   });
 
-  // Installed programs
+  // Installed programs (show on desktop)
   installedPrograms.forEach((p, i) => {
     createDesktopIcon({
       id: 'prog-' + p.id,
@@ -2189,8 +2354,10 @@ function createDesktopIcon(ic) {
     else if (ic.action === 'viewImage') viewImage(ic.data);
     else if (ic.action === 'runProgram') runProgram(ic.data);
     else if (ic.action === 'openRoomFolder') openRoomFolder(ic.data);
+    else if (ic.action === 'openFolder') openFolder(ic.folderId);
     else if (window[ic.action]) window[ic.action]();
   };
+  if (ic.folderId) el.dataset.folderId = ic.folderId;
   // Mousedown for dragging - only start drag on icon-img or icon area, not on double-click
   el.onmousedown = (e) => {
     // Select icon on click
@@ -2853,6 +3020,8 @@ console.log('App started!');`;
           '<div class="ide-toolbar">' +
             '<button onclick="ideRun(' + id + ')">▶ Run</button>' +
             '<button onclick="ideStop(' + id + ')">⬛ Stop</button>' +
+            '<button onclick="ideSave(' + id + ')">💾 Save</button>' +
+            '<button onclick="idePublish(' + id + ')" style="background:#2d5a2d;color:white;">🌐 Publish</button>' +
             '<select onchange="ideLoadExample(' + id + ', this.value)">' +
               '<option value="">-- Examples --</option>' +
               exampleOptions +
@@ -3004,16 +3173,108 @@ function ideSave(id) {
   const m = code.match(/ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]/);
   const appName = m ? m[1] : 'script';
   let filename = appName.replace(/\s+/g, '-').toLowerCase() + '.js';
-  let counter = 1;
-  while (savedFiles.some(f => f.name === filename)) {
-    counter++;
-    filename = appName.replace(/\s+/g, '-').toLowerCase() + '(' + counter + ').js';
-  }
-  savedFiles.push({ name: filename, content: code, room: null });
-  saveState();
-  createDesktopIcons();
+
+  // Save to server
+  ALGO.saveFile(filename, code, 'javascript');
   hideMenus();
   algoSpeak('Saved ' + filename + '!');
+}
+
+function idePublish(id) {
+  const code = document.getElementById('ide-code-' + id).value.trim();
+  if (!code) return;
+
+  // Extract app name for filename
+  const m = code.match(/ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]/);
+  const appName = m ? m[1] : 'My App';
+  const filename = appName.replace(/\s+/g, '-').toLowerCase() + '.html';
+
+  // Create standalone HTML that includes the ALGO API and runs the code
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(appName)}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: #f0f0f0; min-height: 100vh; }
+.window { position: absolute; background: #c0c0c0; border: 2px outset #fff; box-shadow: 2px 2px 8px rgba(0,0,0,0.3); }
+.window-titlebar { background: linear-gradient(90deg, #000080, #1084d0); color: white; padding: 4px 8px; font-weight: bold; display: flex; justify-content: space-between; }
+.window-content { background: white; padding: 10px; }
+button { padding: 4px 12px; margin: 2px; cursor: pointer; }
+input, select { padding: 4px; margin: 2px; }
+</style>
+</head>
+<body>
+<script>
+// ALGO Mini API for standalone apps
+const ALGO = {
+  app: { name: 'App', icon: '📱' },
+  createWindow: function(opts) {
+    const win = document.createElement('div');
+    win.className = 'window';
+    win.style.cssText = 'left:50px;top:50px;width:' + (opts.width||300) + 'px;';
+    win.innerHTML = '<div class="window-titlebar"><span>' + (opts.icon||this.app.icon) + ' ' + (opts.title||this.app.name) + '</span></div><div class="window-content">' + (opts.content||'') + '</div>';
+    document.body.appendChild(win);
+    return win;
+  },
+  ui: {
+    button: (label, fn) => '<button onclick="(' + fn.toString() + ')()">' + label + '</button>',
+    input: (id, ph) => '<input id="' + id + '" placeholder="' + (ph||'') + '">',
+    label: (t) => '<label>' + t + '</label>',
+    panel: (c) => '<div style="padding:10px;background:#f5f5f5;border:1px solid #ccc;margin:4px;">' + c + '</div>'
+  },
+  notify: (msg) => alert(msg),
+  getValue: (id) => document.getElementById(id)?.value,
+  setContent: (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; },
+  saveFile: () => {},
+  registerFileType: () => {}
+};
+<\/script>
+<script>
+${code}
+<\/script>
+</body>
+</html>`;
+
+  // Save to public folder
+  const publicPath = 'public/' + filename;
+
+  fetch(API_BASE + '/files/save', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + sessionToken
+    },
+    body: JSON.stringify({ path: publicPath, content: html, type: 'html' })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      const url = '/' + currentUser + '/' + filename;
+      algoSpeak('Published! View at ' + url);
+
+      // Show success dialog with link
+      createWindow({
+        title: '🌐 Published!',
+        icon: '✓',
+        width: 400,
+        height: 200,
+        content: '<div style="padding:20px;text-align:center;">' +
+          '<h3 style="color:green;">App Published Successfully!</h3>' +
+          '<p style="margin:15px 0;">Your app is now live at:</p>' +
+          '<a href="' + url + '" target="_blank" style="font-size:16px;color:#0066cc;">' + location.origin + url + '</a>' +
+          '<p style="margin-top:15px;"><button onclick="window.open(\'' + url + '\', \'_blank\')">Open in New Tab</button></p>' +
+        '</div>'
+      });
+    } else {
+      algoSpeak('Publish failed: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(e => {
+    algoSpeak('Publish error: ' + e.message);
+  });
 }
 
 function ideInstall(id) {
@@ -4505,6 +4766,385 @@ function createDesktopShortcut(artifactName) {
   updateProgramsMenu();
 }
 
+// ==================== FOLDER SYSTEM ====================
+function initFolders() {
+  // Create default folders if they don't exist
+  if (!folders.find(f => f.id === FOLDER_PROGRAMS)) {
+    folders.push({
+      id: FOLDER_PROGRAMS,
+      name: 'Programs',
+      icon: '📁',
+      parent: FOLDER_DESKTOP,
+      isSystem: true,
+      subfolders: [
+        { id: 'prog-ai', name: 'AI Wizards', icon: '🤖' },
+        { id: 'prog-media', name: 'Media', icon: '🎵' },
+        { id: 'prog-tools', name: 'Tools', icon: '🔧' },
+        { id: 'prog-games', name: 'Games', icon: '🎮' }
+      ]
+    });
+  }
+  if (!folders.find(f => f.id === FOLDER_RECYCLE)) {
+    folders.push({
+      id: FOLDER_RECYCLE,
+      name: 'Recycle Bin',
+      icon: '🗑️',
+      parent: FOLDER_DESKTOP,
+      isSystem: true
+    });
+  }
+}
+
+function createFolder(name, parentId = FOLDER_DESKTOP) {
+  const id = 'folder-' + Date.now();
+  const folder = {
+    id: id,
+    name: name || 'New Folder',
+    icon: '📁',
+    parent: parentId,
+    items: []
+  };
+  folders.push(folder);
+  saveState();
+  createDesktopIcons();
+  return folder;
+}
+
+function openFolder(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  // Special handling for Recycle Bin
+  if (folderId === FOLDER_RECYCLE) {
+    openRecycleBin();
+    return;
+  }
+
+  // Special handling for Programs folder
+  if (folderId === FOLDER_PROGRAMS) {
+    openProgramsFolder();
+    return;
+  }
+
+  const id = winId;
+  let itemsHtml = '<div class="folder-view" data-folder-id="' + folderId + '">';
+
+  // Add back button if not root
+  if (folder.parent && folder.parent !== FOLDER_DESKTOP) {
+    itemsHtml += '<div class="folder-item" ondblclick="openFolder(\'' + folder.parent + '\')">' +
+      '<div class="folder-icon">⬆️</div><div class="folder-name">..</div></div>';
+  }
+
+  // Show subfolders
+  const subfolders = folders.filter(f => f.parent === folderId);
+  subfolders.forEach(sf => {
+    itemsHtml += '<div class="folder-item" data-item-id="' + sf.id + '" data-type="folder" ondblclick="openFolder(\'' + sf.id + '\')" oncontextmenu="showFolderItemMenu(event, \'' + sf.id + '\', \'folder\')">' +
+      '<div class="folder-icon">' + (sf.icon || '📁') + '</div><div class="folder-name">' + sf.name + '</div></div>';
+  });
+
+  // Show files in this folder
+  const folderFiles = savedFiles.filter(f => f.parent === folderId);
+  folderFiles.forEach((f, i) => {
+    const icon = ALGO.getFileIcon(f.name);
+    itemsHtml += '<div class="folder-item" data-item-id="file-' + savedFiles.indexOf(f) + '" data-type="file" ondblclick="openSavedFile(savedFiles[' + savedFiles.indexOf(f) + '])" oncontextmenu="showFolderItemMenu(event, \'file-' + savedFiles.indexOf(f) + '\', \'file\')">' +
+      '<div class="folder-icon">' + icon + '</div><div class="folder-name">' + f.name + '</div></div>';
+  });
+
+  itemsHtml += '</div>';
+
+  createWindow({
+    title: folder.name,
+    icon: folder.icon || '📁',
+    width: 500,
+    height: 400,
+    stateKey: 'folder-' + folderId,
+    menubar: '<div class="menubar"><div class="menu-item" onclick="toggleMenu(\'folder-file-menu-' + id + '\')">File<div class="dropdown-menu" id="folder-file-menu-' + id + '">' +
+      '<div class="menu-option" onclick="createFolderInWindow(\'' + folderId + '\')">New Folder</div>' +
+      '<div class="menu-option" onclick="createFileInFolder(\'' + folderId + '\')">New File</div>' +
+      '</div></div></div>',
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + itemsHtml
+  });
+}
+
+function openProgramsFolder() {
+  const id = winId;
+  let html = '<div class="folder-view">';
+
+  // AI Wizards subfolder
+  html += '<div class="folder-item" ondblclick="openProgramCategory(\'ai\')"><div class="folder-icon">🤖</div><div class="folder-name">AI Wizards</div></div>';
+  // Media subfolder
+  html += '<div class="folder-item" ondblclick="openProgramCategory(\'media\')"><div class="folder-icon">🎵</div><div class="folder-name">Media</div></div>';
+  // Tools subfolder
+  html += '<div class="folder-item" ondblclick="openProgramCategory(\'tools\')"><div class="folder-icon">🔧</div><div class="folder-name">Tools</div></div>';
+
+  // Show installed programs
+  installedPrograms.forEach(p => {
+    html += '<div class="folder-item" ondblclick="runProgram(installedPrograms.find(x=>x.id===\'' + p.id + '\'))">' +
+      '<div class="folder-icon">' + (p.icon || '📱') + '</div><div class="folder-name">' + p.name + '</div></div>';
+  });
+
+  html += '</div>';
+
+  createWindow({
+    title: 'Programs',
+    icon: '📁',
+    width: 500,
+    height: 400,
+    stateKey: 'folder-programs',
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + html
+  });
+}
+
+function openProgramCategory(category) {
+  const id = winId;
+  let html = '<div class="folder-view">';
+
+  const categories = {
+    'ai': {
+      name: 'AI Wizards',
+      icon: '🤖',
+      items: [
+        { name: 'Claude Wizard', icon: '🤖', action: 'openClaudeWizard' },
+        { name: 'Gemini Wizard', icon: '💎', action: 'openGeminiWizard' },
+        { name: 'GPT Wizard', icon: '🧠', action: 'openGPTWizard' }
+      ]
+    },
+    'media': {
+      name: 'Media',
+      icon: '🎵',
+      items: [
+        { name: 'Music Player', icon: '🎵', action: 'openMusicPlayer' },
+        { name: 'Video Player', icon: '📺', action: 'openVideoPlayer' },
+        { name: 'MIDI Editor', icon: '🎹', action: 'openMidiEditor' },
+        { name: 'Chime Synth', icon: '🔔', action: 'openChimeSynth' },
+        { name: 'Photobooth', icon: '📸', action: 'openPhotobooth' },
+        { name: 'Webcam', icon: '📹', action: 'openWebcam' }
+      ]
+    },
+    'tools': {
+      name: 'Tools',
+      icon: '🔧',
+      items: [
+        { name: 'Notepad', icon: '📝', action: 'openNotepad' },
+        { name: 'JavaScript.IDE', icon: '📜', action: 'openJSIDE' },
+        { name: 'Web Browser', icon: '🌐', action: 'openBrowser' },
+        { name: 'Shade Station', icon: '🎨', action: 'openShadeStation' },
+        { name: 'Box Editor', icon: '📦', action: 'openBoxEditor' },
+        { name: 'Calendar', icon: '📅', action: 'openCalendarApp' },
+        { name: 'Todo Manager', icon: '📋', action: 'openTodoApp' },
+        { name: 'Ticket Manager', icon: '🎫', action: 'openTicketManager' }
+      ]
+    }
+  };
+
+  const cat = categories[category];
+  if (!cat) return;
+
+  // Back button
+  html += '<div class="folder-item" ondblclick="openProgramsFolder()"><div class="folder-icon">⬆️</div><div class="folder-name">..</div></div>';
+
+  cat.items.forEach(item => {
+    html += '<div class="folder-item" ondblclick="' + item.action + '()">' +
+      '<div class="folder-icon">' + item.icon + '</div><div class="folder-name">' + item.name + '</div></div>';
+  });
+
+  html += '</div>';
+
+  createWindow({
+    title: cat.name,
+    icon: cat.icon,
+    width: 500,
+    height: 400,
+    stateKey: 'folder-prog-' + category,
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + html
+  });
+}
+
+function openRecycleBin() {
+  const id = winId;
+  let html = '<div class="folder-view">';
+
+  if (recycleBin.length === 0) {
+    html += '<div style="padding:20px;color:#666;text-align:center;">Recycle Bin is empty</div>';
+  } else {
+    recycleBin.forEach((item, i) => {
+      const icon = item.type === 'folder' ? '📁' : ALGO.getFileIcon(item.name || 'file.txt');
+      html += '<div class="folder-item" data-recycle-idx="' + i + '" oncontextmenu="showRecycleItemMenu(event, ' + i + ')">' +
+        '<div class="folder-icon">' + icon + '</div><div class="folder-name">' + (item.name || 'Item') + '</div></div>';
+    });
+  }
+
+  html += '</div>';
+
+  createWindow({
+    title: 'Recycle Bin',
+    icon: recycleBin.length > 0 ? '🗑️' : '🗑️',
+    width: 500,
+    height: 400,
+    stateKey: 'folder-recycle',
+    menubar: '<div class="menubar"><div class="menu-item" onclick="toggleMenu(\'recycle-menu-' + id + '\')">File<div class="dropdown-menu" id="recycle-menu-' + id + '">' +
+      '<div class="menu-option" onclick="emptyRecycleBin()">Empty Recycle Bin</div>' +
+      '</div></div></div>',
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + html
+  });
+}
+
+function moveToRecycleBin(itemId, itemType) {
+  let item = null;
+  let originalParent = FOLDER_DESKTOP;
+
+  if (itemType === 'file') {
+    const idx = parseInt(itemId.replace('file-', ''));
+    item = savedFiles[idx];
+    if (item) {
+      originalParent = item.parent || FOLDER_DESKTOP;
+      savedFiles.splice(idx, 1);
+    }
+  } else if (itemType === 'folder') {
+    const folder = folders.find(f => f.id === itemId);
+    if (folder && !folder.isSystem) {
+      item = { ...folder, type: 'folder' };
+      originalParent = folder.parent || FOLDER_DESKTOP;
+      folders = folders.filter(f => f.id !== itemId);
+    }
+  } else if (itemType === 'program') {
+    const prog = installedPrograms.find(p => p.id === itemId);
+    if (prog) {
+      item = { ...prog, type: 'program' };
+      installedPrograms = installedPrograms.filter(p => p.id !== itemId);
+      updateProgramsMenu();
+    }
+  }
+
+  if (item) {
+    recycleBin.push({
+      ...item,
+      originalParent: originalParent,
+      deletedAt: Date.now()
+    });
+    saveState();
+    createDesktopIcons();
+    ALGO.notify('Moved to Recycle Bin');
+  }
+}
+
+function restoreFromRecycleBin(idx) {
+  const item = recycleBin[idx];
+  if (!item) return;
+
+  if (item.type === 'folder') {
+    folders.push({
+      id: item.id,
+      name: item.name,
+      icon: item.icon,
+      parent: item.originalParent
+    });
+  } else if (item.type === 'program') {
+    installedPrograms.push({
+      id: item.id,
+      name: item.name,
+      icon: item.icon,
+      code: item.code
+    });
+    updateProgramsMenu();
+  } else {
+    // It's a file
+    savedFiles.push({
+      name: item.name,
+      content: item.content,
+      type: item.fileType || 'text',
+      parent: item.originalParent
+    });
+  }
+
+  recycleBin.splice(idx, 1);
+  saveState();
+  createDesktopIcons();
+  ALGO.notify('Restored');
+}
+
+function emptyRecycleBin() {
+  if (recycleBin.length === 0) return;
+  if (confirm('Permanently delete all items in Recycle Bin?')) {
+    recycleBin = [];
+    saveState();
+    ALGO.notify('Recycle Bin emptied');
+  }
+}
+
+function showRecycleItemMenu(e, idx) {
+  e.preventDefault();
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '<div class="ctx-item" onclick="restoreFromRecycleBin(' + idx + ');hideContextMenu()">Restore</div>' +
+    '<div class="ctx-sep"></div>' +
+    '<div class="ctx-item" onclick="recycleBin.splice(' + idx + ',1);saveState();hideContextMenu();openRecycleBin()">Delete Permanently</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('visible');
+}
+
+function showFolderItemMenu(e, itemId, itemType) {
+  e.preventDefault();
+  e.stopPropagation();
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '<div class="ctx-item" onclick="ctxOpenFolderItem(\'' + itemId + '\', \'' + itemType + '\')">Open</div>' +
+    '<div class="ctx-item" onclick="ctxRenameFolderItem(\'' + itemId + '\', \'' + itemType + '\')">Rename</div>' +
+    '<div class="ctx-sep"></div>' +
+    '<div class="ctx-item" onclick="moveToRecycleBin(\'' + itemId + '\', \'' + itemType + '\');hideContextMenu()">Delete</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('visible');
+}
+
+function ctxOpenFolderItem(itemId, itemType) {
+  if (itemType === 'folder') {
+    openFolder(itemId);
+  } else if (itemType === 'file') {
+    const idx = parseInt(itemId.replace('file-', ''));
+    openSavedFile(savedFiles[idx]);
+  }
+  hideContextMenu();
+}
+
+function ctxRenameFolderItem(itemId, itemType) {
+  const newName = prompt('Enter new name:');
+  if (!newName) return;
+
+  if (itemType === 'folder') {
+    const folder = folders.find(f => f.id === itemId);
+    if (folder) folder.name = newName;
+  } else if (itemType === 'file') {
+    const idx = parseInt(itemId.replace('file-', ''));
+    if (savedFiles[idx]) savedFiles[idx].name = newName;
+  }
+  saveState();
+  createDesktopIcons();
+  hideContextMenu();
+}
+
+function createFolderInWindow(parentId) {
+  const name = prompt('Folder name:', 'New Folder');
+  if (name) {
+    createFolder(name, parentId);
+    openFolder(parentId); // Refresh
+  }
+  hideMenus();
+}
+
+function createFileInFolder(folderId) {
+  // Open notepad and set the file's parent folder
+  openNotepad(null, folderId);
+  hideMenus();
+}
+
+// Snap coordinates to grid
+function snapToGrid(x, y) {
+  return {
+    x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+    y: Math.round(y / GRID_SIZE) * GRID_SIZE
+  };
+}
+
 // ==================== CONTEXT MENU ====================
 function showContextMenu(e) {
   e.preventDefault();
@@ -4549,8 +5189,9 @@ function showContextMenu(e) {
       }
     }
 
-    if (type === 'openFile' || type === 'runProgram' || type === 'openRoomFolder') {
-      html += '<div class="ctx-sep"></div><div class="ctx-item" onclick="ctxDelete()">Delete</div>';
+    if (type === 'openFile' || type === 'runProgram' || type === 'openRoomFolder' || type === 'openFolder') {
+      html += '<div class="ctx-item" onclick="ctxRename()">Rename</div>';
+      html += '<div class="ctx-sep"></div><div class="ctx-item" onclick="ctxDelete()">🗑️ Move to Recycle Bin</div>';
     }
     // Add "Reset Position" option if icon has been moved
     if (iconPositions[iconId]) {
@@ -4559,12 +5200,12 @@ function showContextMenu(e) {
   } else {
     html = '<div class="ctx-item" id="ctx-paste-item" onclick="ctxPaste()">Paste</div>' +
            '<div class="ctx-sep"></div>' +
-           '<div class="ctx-item" onclick="openNotepad()">New Text File</div>' +
-           '<div class="ctx-item" onclick="openJSIDE()">New JavaScript</div>' +
-           '<div class="ctx-item" onclick="createRoomFolder()">New Room Folder</div>' +
-           '<div class="ctx-item" onclick="createStickyNote(' + e.clientX + ',' + e.clientY + ')">New Sticky Note</div>' +
+           '<div class="ctx-item" onclick="ctxNewFolder()">📁 New Folder</div>' +
+           '<div class="ctx-item" onclick="openNotepad()">📝 New Text File</div>' +
+           '<div class="ctx-item" onclick="openJSIDE()">📜 New JavaScript</div>' +
+           '<div class="ctx-item" onclick="createStickyNote(' + e.clientX + ',' + e.clientY + ')">📌 New Sticky Note</div>' +
            '<div class="ctx-sep"></div>' +
-           '<div class="ctx-item" onclick="location.reload()">Refresh</div>';
+           '<div class="ctx-item" onclick="location.reload()">🔄 Refresh</div>';
     // Try to read clipboard and show preview
     setTimeout(updatePastePreview, 0);
   }
@@ -4606,19 +5247,51 @@ function ctxDelete() {
   if (!icon) return;
   const id = icon.dataset.iconId;
   if (id.startsWith('file-')) {
-    const idx = parseInt(id.replace('file-',''));
-    savedFiles.splice(idx, 1);
+    moveToRecycleBin(id, 'file');
   } else if (id.startsWith('prog-')) {
     const pid = id.replace('prog-','');
-    installedPrograms = installedPrograms.filter(p => p.id !== pid);
-    updateProgramsMenu();
+    moveToRecycleBin(pid, 'program');
+  } else if (id.startsWith('folder-')) {
+    moveToRecycleBin(id, 'folder');
   } else if (id.startsWith('room-')) {
     const roomName = id.replace('room-','');
     roomFolders = roomFolders.filter(r => r.name !== roomName);
     savedFiles = savedFiles.filter(f => f.room !== roomName);
+    saveState();
+    createDesktopIcons();
+  }
+  hideContextMenu();
+}
+
+function ctxRename() {
+  const icon = contextTarget.icon;
+  if (!icon) return;
+  const id = icon.dataset.iconId;
+  const newName = prompt('Enter new name:');
+  if (!newName) { hideContextMenu(); return; }
+
+  if (id.startsWith('file-')) {
+    const idx = parseInt(id.replace('file-',''));
+    if (savedFiles[idx]) savedFiles[idx].name = newName;
+  } else if (id.startsWith('prog-')) {
+    const pid = id.replace('prog-','');
+    const prog = installedPrograms.find(p => p.id === pid);
+    if (prog) prog.name = newName;
+    updateProgramsMenu();
+  } else if (id.startsWith('folder-')) {
+    const folder = folders.find(f => f.id === id);
+    if (folder) folder.name = newName;
   }
   saveState();
   createDesktopIcons();
+  hideContextMenu();
+}
+
+function ctxNewFolder() {
+  const name = prompt('Folder name:', 'New Folder');
+  if (name) {
+    createFolder(name, FOLDER_DESKTOP);
+  }
   hideContextMenu();
 }
 
@@ -4833,10 +5506,37 @@ function endDrag() {
   }
   if (dragIcon) {
     const iconId = dragIcon.dataset.iconId;
-    iconPositions[iconId] = {
-      x: parseInt(dragIcon.style.left),
-      y: parseInt(dragIcon.style.top)
-    };
+    const iconType = dragIcon.dataset.iconType;
+    let x = parseInt(dragIcon.style.left);
+    let y = parseInt(dragIcon.style.top);
+
+    // Check if dropped on Recycle Bin
+    const recycleBinIcon = document.getElementById('icon-' + FOLDER_RECYCLE);
+    if (recycleBinIcon && iconId !== FOLDER_RECYCLE && iconId !== FOLDER_PROGRAMS) {
+      const rbRect = recycleBinIcon.getBoundingClientRect();
+      const dragRect = dragIcon.getBoundingClientRect();
+      // Check overlap
+      if (dragRect.left < rbRect.right && dragRect.right > rbRect.left &&
+          dragRect.top < rbRect.bottom && dragRect.bottom > rbRect.top) {
+        // Dropped on Recycle Bin - delete the item
+        if (iconId.startsWith('file-')) {
+          moveToRecycleBin(iconId, 'file');
+        } else if (iconId.startsWith('prog-')) {
+          moveToRecycleBin(iconId.replace('prog-', ''), 'program');
+        } else if (iconId.startsWith('folder-')) {
+          moveToRecycleBin(iconId, 'folder');
+        }
+        dragIcon = null;
+        return;
+      }
+    }
+
+    // Snap to grid
+    const snapped = snapToGrid(x, y);
+    dragIcon.style.left = snapped.x + 'px';
+    dragIcon.style.top = snapped.y + 'px';
+
+    iconPositions[iconId] = { x: snapped.x, y: snapped.y };
     localStorage.setItem('algo-icon-positions', JSON.stringify(iconPositions));
   }
   dragWin = null;
@@ -6516,6 +7216,18 @@ function toggleStartMenu() {
 function hideStartMenu() {
   document.getElementById('start-menu').classList.remove('visible');
   document.getElementById('start-btn').classList.remove('active');
+  // Close any open submenus
+  document.querySelectorAll('.start-item.submenu-open').forEach(el => el.classList.remove('submenu-open'));
+}
+
+function toggleSubmenu(e, el) {
+  e.stopPropagation();
+  // Close other submenus
+  document.querySelectorAll('.start-item.submenu-open').forEach(item => {
+    if (item !== el) item.classList.remove('submenu-open');
+  });
+  // Toggle this submenu
+  el.classList.toggle('submenu-open');
 }
 
 // ==================== UTILITIES ====================
@@ -6768,7 +7480,123 @@ function saveState() {
   localStorage.setItem('algo-rooms', JSON.stringify(roomFolders));
   localStorage.setItem('algo-windows', JSON.stringify(windowStates));
   localStorage.setItem('algo-apikeys', JSON.stringify(apiKeys));
+  localStorage.setItem('algo-folders', JSON.stringify(folders.filter(f => !f.isSystem)));
+  localStorage.setItem('algo-recycle-bin', JSON.stringify(recycleBin));
 }
+
+// Default external apps - loaded on first run
+const DEFAULT_APPS = [
+  {
+    id: 'look',
+    name: 'Look',
+    icon: '🎨',
+    code: `ALGO.app.name = "Look";
+ALGO.app.icon = "🎨";
+
+// Register .theme file type
+ALGO.registerFileType('theme', {
+  inputIcon: '🖌️',
+  outputIcon: '🖌️',
+  appName: 'Look',
+  description: 'Theme File'
+});
+
+const themes = {
+  'classic': { name: 'Classic (Win95)', css: '' },
+  'beos': {
+    name: 'BeOS Haiku',
+    css: \`
+      .desktop-icon .icon-img {
+        background: linear-gradient(135deg, #ffffcc 0%, #ffcc66 100%);
+        border-radius: 4px;
+        box-shadow: 1px 1px 0 #aa8833, inset -1px -1px 0 rgba(0,0,0,0.2), inset 1px 1px 0 rgba(255,255,255,0.5);
+        padding: 4px;
+      }
+      .window { border-radius: 4px; }
+      .window-titlebar { background: linear-gradient(180deg, #ffdd44 0%, #cc9900 100%); border-radius: 4px 4px 0 0; }
+    \`
+  },
+  'dark': {
+    name: 'Dark Mode',
+    css: \`
+      #desktop { background: #1a1a2e !important; }
+      .window { background: #16213e; color: #e0e0e0; border-color: #0f3460; }
+      .window-titlebar { background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%); color: #e94560; }
+      .window-content { background: #16213e; color: #e0e0e0; }
+      #taskbar { background: #0f3460; }
+      #start-menu { background: #16213e; color: #e0e0e0; border-color: #0f3460; }
+      .start-item:hover { background: #e94560; }
+      .desktop-icon span { color: #fff; text-shadow: 1px 1px 2px #000; }
+    \`
+  },
+  'miami': {
+    name: 'Miami Vice',
+    css: \`
+      #desktop { background: linear-gradient(135deg, #ff6b9d 0%, #c44569 50%, #6c5ce7 100%) !important; }
+      .window-titlebar { background: linear-gradient(90deg, #ff6b9d 0%, #6c5ce7 100%); }
+      .desktop-icon span { color: #fff; text-shadow: 2px 2px 4px #000; }
+      #taskbar { background: linear-gradient(90deg, #6c5ce7 0%, #00d2d3 100%); }
+    \`
+  },
+  'forest': {
+    name: 'Forest',
+    css: \`
+      #desktop { background: linear-gradient(180deg, #134e5e 0%, #71b280 100%) !important; }
+      .window-titlebar { background: linear-gradient(180deg, #2d5016 0%, #134e5e 100%); }
+      .desktop-icon span { color: #fff; text-shadow: 1px 1px 2px #000; }
+      #taskbar { background: #2d5016; }
+      #start-menu { background: #3a5a1c; }
+    \`
+  }
+};
+
+let currentTheme = localStorage.getItem('algo-theme') || 'classic';
+
+function applyTheme(name) {
+  const theme = themes[name];
+  if (!theme) return;
+  ALGO.injectCSS('look-theme', theme.css);
+  currentTheme = name;
+  localStorage.setItem('algo-theme', name);
+  ALGO.notify('Theme: ' + theme.name);
+}
+
+function saveCustomTheme() {
+  const name = ALGO.getValue('theme-name') || 'custom';
+  const css = ALGO.getValue('theme-css');
+  const content = JSON.stringify({ name, css });
+  ALGO.saveFile(name + '.theme', content, 'theme');
+  ALGO.notify('Saved ' + name + '.theme');
+}
+
+// Build UI
+let content = '<div style="padding:10px;">';
+content += '<h3 style="margin:0 0 10px;">Select Theme</h3>';
+content += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:15px;">';
+for (const [id, theme] of Object.entries(themes)) {
+  const selected = id === currentTheme ? 'border:2px solid #000;' : 'border:2px solid #999;';
+  content += '<button onclick="applyTheme(\\'' + id + '\\')" style="padding:10px;' + selected + 'cursor:pointer;">' + theme.name + '</button>';
+}
+content += '</div>';
+content += '<hr style="margin:15px 0;">';
+content += '<h3 style="margin:0 0 10px;">Custom CSS</h3>';
+content += '<input id="theme-name" placeholder="Theme name" style="width:100%;margin-bottom:5px;">';
+content += '<textarea id="theme-css" placeholder="Enter custom CSS..." style="width:100%;height:100px;font-family:monospace;font-size:11px;"></textarea>';
+content += '<button onclick="saveCustomTheme()" style="margin-top:5px;">Save as .theme</button>';
+content += '</div>';
+
+ALGO.createWindow({
+  title: 'Look - Theme Manager',
+  icon: '🎨',
+  width: 350,
+  height: 400,
+  content: content
+});
+
+// Apply saved theme on load
+applyTheme(currentTheme);`
+  }
+];
 
 function loadState() {
   try {
@@ -6780,8 +7608,39 @@ function loadState() {
     windowStates = JSON.parse(localStorage.getItem('algo-windows') || '{}');
     apiKeys = JSON.parse(localStorage.getItem('algo-apikeys') || '{}');
     iconPositions = JSON.parse(localStorage.getItem('algo-icon-positions') || '{}');
+    folders = JSON.parse(localStorage.getItem('algo-folders') || '[]');
+    recycleBin = JSON.parse(localStorage.getItem('algo-recycle-bin') || '[]');
+
+    // Install default apps if not already installed
+    let needsSave = false;
+    for (const app of DEFAULT_APPS) {
+      if (!installedPrograms.some(p => p.id === app.id)) {
+        installedPrograms.push({ id: app.id, name: app.name, icon: app.icon, code: app.code });
+        needsSave = true;
+      }
+    }
+    if (needsSave) saveState();
+
+    // Apply saved theme
+    const savedTheme = localStorage.getItem('algo-theme');
+    if (savedTheme && savedTheme !== 'classic') {
+      // Re-run Look app's theme application on load
+      setTimeout(() => {
+        const lookApp = installedPrograms.find(p => p.id === 'look');
+        if (lookApp) {
+          try {
+            // Extract and apply theme CSS
+            const themeMatch = lookApp.code.match(/const themes = \{([\s\S]*?)\};/);
+            if (themeMatch) {
+              eval('const themes = {' + themeMatch[1] + '};const t=themes["' + savedTheme + '"];if(t)ALGO.injectCSS("look-theme",t.css);');
+            }
+          } catch(e) {}
+        }
+      }, 100);
+    }
+
     updateProgramsMenu();
-  } catch(e) {}
+  } catch(e) { console.error('loadState error:', e); }
 }
 
 // ==================== ALGO DOLPHIN MASCOT ====================

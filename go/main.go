@@ -908,6 +908,35 @@ func main() {
 		http.NotFound(w, r)
 	})
 
-	fmt.Printf("\n  %s %s running at http://localhost:%s\n\n", config.OSIcon, config.OSName, config.Port)
-	http.ListenAndServe(":"+config.Port, mux)
+	// Check for SSL certificates
+	certFile := "/etc/letsencrypt/live/functionserver.com/fullchain.pem"
+	keyFile := "/etc/letsencrypt/live/functionserver.com/privkey.pem"
+
+	_, certErr := os.Stat(certFile)
+	_, keyErr := os.Stat(keyFile)
+
+	if certErr == nil && keyErr == nil {
+		// SSL certificates found - run HTTPS on 443 and HTTP redirect on 80
+		fmt.Printf("\n  %s %s running at https://functionserver.com\n\n", config.OSIcon, config.OSName)
+
+		// HTTP redirect server
+		go func() {
+			redirect := http.NewServeMux()
+			redirect.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				target := "https://" + r.Host + r.URL.Path
+				if r.URL.RawQuery != "" {
+					target += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+			})
+			http.ListenAndServe(":80", redirect)
+		}()
+
+		// HTTPS server
+		http.ListenAndServeTLS(":443", certFile, keyFile, mux)
+	} else {
+		// No SSL - run HTTP only
+		fmt.Printf("\n  %s %s running at http://localhost:%s\n\n", config.OSIcon, config.OSName, config.Port)
+		http.ListenAndServe(":"+config.Port, mux)
+	}
 }
