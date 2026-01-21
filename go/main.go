@@ -343,6 +343,7 @@ func handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Command string `json:"command"`
+		Cwd     string `json:"cwd"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -359,8 +360,65 @@ func handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 	homeDir := filepath.Join(config.HomesDir, username)
 	os.MkdirAll(homeDir, 0755)
 
+	// Determine working directory
+	workDir := homeDir
+	if req.Cwd != "" && req.Cwd != "~" {
+		// Expand ~ to home dir
+		cwd := req.Cwd
+		if strings.HasPrefix(cwd, "~/") {
+			cwd = filepath.Join(homeDir, cwd[2:])
+		} else if cwd == "~" {
+			cwd = homeDir
+		} else if !filepath.IsAbs(cwd) {
+			cwd = filepath.Join(homeDir, cwd)
+		}
+		// Resolve and validate path is within home
+		resolved, err := filepath.Abs(cwd)
+		if err == nil && strings.HasPrefix(resolved, homeDir) {
+			if info, err := os.Stat(resolved); err == nil && info.IsDir() {
+				workDir = resolved
+			}
+		}
+	}
+
 	parts := strings.Fields(command)
 	baseCmd := parts[0]
+
+	// Handle cd specially - validate and return new cwd
+	if baseCmd == "cd" {
+		newDir := homeDir
+		if len(parts) > 1 {
+			target := parts[1]
+			if target == "~" || target == "" {
+				newDir = homeDir
+			} else if target == ".." {
+				newDir = filepath.Dir(workDir)
+			} else if strings.HasPrefix(target, "~/") {
+				newDir = filepath.Join(homeDir, target[2:])
+			} else if filepath.IsAbs(target) {
+				newDir = target
+			} else {
+				newDir = filepath.Join(workDir, target)
+			}
+		}
+		// Resolve and validate
+		resolved, err := filepath.Abs(newDir)
+		if err != nil || !strings.HasPrefix(resolved, homeDir) {
+			jsonResponse(w, map[string]interface{}{"error": "Access denied", "cwd": workDir}, 403)
+			return
+		}
+		if info, err := os.Stat(resolved); err != nil || !info.IsDir() {
+			jsonResponse(w, map[string]interface{}{"error": "Not a directory", "cwd": workDir}, 400)
+			return
+		}
+		// Return display path with ~ prefix
+		displayPath := strings.Replace(resolved, homeDir, "~", 1)
+		if displayPath == "" {
+			displayPath = "~"
+		}
+		jsonResponse(w, map[string]interface{}{"output": "", "cwd": displayPath}, 200)
+		return
+	}
 
 	if !isCommandAllowed(baseCmd) {
 		if baseCmd == "help" {
@@ -372,14 +430,14 @@ func handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmd := exec.Command("sh", "-c", command)
-	cmd.Dir = homeDir
+	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(),
 		"HOME="+homeDir,
 		"USER="+username,
 	)
 
 	output, err := cmd.CombinedOutput()
-	response := map[string]string{"output": strings.TrimRight(string(output), "\n")}
+	response := map[string]interface{}{"output": strings.TrimRight(string(output), "\n")}
 	if err != nil {
 		response["error"] = err.Error()
 	}
