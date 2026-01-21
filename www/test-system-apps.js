@@ -1,122 +1,113 @@
+// Test all system apps load and run correctly
 const puppeteer = require('puppeteer-core');
 
-async function test() {
-  const browser = await puppeteer.launch({ headless: true,
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--no-sandbox'] });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function testSystemApps() {
+  console.log('Starting system apps test...\n');
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    args: ['--no-sandbox']
+  });
+
   const page = await browser.newPage();
-  
-  page.on('console', msg => {
-    if (msg.type() === 'error' && !msg.text().includes('404') && !msg.text().includes('403')) {
-      console.log('ERR:', msg.text());
+  await page.setViewport({ width: 1280, height: 800 });
+
+  // Go to app
+  await page.goto('http://localhost:8080/app', { waitUntil: 'networkidle0' });
+  await sleep(1500); // Wait for guest login
+
+  // Check we're in guest mode
+  const userIndicator = await page.$eval('#user-indicator', el => el.textContent);
+  console.log('User mode:', userIndicator);
+
+  // Get list of system apps from API
+  const apps = await page.evaluate(async () => {
+    const r = await fetch('/api/system-apps');
+    const data = await r.json();
+    return data.apps;
+  });
+
+  console.log(`\nFound ${apps.length} system apps to test:\n`);
+
+  const results = [];
+
+  for (const app of apps) {
+    process.stdout.write(`Testing ${app.name} (${app.id})... `);
+
+    try {
+      // Run the app
+      const windowsBefore = await page.$$('.window');
+
+      await page.evaluate((appId) => {
+        runSystemApp(appId);
+      }, app.id);
+
+      await sleep(500);
+
+      // Check if a window was created
+      const windowsAfter = await page.$$('.window');
+      const newWindows = windowsAfter.length - windowsBefore.length;
+
+      if (newWindows > 0) {
+        // Get window title
+        const lastWindow = windowsAfter[windowsAfter.length - 1];
+        const title = await lastWindow.$eval('.window-title', el => el.textContent);
+        console.log(`✓ Window: "${title}"`);
+        results.push({ app: app.name, status: 'pass', window: title });
+
+        // Close the window
+        const closeBtn = await lastWindow.$('.win-btn.close');
+        if (closeBtn) await closeBtn.click();
+        await sleep(100);
+      } else {
+        // Check for errors
+        const hasError = await page.evaluate(() => {
+          const toasts = document.querySelectorAll('.algo-toast');
+          for (const t of toasts) {
+            if (t.textContent.includes('Error')) return t.textContent;
+          }
+          return null;
+        });
+
+        if (hasError) {
+          console.log(`✗ Error: ${hasError}`);
+          results.push({ app: app.name, status: 'fail', error: hasError });
+        } else {
+          console.log('✗ No window created');
+          results.push({ app: app.name, status: 'fail', error: 'No window' });
+        }
+      }
+    } catch (e) {
+      console.log(`✗ Exception: ${e.message}`);
+      results.push({ app: app.name, status: 'fail', error: e.message });
     }
-  });
-
-  console.log('1. Loading app...');
-  await page.goto('https://functionserver.com/app', { waitUntil: 'networkidle2', timeout: 30000 });
-  await new Promise(r => setTimeout(r, 2000));
-
-  // Register and login
-  const needsLogin = await page.evaluate(() => {
-    const overlay = document.getElementById('login-overlay');
-    return overlay && !overlay.classList.contains('hidden');
-  });
-
-  if (needsLogin) {
-    console.log('2. Registering...');
-    await page.evaluate(() => {
-      const tab = document.querySelector('.tab[data-tab="register"]');
-      if (tab) tab.click();
-    });
-    await new Promise(r => setTimeout(r, 300));
-    
-    const user = 'sysapptest' + Date.now().toString().slice(-6);
-    await page.evaluate((u) => {
-      document.getElementById('reg-username').value = u;
-      document.getElementById('reg-password').value = 'test123';
-      document.getElementById('reg-confirm').value = 'test123';
-      document.querySelector('#register-form button').click();
-    }, user);
-    await new Promise(r => setTimeout(r, 3000));
   }
-
-  // Wait for system apps to load
-  await new Promise(r => setTimeout(r, 2000));
-
-  // Check system apps
-  console.log('3. Checking system apps...');
-  const result = await page.evaluate(() => {
-    return {
-      systemAppsCount: typeof systemApps !== 'undefined' ? systemApps.length : 0,
-      systemApps: typeof systemApps !== 'undefined' ? systemApps.map(a => ({ id: a.id, name: a.name, icon: a.icon })) : [],
-      uninstalledCount: typeof uninstalledSystemApps !== 'undefined' ? uninstalledSystemApps.length : 0
-    };
-  });
-
-  console.log('   System apps:', result.systemAppsCount);
-  result.systemApps.forEach(a => console.log('   -', a.icon, a.name));
-
-  // Run Ticket Manager directly
-  if (result.systemAppsCount > 0) {
-    console.log('4. Running Ticket Manager...');
-    await page.evaluate(() => {
-      const app = systemApps.find(a => a.id === 'ticket-manager');
-      if (app) runApp(app);
-    });
-    await new Promise(r => setTimeout(r, 1500));
-
-    const windowOpen = await page.evaluate(() => {
-      const windows = document.querySelectorAll('.window');
-      return Array.from(windows).some(w => w.textContent.includes('Ticket Manager'));
-    });
-    console.log('   Window opened:', windowOpen);
-
-    // Check if the app UI loaded
-    const appUI = await page.evaluate(() => {
-      const hasRefresh = !!document.querySelector('button[onclick*="_tm_refresh"]');
-      const hasList = !!document.getElementById('tm-list');
-      return { hasRefresh, hasList };
-    });
-    console.log('   App UI loaded:', appUI.hasRefresh && appUI.hasList);
-  }
-
-  // Test fork functionality
-  console.log('5. Testing fork...');
-  await page.evaluate(() => {
-    forkSystemApp('ticket-manager');
-  });
-  await new Promise(r => setTimeout(r, 500));
-
-  const forked = await page.evaluate(() => {
-    return installedPrograms.some(p => p.name.includes('Ticket Manager') && p.name.includes('Copy'));
-  });
-  console.log('   Forked successfully:', forked);
-
-  // Test uninstall
-  console.log('6. Testing uninstall...');
-  await page.evaluate(() => {
-    uninstallSystemApp('ticket-manager');
-  });
-  await new Promise(r => setTimeout(r, 500));
-
-  const uninstalled = await page.evaluate(() => {
-    return uninstalledSystemApps.includes('ticket-manager');
-  });
-  console.log('   Uninstalled:', uninstalled);
-
-  // Test reinstall
-  console.log('7. Testing reinstall...');
-  await page.evaluate(() => {
-    reinstallSystemApp('ticket-manager');
-  });
-  await new Promise(r => setTimeout(r, 500));
-
-  const reinstalled = await page.evaluate(() => {
-    return !uninstalledSystemApps.includes('ticket-manager');
-  });
-  console.log('   Reinstalled:', reinstalled);
 
   await browser.close();
-  console.log('\n✓ System apps test complete!');
+
+  // Summary
+  console.log('\n=== SUMMARY ===');
+  const passed = results.filter(r => r.status === 'pass').length;
+  const failed = results.filter(r => r.status === 'fail').length;
+  console.log(`Passed: ${passed}/${results.length}`);
+  console.log(`Failed: ${failed}/${results.length}`);
+
+  if (failed > 0) {
+    console.log('\nFailed apps:');
+    results.filter(r => r.status === 'fail').forEach(r => {
+      console.log(`  - ${r.app}: ${r.error}`);
+    });
+    process.exit(1);
+  } else {
+    console.log('\nAll system apps working!');
+    process.exit(0);
+  }
 }
 
-test().catch(e => console.error('Error:', e.message));
+testSystemApps().catch(e => {
+  console.error('Test failed:', e);
+  process.exit(1);
+});

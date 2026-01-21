@@ -1,0 +1,5356 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Function Server</title>
+<link rel="stylesheet" href="algo-os.css">
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div id="login-overlay">
+  <div class="login-dialog">
+    <h2>🖥️ Function Server</h2>
+    <div class="tabs">
+      <div class="tab active" data-tab="login" onclick="showLoginTab('login')">Login</div>
+      <div class="tab" data-tab="register" onclick="showLoginTab('register')">Register</div>
+    </div>
+    <div id="login-form">
+      <label>Username:</label>
+      <input type="text" id="login-username" autocomplete="username">
+      <label>Password:</label>
+      <input type="password" id="login-password" autocomplete="current-password">
+      <div class="buttons">
+        <button onclick="doLogin()">Login</button>
+      </div>
+    </div>
+    <div id="register-form" style="display:none;">
+      <label>Username:</label>
+      <input type="text" id="reg-username" autocomplete="username">
+      <label>Password:</label>
+      <input type="password" id="reg-password" autocomplete="new-password">
+      <label>Confirm:</label>
+      <input type="password" id="reg-confirm" autocomplete="new-password">
+      <div class="buttons">
+        <button onclick="doRegister()">Create Account</button>
+      </div>
+    </div>
+    <div id="login-error" class="error"></div>
+  </div>
+</div>
+
+<div id="user-indicator"></div>
+<div id="desktop"></div>
+<div id="toast-container"></div>
+
+<div id="taskbar">
+  <div id="start-btn" onclick="toggleStartMenu()">
+    <span style="font-size:14px;">🐬</span> Start
+  </div>
+  <div id="taskbar-windows"></div>
+  <div id="mini-player">
+    <span class="mini-btn" onclick="miniPlayerPrev()">⏮</span>
+    <span class="mini-btn" id="mini-play-btn" onclick="miniPlayerToggle()">▶</span>
+    <span class="mini-btn" onclick="miniPlayerNext()">⏭</span>
+    <span class="mini-title" id="mini-player-title" onclick="miniPlayerOpen()">No track</span>
+  </div>
+  <div id="clock"></div>
+</div>
+
+<div id="start-menu">
+  <div class="start-sidebar">FunctionServer</div>
+  <div class="start-items">
+    <div class="start-item has-sub" onclick="toggleSubmenu(event, this)" onmouseenter="openSubmenu(this)" onmouseleave="closeSubmenuDelay(this)">
+      <span>📁</span> Programs
+      <div class="start-submenu" id="programs-menu" onmouseenter="if(submenuCloseTimeout){clearTimeout(submenuCloseTimeout);submenuCloseTimeout=null;}" onmouseleave="closeSubmenuDelay(this.parentElement)">
+        <div class="start-item" onclick="openNotepad()"><span>📝</span> Notepad</div>
+        <div class="start-item" onclick="openJSIDE()"><span>📜</span> JavaScript.IDE</div>
+        <div class="start-item" onclick="openBrowser()"><span>🌐</span> Web Browser</div>
+        <div class="start-separator"></div>
+        <div id="installed-programs-menu"></div>
+      </div>
+    </div>
+    <div class="start-item" onclick="openDocumentation()"><span style="color:#8B0000;">📕</span> Documentation</div>
+    <div class="start-item" onclick="openHelp()"><span style="color:#8B0000;">📙</span> Help</div>
+    <div class="start-separator"></div>
+    <div class="start-item" onclick="openNotepad()"><span>📝</span> New Post</div>
+    <div class="start-item" onclick="runSystemApp('sticky-notes')"><span>📌</span> Sticky Notes</div>
+    <div class="start-separator"></div>
+    <div class="start-item" onclick="showAbout()"><span>ℹ️</span> About</div>
+    <div class="start-item" onclick="openSettings()"><span>⚙️</span> Settings</div>
+    <div class="start-separator"></div>
+    <div class="start-item" id="start-menu-auth" onclick="logout()"><span>🚪</span> Log Out</div>
+  </div>
+</div>
+
+<div id="context-menu"></div>
+
+
+<div id="todo-overlay">
+  <div class="overlay-header">
+    <span>📋 Tasks</span>
+    <span class="close-btn" onclick="hideTodoOverlay()">×</span>
+  </div>
+  <div class="overlay-content" id="todo-overlay-content">
+    <div style="color:#888;text-align:center;">No pending tasks</div>
+  </div>
+  <div class="overlay-footer">
+    <button onclick="openTodoApp()">Open Todo App</button>
+    <button onclick="hideTodoOverlay()">Hide</button>
+  </div>
+</div>
+
+<div id="calendar-widget">
+  <div class="widget-header" onmousedown="startCalendarWidgetDrag(event)" ontouchstart="startCalendarWidgetDrag(event)">
+    <span>📅 Calendar</span>
+    <span class="close-btn" onclick="hideCalendarWidget()">×</span>
+  </div>
+  <div class="calendar-nav">
+    <button onclick="calendarWidgetPrev()">◀</button>
+    <span id="calendar-widget-month">January 2026</span>
+    <button onclick="calendarWidgetNext()">▶</button>
+  </div>
+  <div class="calendar-grid" id="calendar-widget-grid"></div>
+  <div class="upcoming" id="calendar-widget-upcoming"></div>
+  <div class="widget-footer">
+    <button onclick="openCalendarApp()">Open Calendar</button>
+  </div>
+</div>
+
+<script>
+// ==================== AUTH CONFIG ====================
+const API_BASE = '/api';
+let currentUser = null;
+let sessionToken = null;
+
+// ==================== AUTH FUNCTIONS ====================
+function checkSession() {
+  const token = localStorage.getItem('session_token');
+  const user = localStorage.getItem('username');
+  if (token && user) {
+    fetch(API_BASE + '/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, username: user })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.valid) {
+        loginSuccess(user, token);
+      } else {
+        // Start as guest instead of showing login
+        startAsGuest();
+      }
+    })
+    .catch(() => startAsGuest());
+  } else {
+    // Start as guest - no login required
+    startAsGuest();
+  }
+}
+
+function startAsGuest() {
+  currentUser = 'Guest';
+  sessionToken = null;
+  hideLogin();
+  document.getElementById('user-indicator').textContent = 'Guest (click to login)';
+  document.getElementById('user-indicator').style.cursor = 'pointer';
+  document.getElementById('user-indicator').onclick = showLogin;
+  // Update start menu to show login instead of logout
+  const authItem = document.getElementById('start-menu-auth');
+  if (authItem) {
+    authItem.innerHTML = '<span>🔑</span> Login / Register';
+    authItem.onclick = function() { hideStartMenu(); showLogin(); };
+  }
+  init();
+}
+
+function showLogin() {
+  document.getElementById('login-overlay').classList.remove('hidden');
+}
+
+function hideLogin() {
+  document.getElementById('login-overlay').classList.add('hidden');
+}
+
+function showLoginTab(tab) {
+  document.querySelectorAll('.login-dialog .tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('login-error').textContent = '';
+}
+
+function loginSuccess(username, token) {
+  currentUser = username;
+  sessionToken = token;
+  localStorage.setItem('session_token', token);
+  localStorage.setItem('username', username);
+  hideLogin();
+  document.getElementById('user-indicator').textContent = username + '@FunctionServer';
+  document.getElementById('user-indicator').onclick = null;
+  document.getElementById('user-indicator').style.cursor = 'default';
+  // Restore logout button in start menu
+  const authItem = document.getElementById('start-menu-auth');
+  if (authItem) {
+    authItem.innerHTML = '<span>🚪</span> Log Out';
+    authItem.onclick = logout;
+  }
+  init();
+}
+
+function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!username || !password) {
+    errorEl.textContent = 'Please enter username and password';
+    return;
+  }
+
+  fetch(API_BASE + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      loginSuccess(data.username, data.token);
+    } else {
+      errorEl.textContent = data.error || 'Login failed';
+    }
+  })
+  .catch(e => {
+    errorEl.textContent = 'Connection error';
+  });
+}
+
+function doRegister() {
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm = document.getElementById('reg-confirm').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!username || !password) {
+    errorEl.textContent = 'Please fill all fields';
+    return;
+  }
+  if (password !== confirm) {
+    errorEl.textContent = 'Passwords do not match';
+    return;
+  }
+  if (password.length < 6) {
+    errorEl.textContent = 'Password must be at least 6 characters';
+    return;
+  }
+
+  fetch(API_BASE + '/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      loginSuccess(data.username, data.token);
+    } else {
+      errorEl.textContent = data.error || 'Registration failed';
+    }
+  })
+  .catch(e => {
+    errorEl.textContent = 'Connection error';
+  });
+}
+
+function logout() {
+  currentUser = null;
+  sessionToken = null;
+  localStorage.removeItem('session_token');
+  localStorage.removeItem('username');
+  location.reload();
+}
+
+// ==================== STATE ====================
+let windows = [];
+let winId = 0;
+let activeWin = null;
+let savedFiles = [];
+let installedPrograms = [];  // User-installed apps
+let systemApps = [];          // Admin-provided system apps (read-only)
+let uninstalledSystemApps = []; // System apps user has uninstalled
+let roomFolders = [];
+let windowStates = {};
+let apiKeys = {};
+let dragWin = null;
+let dragOffset = {x:0,y:0};
+let contextTarget = null;
+
+// P2P Chat State
+let chatPeerId = 'p' + Math.random().toString(36).substr(2, 9);
+let chatPeers = {}; // peerId -> { pc, dataChannel, connected, name }
+let chatRoom = 'algo-chat';
+let chatName = localStorage.getItem('algo-chat-name') || 'anon';
+let chatPollInterval = null;
+let chatWinId = null;
+
+// Sticky Notes State
+let stickyNotes = [];
+let stickyNoteId = 0;
+let dragStickyNote = null;
+
+// Icon Drag State
+let dragIcon = null;
+let iconDragOffset = {x:0, y:0};
+let iconPositions = {}; // iconId -> {x, y}
+const GRID_SIZE = 80; // Snap-to-grid size
+
+// Folder System
+let folders = []; // { id, name, parent, items: [] }
+let recycleBin = []; // { originalItem, originalParent, deletedAt }
+
+// Special folder IDs
+const FOLDER_DESKTOP = 'desktop';
+const FOLDER_PROGRAMS = 'programs';
+const FOLDER_RECYCLE = 'recycle-bin';
+
+// File Type Registry - apps register file types they handle
+// inputIcon takes priority over outputIcon for display
+let fileTypeRegistry = {
+  // ext -> { inputIcon, outputIcon, inputApp, outputApp, description }
+  'txt': { outputIcon: '📄', outputApp: 'Notepad', description: 'Text Document' },
+  'html': { outputIcon: '🌐', outputApp: 'JavaScript.IDE', description: 'HTML Document' },
+  'js': { outputIcon: '📜', outputApp: 'JavaScript.IDE', description: 'JavaScript' },
+  'shader': { inputIcon: '✨', outputIcon: '✨', inputApp: 'Shade Station', outputApp: 'Shade Station', description: 'GLSL Shader' },
+  'mid': { inputIcon: '🎹', outputIcon: '🎹', inputApp: 'MIDI Editor', outputApp: 'MIDI Editor', description: 'MIDI File' },
+  'json': { outputIcon: '📋', outputApp: 'Notepad', description: 'JSON Data' },
+  'css': { outputIcon: '🎨', outputApp: 'Notepad', description: 'Stylesheet' },
+  'theme': { inputIcon: '🖌️', outputIcon: '🖌️', inputApp: 'Look', outputApp: 'Look', description: 'Theme File' },
+};
+
+// Custom CSS injected by apps (like Look)
+let injectedCSS = {};
+
+// ALGO API for external apps
+const ALGO = {
+  app: { name: 'App', icon: '📱' },
+
+  // Register a file type handler
+  registerFileType: function(ext, opts) {
+    const existing = fileTypeRegistry[ext] || {};
+    if (opts.inputIcon) {
+      existing.inputIcon = opts.inputIcon;
+      existing.inputApp = opts.appName || ALGO.app.name;
+    }
+    if (opts.outputIcon) {
+      existing.outputIcon = opts.outputIcon;
+      existing.outputApp = opts.appName || ALGO.app.name;
+    }
+    if (opts.description) existing.description = opts.description;
+    fileTypeRegistry[ext] = existing;
+    createDesktopIcons(); // Refresh icons
+  },
+
+  // Get icon for a file (input takes priority)
+  getFileIcon: function(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const reg = fileTypeRegistry[ext];
+    if (reg) return reg.inputIcon || reg.outputIcon || '📄';
+    return '📄';
+  },
+
+  // Inject custom CSS (for theming)
+  injectCSS: function(id, css) {
+    // Remove old style if exists
+    const oldStyle = document.getElementById('injected-css-' + id);
+    if (oldStyle) oldStyle.remove();
+
+    if (css) {
+      const style = document.createElement('style');
+      style.id = 'injected-css-' + id;
+      style.textContent = css;
+      document.head.appendChild(style);
+      injectedCSS[id] = css;
+    } else {
+      delete injectedCSS[id];
+    }
+  },
+
+  // Remove injected CSS
+  removeCSS: function(id) {
+    ALGO.injectCSS(id, null);
+  },
+
+  // Create a window
+  createWindow: function(opts) {
+    return createWindow(opts);
+  },
+
+  // UI helpers
+  ui: {
+    button: (label, onclick) => `<button onclick="${onclick}">${label}</button>`,
+    input: (id, placeholder, value) => `<input id="${id}" placeholder="${placeholder || ''}" value="${value || ''}">`,
+    select: (id, options) => `<select id="${id}">${options.map(o =>
+      typeof o === 'string' ? `<option>${o}</option>` : `<option value="${o.value}">${o.label}</option>`
+    ).join('')}</select>`,
+    label: (text) => `<label>${text}</label>`,
+    panel: (content) => `<div style="padding:10px;background:#f5f5f5;border:1px solid #ccc;margin:4px;">${content}</div>`,
+    row: (content) => `<div style="display:flex;gap:8px;margin:4px 0;align-items:center;">${content}</div>`,
+    colorPicker: (id, value) => `<input type="color" id="${id}" value="${value || '#000000'}">`
+  },
+
+  // Get/set values
+  getValue: (id) => document.getElementById(id)?.value,
+  setValue: (id, val) => { const el = document.getElementById(id); if(el) el.value = val; },
+  getElement: (id) => document.getElementById(id),
+
+  // Notifications
+  notify: (msg) => algoSpeak(msg),
+
+  // File operations
+  saveFile: function(name, content, type) {
+    // Delegate to the global saveFile function
+    if (window.saveFileToServer) {
+      return saveFileToServer(name, content, type);
+    }
+    // Fallback to localStorage
+    const existing = savedFiles.findIndex(f => f.name === name);
+    if (existing >= 0) {
+      savedFiles[existing] = { name, content, type: type || 'text' };
+    } else {
+      savedFiles.push({ name, content, type: type || 'text' });
+    }
+    createDesktopIcons();
+    return true;
+  },
+
+  loadFile: function(name) {
+    const file = savedFiles.find(f => f.name === name);
+    return file ? file.content : null;
+  },
+
+  // List files
+  listFiles: function(ext) {
+    if (ext) {
+      return savedFiles.filter(f => f.name.endsWith('.' + ext));
+    }
+    return savedFiles;
+  },
+
+  // Get current user
+  getUser: function() {
+    return currentUser || localStorage.getItem('guest-username') || null;
+  },
+
+  // Check if logged in
+  isLoggedIn: function() {
+    return !!sessionToken;
+  }
+};
+
+// Todo State
+let todoLists = []; // { id, name, items: [{ id, text, done, created }] }
+let todoOverlayHidden = false;
+let todoWinId = null;
+
+// Calendar State
+let calendarEvents = []; // { id, title, date, isHoliday }
+let calendarWidgetHidden = false;
+let calendarWidgetMonth = new Date().getMonth();
+let calendarWidgetYear = new Date().getFullYear();
+let calendarWinId = null;
+let calendarAppMonth = new Date().getMonth();
+let calendarAppYear = new Date().getFullYear();
+let stickyDragOffset = {x:0, y:0};
+let calendarWidgetPos = { x: null, y: null }; // null means use percentage-based default
+let calendarWidgetDragging = false;
+let calendarWidgetDragOffset = { x: 0, y: 0 };
+
+const HELP_CONTENT = {
+  'welcome': {
+    title: 'Welcome',
+    content: `<h1>Welcome to Function Server</h1>
+<p>A cloud operating system in your browser.</p>
+<h2>Getting Started</h2>
+<ul>
+<li><b>Double-click</b> icons to open programs</li>
+<li><b>Right-click</b> for context menus</li>
+<li>Use the <b>Start Menu</b> to access all programs</li>
+</ul>
+<h2>AI Agents</h2>
+<p>Use the Agents app to generate code with Claude, Gemini, or GPT.</p>
+<h2>Building Apps</h2>
+<p>Use Designer for layouts, Craft for components, and JavaScript.IDE to code.</p>`
+  },
+  'agents': {
+    title: 'AI Agents',
+    content: `<h1>AI Agents</h1>
+<p>Generate code and apps using AI models.</p>
+<h2>Setup</h2>
+<ol>
+<li>Open Agents from Start → Programs</li>
+<li>Select a model (Claude, Gemini, or GPT)</li>
+<li>Enter your API key (saved locally)</li>
+<li>Describe what you want to build</li>
+</ol>
+<p>Generated apps appear on your desktop.</p>`
+  },
+  'chat': {
+    title: 'Chat',
+    content: `<h1>Chat</h1>
+<p>Chat with other users in real-time.</p>
+<h2>Features</h2>
+<ul>
+<li>See who's online</li>
+<li>Send messages</li>
+<li>P2P WebRTC connections</li>
+</ul>`
+  },
+  'shadestation': {
+    title: 'Shade Station',
+    content: `<h1>Shade Station</h1>
+<p>A real-time WebGL shader editor for creating visual effects.</p>
+<h2>Features</h2>
+<ul>
+<li>Live preview as you type</li>
+<li>Built-in presets (Rainbow, Plasma, Circles, Mouse)</li>
+<li>Uniforms: u_time, u_resolution, u_mouse</li>
+<li>Save shaders to desktop as .shader files</li>
+<li>Speed control and pause</li>
+</ul>
+<h2>Shader Uniforms</h2>
+<ul>
+<li><code>u_time</code> - elapsed time in seconds</li>
+<li><code>u_resolution</code> - canvas width/height</li>
+<li><code>u_mouse</code> - mouse position</li>
+</ul>
+<h2>File Format</h2>
+<p>Shade Station uses .shader files containing GLSL fragment shader code. Double-click any .shader file to open it.</p>`
+  }
+};
+
+
+// ==================== INIT ====================
+function init() {
+  loadState();
+  loadSystemApps(); // Load admin-provided system apps
+  createDesktopIcons();
+  loadStickyNotes();
+  loadTodos();
+  loadCalendar();
+  loadDesktopBackground();
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  document.addEventListener('click', globalClick);
+  document.addEventListener('contextmenu', showContextMenu);
+  document.addEventListener('mousedown', startDrag);
+  document.addEventListener('mousemove', onDrag);
+  document.addEventListener('mouseup', endDrag);
+  document.addEventListener('paste', handleDesktopPaste);
+
+  // Touch support for mobile - dragging windows and long press context menu
+  let longPressTimer = null;
+  let longPressTarget = null;
+  let touchDragging = false;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const touch = e.touches[0];
+    const titlebar = e.target.closest('.window-titlebar');
+
+    // Check if touching a window titlebar for dragging
+    if (titlebar && !e.target.classList.contains('window-btn')) {
+      const id = parseInt(titlebar.dataset.winid);
+      dragWin = windows.find(w => w.id === id);
+      if (dragWin) {
+        const el = document.getElementById('win-' + id);
+        dragOffset.x = touch.clientX - el.offsetLeft;
+        dragOffset.y = touch.clientY - el.offsetTop;
+        touchDragging = true;
+        focusWindow(id);
+        e.preventDefault(); // Prevent scrolling when starting to drag
+        return;
+      }
+    }
+
+    // Check if touching a sticky note header for dragging
+    const stickyHeader = e.target.closest('.sticky-header');
+    if (stickyHeader) {
+      const stickyEl = stickyHeader.closest('.sticky-note');
+      if (stickyEl) {
+        const id = parseInt(stickyEl.id.replace('sticky-', ''));
+        dragStickyNote = stickyNotes.find(n => n.id === id);
+        if (dragStickyNote) {
+          stickyDragOffset.x = touch.clientX - stickyEl.offsetLeft;
+          stickyDragOffset.y = touch.clientY - stickyEl.offsetTop;
+          touchDragging = true;
+          e.preventDefault();
+          return;
+        }
+      }
+    }
+
+    // Check if touching a desktop icon - handle tap vs drag
+    const icon = e.target.closest('.desktop-icon');
+    if (icon) {
+      // Store touch start position for drag detection
+      icon._touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+      icon._touchMoved = false;
+      iconDragOffset.x = touch.clientX - icon.offsetLeft;
+      iconDragOffset.y = touch.clientY - icon.offsetTop;
+      icon.classList.add('selected');
+      document.querySelectorAll('.desktop-icon').forEach(i => {
+        if (i !== icon) i.classList.remove('selected');
+      });
+      // Don't start drag immediately - wait for movement
+      dragIcon = null;
+      touchDragging = false;
+      e.preventDefault();
+      return;
+    }
+
+    // Long press for context menu (only if not dragging)
+    longPressTarget = { x: touch.clientX, y: touch.clientY, target: e.target };
+    longPressTimer = setTimeout(() => {
+      if (longPressTarget && !touchDragging) {
+        showContextMenu({ preventDefault: ()=>{}, clientX: longPressTarget.x, clientY: longPressTarget.y, target: longPressTarget.target });
+        longPressTarget = null;
+      }
+    }, 600);
+  }, { passive: false });
+
+  document.addEventListener('touchmove', (e) => {
+    clearTimeout(longPressTimer);
+    longPressTarget = null;
+
+    if (touchDragging && e.touches.length > 0) {
+      const touch = e.touches[0];
+
+      if (dragWin) {
+        const el = document.getElementById('win-' + dragWin.id);
+        dragWin.x = touch.clientX - dragOffset.x;
+        dragWin.y = touch.clientY - dragOffset.y;
+        el.style.left = dragWin.x + 'px';
+        el.style.top = dragWin.y + 'px';
+        e.preventDefault(); // Prevent scrolling while dragging
+      }
+
+      if (dragStickyNote) {
+        const el = document.getElementById('sticky-' + dragStickyNote.id);
+        dragStickyNote.x = touch.clientX - stickyDragOffset.x;
+        dragStickyNote.y = touch.clientY - stickyDragOffset.y;
+        el.style.left = dragStickyNote.x + 'px';
+        el.style.top = dragStickyNote.y + 'px';
+        e.preventDefault();
+      }
+
+      if (dragIcon) {
+        let newX = touch.clientX - iconDragOffset.x;
+        let newY = touch.clientY - iconDragOffset.y;
+        // Keep icon on screen
+        const desktop = document.getElementById('desktop');
+        const maxX = desktop.clientWidth - dragIcon.offsetWidth;
+        const maxY = desktop.clientHeight - dragIcon.offsetHeight - 40;
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+        dragIcon.style.left = newX + 'px';
+        dragIcon.style.top = newY + 'px';
+        e.preventDefault();
+      }
+    }
+
+    // Check if a selected icon needs to start dragging (moved more than 10px)
+    const selectedIcon = document.querySelector('.desktop-icon.selected');
+    if (selectedIcon && selectedIcon._touchStart && !dragIcon && e.touches.length > 0) {
+      const touch = e.touches[0];
+      const dx = Math.abs(touch.clientX - selectedIcon._touchStart.x);
+      const dy = Math.abs(touch.clientY - selectedIcon._touchStart.y);
+      if (dx > 10 || dy > 10) {
+        selectedIcon._touchMoved = true;
+        dragIcon = selectedIcon;
+        touchDragging = true;
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+
+  // Track last tap for double-tap detection
+  let lastIconTap = { time: 0, icon: null };
+
+  document.addEventListener('touchend', (e) => {
+    clearTimeout(longPressTimer);
+    longPressTarget = null;
+
+    // Check for icon tap (not drag)
+    const selectedIcon = document.querySelector('.desktop-icon.selected');
+    if (selectedIcon && selectedIcon._touchStart && !selectedIcon._touchMoved && !touchDragging) {
+      const now = Date.now();
+      const tapDuration = now - selectedIcon._touchStart.time;
+
+      // If quick tap (< 300ms) - treat as a tap
+      if (tapDuration < 300) {
+        // Check for double tap
+        if (lastIconTap.icon === selectedIcon && (now - lastIconTap.time) < 400) {
+          // Double tap - open the icon
+          if (selectedIcon.ondblclick) selectedIcon.ondblclick();
+          lastIconTap = { time: 0, icon: null };
+        } else {
+          // Single tap - remember for potential double tap
+          lastIconTap = { time: now, icon: selectedIcon };
+        }
+      }
+      selectedIcon._touchStart = null;
+    }
+
+    if (touchDragging) {
+      if (dragWin) {
+        const stateKey = dragWin.stateKey || dragWin.title;
+        windowStates[stateKey] = { x: dragWin.x, y: dragWin.y, width: dragWin.width, height: dragWin.height };
+        saveState();
+      }
+      if (dragStickyNote) {
+        saveStickyNotes();
+      }
+      if (dragIcon) {
+        const iconId = dragIcon.dataset.iconId;
+        iconPositions[iconId] = {
+          x: parseInt(dragIcon.style.left),
+          y: parseInt(dragIcon.style.top)
+        };
+        localStorage.setItem('algo-icon-positions', JSON.stringify(iconPositions));
+        dragIcon._touchStart = null;
+        dragIcon._touchMoved = false;
+      }
+      dragWin = null;
+      dragStickyNote = null;
+      dragIcon = null;
+      touchDragging = false;
+    }
+  });
+
+  setTimeout(() => algoSpeak("Welcome to Function Server!"), 1500);
+}
+
+function handleDesktopPaste(e) {
+  // Only handle paste if not in an input/textarea
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.target.isContentEditable) return;
+
+  const clipboardData = e.clipboardData || window.clipboardData;
+
+  // Check for images first
+  const items = clipboardData.items;
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const blob = items[i].getAsFile();
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const dataUrl = event.target.result;
+          const filename = generatePasteFilename('img', '.png');
+          savedFiles.push({ name: filename, content: dataUrl, type: 'image' });
+          saveState();
+          createDesktopIcons();
+          algoSpeak('Pasted ' + filename);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+  }
+
+  // Check for text
+  const text = clipboardData.getData('text').trim();
+  if (!text) return;
+
+  // Check if it's a laserbarf URL or artifact name - create shortcut
+  let artifactName = null;
+  if (text.match(/^https?:\/\/(www\.)?laserbarf\.com\/([a-z0-9-]+)/i)) {
+    artifactName = text.match(/laserbarf\.com\/([a-z0-9-]+)/i)[1];
+  } else if (text.match(/^\/([a-z0-9-]+)/i)) {
+    artifactName = text.match(/^\/([a-z0-9-]+)/i)[1];
+  }
+
+  if (artifactName) {
+    e.preventDefault();
+    createDesktopShortcut(artifactName);
+    algoSpeak('Added shortcut: ' + artifactName);
+    return;
+  }
+
+  // Otherwise create a text file
+  e.preventDefault();
+  const filename = generatePasteFilename('note', '.txt');
+  savedFiles.push({ name: filename, content: text, type: 'text' });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Pasted ' + filename);
+}
+
+function generatePasteFilename(prefix, ext) {
+  const syllables = ['mo','ha','lo','ki','ra','zu','na','te','fi','bo','se','lu','pa','ri','do','ve'];
+  let name = prefix + '-' + syllables[Math.floor(Math.random()*syllables.length)] +
+             syllables[Math.floor(Math.random()*syllables.length)] + ext;
+  let counter = 1;
+  while (savedFiles.some(f => f.name === name)) {
+    name = prefix + '-' + syllables[Math.floor(Math.random()*syllables.length)] +
+           syllables[Math.floor(Math.random()*syllables.length)] + '(' + counter + ')' + ext;
+    counter++;
+  }
+  return name;
+}
+
+function createDesktopIcons() {
+  const desktop = document.getElementById('desktop');
+  // Keep windows, don't clear them
+  desktop.querySelectorAll('.desktop-icon').forEach(el => el.remove());
+
+  // Initialize folders if needed
+  initFolders();
+
+  // System folders at top-right (Programs and Recycle Bin)
+  const systemFolderIcons = [
+    { id: FOLDER_PROGRAMS, name: 'Programs', icon: '📁', x: window.innerWidth - 100, y: 20, action: 'openFolder', folderId: FOLDER_PROGRAMS },
+    { id: FOLDER_RECYCLE, name: 'Recycle Bin', icon: recycleBin.length > 0 ? '🗑️' : '🗑️', x: window.innerWidth - 100, y: 100, action: 'openFolder', folderId: FOLDER_RECYCLE },
+  ];
+
+  // Desktop icons - organized for a clean, professional look
+  // Left column: Core productivity tools
+  const defaultIcons = [
+    { id: 'jsIDE', name: 'JavaScript.IDE', icon: '📜', x: 20, y: 20, action: 'openJSIDE' },
+    { id: 'notepad', name: 'Notepad', icon: '📝', x: 20, y: 100, action: 'openNotepad' },
+    { id: 'browser', name: 'Web Browser', icon: '🌐', x: 20, y: 180, action: 'openBrowser' },
+    { id: 'docs', name: 'Documentation', icon: '📕', x: 20, y: 260, action: 'openDocumentation' },
+  ];
+
+  systemFolderIcons.forEach(ic => createDesktopIcon(ic));
+  defaultIcons.forEach(ic => createDesktopIcon(ic));
+
+  // User-created folders on desktop
+  const desktopFolders = folders.filter(f => f.parent === FOLDER_DESKTOP && !f.isSystem);
+  desktopFolders.forEach((f, i) => {
+    createDesktopIcon({
+      id: f.id,
+      name: f.name,
+      icon: f.icon || '📁',
+      x: 100 + (i % 4) * 80,
+      y: 20 + Math.floor(i / 4) * 80,
+      action: 'openFolder',
+      folderId: f.id
+    });
+  });
+
+  // Saved files - only show files NOT in a folder (desktop level)
+  const desktopFiles = savedFiles.filter(f => !f.room && (!f.parent || f.parent === FOLDER_DESKTOP));
+  desktopFiles.forEach((f, i) => {
+    const fileIdx = savedFiles.indexOf(f);
+    // Use file type registry for icons
+    let icon = ALGO.getFileIcon(f.name);
+    if (f.type === 'image' || f.name.endsWith('.png') || f.name.endsWith('.jpg') || f.name.endsWith('.gif')) icon = '🖼️';
+    createDesktopIcon({
+      id: 'file-' + fileIdx,
+      name: f.name,
+      icon: icon,
+      imageData: f.type === 'image' ? f.content : null,
+      x: 180 + (i % 4) * 80,
+      y: 20 + Math.floor(i / 4) * 80,
+      action: f.type === 'image' ? 'viewImage' : 'openFile',
+      data: f
+    });
+  });
+
+  // Installed programs (show on desktop)
+  installedPrograms.forEach((p, i) => {
+    createDesktopIcon({
+      id: 'prog-' + p.id,
+      name: p.name,
+      icon: p.icon || '🎮',
+      x: 180 + ((desktopFiles.length + i) % 4) * 80,
+      y: 20 + Math.floor((desktopFiles.length + i) / 4) * 80,
+      action: 'runProgram',
+      data: p
+    });
+  });
+
+  // Room folders
+  roomFolders.forEach((r, i) => {
+    const offset = desktopFiles.length + installedPrograms.length;
+    createDesktopIcon({
+      id: 'room-' + r.name,
+      name: r.name,
+      icon: '📂',
+      x: 180 + ((offset + i) % 4) * 80,
+      y: 20 + Math.floor((offset + i) / 4) * 80,
+      action: 'openRoomFolder',
+      data: r
+    });
+  });
+}
+
+function createDesktopIcon(ic) {
+  const el = document.createElement('div');
+  el.className = 'desktop-icon';
+  el.id = 'icon-' + ic.id;
+  // Use saved position if available, otherwise snap default to grid
+  const savedPos = iconPositions[ic.id];
+  const pos = savedPos ? savedPos : snapToGrid(ic.x, ic.y);
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
+  // Show image thumbnail for image files
+  if (ic.imageData) {
+    el.innerHTML = '<div class="icon-img icon-thumbnail"><img src="' + ic.imageData + '" alt=""></div><span>' + ic.name + '</span>';
+  } else {
+    el.innerHTML = '<div class="icon-img">' + ic.icon + '</div><span>' + ic.name + '</span>';
+  }
+  el.ondblclick = () => {
+    if (ic.action === 'openFile') openSavedFile(ic.data);
+    else if (ic.action === 'viewImage') viewImage(ic.data);
+    else if (ic.action === 'runProgram') runProgram(ic.data);
+    else if (ic.action === 'openRoomFolder') openRoomFolder(ic.data);
+    else if (ic.action === 'openFolder') openFolder(ic.folderId);
+    else if (window[ic.action]) window[ic.action]();
+  };
+  if (ic.folderId) el.dataset.folderId = ic.folderId;
+  // Mousedown for dragging - only start drag on icon-img or icon area, not on double-click
+  el.onmousedown = (e) => {
+    // Select icon on click
+    document.querySelectorAll('.desktop-icon').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+  };
+  el.dataset.iconId = ic.id;
+  el.dataset.iconType = ic.action;
+  el.dataset.defaultX = ic.x;
+  el.dataset.defaultY = ic.y;
+  if (ic.data) el.dataset.fileData = JSON.stringify(ic.data);
+  document.getElementById('desktop').appendChild(el);
+}
+
+// ==================== WINDOWS ====================
+function createWindow(opts) {
+  const id = winId++;
+  const stateKey = opts.stateKey || opts.title || 'Window';
+  const saved = windowStates[stateKey] || {};
+  const win = {
+    id, title: opts.title || 'Window', icon: opts.icon || '📄',
+    stateKey: stateKey,
+    x: saved.x ?? opts.x ?? 150 + (id % 5) * 30,
+    y: saved.y ?? opts.y ?? 80 + (id % 5) * 30,
+    width: saved.width ?? opts.width ?? 500,
+    height: saved.height ?? opts.height ?? 400,
+    minimized: false, content: opts.content || '',
+    menubar: opts.menubar || '', onClose: opts.onClose
+  };
+  windows.push(win);
+  renderWindow(win);
+  focusWindow(id);
+  updateTaskbar();
+  return id;
+}
+
+function renderWindow(win) {
+  const el = document.createElement('div');
+  el.className = 'window';
+  el.id = 'win-' + win.id;
+  el.style.cssText = 'left:' + win.x + 'px;top:' + win.y + 'px;width:' + win.width + 'px;height:' + win.height + 'px;z-index:' + (100+win.id);
+  el.innerHTML =
+    '<div class="window-titlebar" data-winid="' + win.id + '">' +
+      '<div class="title">' + win.icon + ' ' + win.title + '</div>' +
+      '<div class="window-btn" onclick="minimizeWindow(' + win.id + ')">_</div>' +
+      '<div class="window-btn" onclick="maximizeWindow(' + win.id + ')">□</div>' +
+      '<div class="window-btn" onclick="closeWindow(' + win.id + ')">×</div>' +
+    '</div>' +
+    win.menubar +
+    '<div class="window-content">' + win.content + '</div>';
+  el.onmousedown = () => focusWindow(win.id);
+  document.getElementById('desktop').appendChild(el);
+}
+
+function getWindowById(id) {
+  return document.getElementById('win-' + id);
+}
+
+function focusWindow(id) {
+  windows.forEach(w => {
+    const el = document.getElementById('win-' + w.id);
+    if (el) {
+      el.classList.toggle('inactive', w.id !== id);
+      el.style.zIndex = w.id === id ? 9000 : 100 + w.id;
+    }
+  });
+  activeWin = id;
+  updateTaskbar();
+}
+
+function minimizeWindow(id) {
+  const el = document.getElementById('win-' + id);
+  if (el) el.classList.add('minimized');
+  const w = windows.find(x => x.id === id);
+  if (w) w.minimized = true;
+  updateTaskbar();
+}
+
+function restoreWindow(id) {
+  const el = document.getElementById('win-' + id);
+  if (el) el.classList.remove('minimized');
+  const w = windows.find(x => x.id === id);
+  if (w) w.minimized = false;
+  focusWindow(id);
+}
+
+function maximizeWindow(id) {
+  const el = document.getElementById('win-' + id);
+  const w = windows.find(x => x.id === id);
+  if (!el || !w) return;
+  if (w.maximized) {
+    el.style.cssText = 'left:' + w.restoreX + 'px;top:' + w.restoreY + 'px;width:' + w.restoreW + 'px;height:' + w.restoreH + 'px;z-index:9000';
+    w.maximized = false;
+  } else {
+    w.restoreX = w.x; w.restoreY = w.y; w.restoreW = w.width; w.restoreH = w.height;
+    el.style.cssText = 'left:0;top:0;width:100%;height:calc(100vh - 28px);z-index:9000';
+    w.maximized = true;
+  }
+}
+
+function closeWindow(id) {
+  const idx = windows.findIndex(w => w.id === id);
+  if (idx > -1) {
+    if (windows[idx].onClose) windows[idx].onClose();
+    windows.splice(idx, 1);
+    const el = document.getElementById('win-' + id);
+    if (el) el.remove();
+    updateTaskbar();
+  }
+}
+
+function updateTaskbar() {
+  document.getElementById('taskbar-windows').innerHTML = windows.map(w =>
+    '<div class="taskbar-item' + (w.id===activeWin?' active':'') + '" onclick="' + (w.minimized?'restoreWindow':'focusWindow') + '(' + w.id + ')">' + w.icon + ' ' + w.title + '</div>'
+  ).join('');
+}
+
+// ==================== NOTEPAD ====================
+function openNotepad(content, filename, room, existingFile) {
+  content = content || '';
+  filename = filename || '';
+  room = room || null;
+  existingFile = existingFile || null;
+  const id = winId;
+  const roomLabel = room ? ' [#' + room + ']' : '';
+  const isNew = !filename;
+  createWindow({
+    title: (filename || 'Untitled') + roomLabel + ' - Notepad',
+    stateKey: 'Notepad',
+    icon: '📝',
+    width: 500, height: 400,
+    menubar: '<div class="window-menubar">' +
+      '<div class="menu-item" onclick="toggleMenu(\'notepad-menu-' + id + '\')">' +
+        'File' +
+        '<div class="dropdown-menu" id="notepad-menu-' + id + '">' +
+          '<div class="dropdown-item" onclick="notepadNew(' + id + ')">New</div>' +
+          '<div class="dropdown-item" onclick="notepadSaveAs(' + id + ')">Save As... (Ctrl+S)</div>' +
+          '<div class="dropdown-item" onclick="notepadPost(' + id + ')">Post to Laserbarf</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>',
+    content: '<div class="notepad-container">' +
+      '<textarea class="notepad-textarea" id="notepad-text-' + id + '" data-filename="' + filename + '" data-room="' + (room||'') + '" data-saved="' + (isNew ? 'false' : 'true') + '" data-original="' + escapeHtml(content) + '">' + escapeHtml(content) + '</textarea>' +
+    '</div>'
+  });
+
+  // Set up change tracking and Ctrl+S
+  setTimeout(() => {
+    const textarea = document.getElementById('notepad-text-' + id);
+    if (textarea) {
+      if (existingFile) textarea._editingFile = existingFile;
+      textarea.addEventListener('input', () => notepadMarkUnsaved(id));
+      textarea.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          notepadSaveAs(id);
+        }
+      });
+    }
+  }, 50);
+}
+
+function notepadMarkUnsaved(id) {
+  const textarea = document.getElementById('notepad-text-' + id);
+  if (!textarea) return;
+  const titleEl = document.querySelector('#win-' + id + ' .title');
+  if (titleEl && !titleEl.textContent.startsWith('📝 *')) {
+    titleEl.textContent = titleEl.textContent.replace('📝 ', '📝 *');
+  }
+}
+
+function toggleMenu(menuId) {
+  event.stopPropagation();
+  const menu = document.getElementById(menuId);
+  document.querySelectorAll('.dropdown-menu').forEach(m => {
+    if (m.id !== menuId) m.classList.remove('visible');
+  });
+  if (menu) menu.classList.toggle('visible');
+}
+
+function notepadNew(id) {
+  document.getElementById('notepad-text-' + id).value = '';
+  document.querySelector('#win-' + id + ' .title').innerHTML = '📝 Untitled - Notepad';
+  hideMenus();
+}
+
+function notepadSaveAs(id) {
+  const textarea = document.getElementById('notepad-text-' + id);
+  const text = textarea.value.trim();
+  if (!text) { alert('Nothing to save!'); return; }
+
+  const room = textarea.dataset.room || null;
+  const existingFilename = textarea.dataset.filename || '';
+  const firstWord = text.split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'untitled';
+  const suggestedName = existingFilename || (firstWord + '.txt');
+
+  hideMenus();
+
+  // Show Save As dialog
+  const filename = prompt('Save as:', suggestedName);
+  if (!filename) return;
+
+  // Ensure .txt extension
+  let finalName = filename.trim();
+  if (!finalName.endsWith('.txt')) finalName += '.txt';
+
+  // Check for collision
+  let counter = 1;
+  let uniqueName = finalName;
+  const baseName = finalName.replace(/\.txt$/, '');
+  while (savedFiles.some(f => f.name === uniqueName && f.room === room && f !== textarea._editingFile)) {
+    counter++;
+    uniqueName = baseName + '(' + counter + ').txt';
+  }
+
+  // If editing existing file, update it; otherwise add new
+  if (textarea._editingFile) {
+    textarea._editingFile.name = uniqueName;
+    textarea._editingFile.content = text;
+  } else {
+    savedFiles.push({ name: uniqueName, content: text, room: room });
+  }
+
+  saveState();
+  createDesktopIcons();
+  if (room) refreshRoomFolder(room);
+
+  textarea.dataset.filename = uniqueName;
+  textarea.dataset.saved = 'true';
+  textarea._editingFile = savedFiles.find(f => f.name === uniqueName && f.room === room);
+  const roomLabel = room ? ' [#' + room + ']' : '';
+  document.querySelector('#win-' + id + ' .title').innerHTML = '📝 ' + uniqueName + roomLabel + ' - Notepad';
+
+  algoSpeak('Saved ' + uniqueName + '!');
+}
+
+function notepadPost(id) {
+  const textarea = document.getElementById('notepad-text-' + id);
+  const text = textarea.value.trim();
+  if (!text) { alert('Nothing to post!'); return; }
+
+  const room = textarea.dataset.room || 'general';
+  postToLaserbarf(text, room);
+  hideMenus();
+  algoSpeak('Posted to #' + room + '!');
+}
+
+function openSavedFile(file) {
+  if (file.name.endsWith('.js')) {
+    openJSIDE(file.content, file.name);
+  } else if (file.type === 'image') {
+    viewImage(file);
+  } else {
+    openNotepad(file.content, file.name, file.room, file);
+  }
+}
+
+function viewImage(file) {
+  createWindow({
+    title: file.name,
+    stateKey: 'Image:' + file.name,
+    icon: '🖼️',
+    width: 500, height: 400,
+    content: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#222;overflow:auto;">' +
+      '<img src="' + file.content + '" style="max-width:100%;max-height:100%;object-fit:contain;">' +
+    '</div>'
+  });
+}
+
+// ==================== ROOM FOLDERS ====================
+function openRoomFolder(room) {
+  const id = winId;
+  createWindow({
+    title: room.name,
+    stateKey: 'Room:' + room.name,
+    icon: '📂',
+    width: 400, height: 300,
+    content: '<div class="folder-content" id="folder-content-' + room.name + '">' + generateFolderContent(room.name) + '</div>'
+  });
+}
+
+function generateFolderContent(roomName) {
+  const roomFiles = savedFiles.filter(f => f.room === roomName);
+  return (roomFiles.length === 0 ? '<div style="color:#666;padding:10px;">Empty folder</div>' : '') +
+    roomFiles.map((f, i) =>
+      '<div class="folder-item" ondblclick="openSavedFile(savedFiles[' + savedFiles.indexOf(f) + '])">' +
+        '<div class="icon-img">' + (f.name.endsWith('.js') ? '📜' : '📄') + '</div>' +
+        '<span>' + f.name + '</span>' +
+      '</div>'
+    ).join('') +
+    '<div class="folder-item" ondblclick="openNotepadInRoom(\'' + roomName + '\')" style="opacity:0.6;">' +
+      '<div class="icon-img">📝</div>' +
+      '<span>New File...</span>' +
+    '</div>';
+}
+
+function refreshRoomFolder(roomName) {
+  const container = document.getElementById('folder-content-' + roomName);
+  if (container) {
+    container.innerHTML = generateFolderContent(roomName);
+  }
+}
+
+function openNotepadInRoom(roomName) {
+  openNotepad('', '', roomName);
+}
+
+function createRoomFolder() {
+  const name = prompt('Enter room name:');
+  if (!name) return;
+  const cleanName = name.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+  if (!cleanName || roomFolders.some(r => r.name === cleanName)) return;
+  roomFolders.push({ name: cleanName });
+  saveState();
+  createDesktopIcons();
+  hideContextMenu();
+}
+
+// ==================== JAVASCRIPT IDE ====================
+// ALGO API library for IDE scripts
+const ALGO_API_CODE = `
+// ALGO API Reference
+window.ALGO = {
+  // App metadata
+  app: { name: 'My App', icon: '📱', version: '1.0' },
+
+  // File type handlers
+  handlers: {},
+
+  // Register as handler for file extension
+  registerFileType: function(ext, handler) {
+    this.handlers[ext] = handler;
+    if (window.registerFileHandler) {
+      window.registerFileHandler(ext, this.app.name, this.app.icon, handler);
+    }
+  },
+
+  // Create a window with UI
+  createWindow: function(options) {
+    const opts = Object.assign({ title: this.app.name, icon: this.app.icon, width: 400, height: 300 }, options);
+    if (window.createWindow) {
+      return window.createWindow(opts);
+    }
+    return null;
+  },
+
+  // Create UI elements
+  ui: {
+    button: function(label, onclick) {
+      // Store function globally and call by reference to avoid HTML escaping issues
+      const fnId = '_algofn_' + Math.random().toString(36).substr(2, 9);
+      window[fnId] = onclick;
+      return '<button onclick="window.' + fnId + '()" style="padding:4px 12px;margin:2px;">' + label + '</button>';
+    },
+    input: function(id, placeholder) {
+      return '<input id="' + id + '" placeholder="' + (placeholder||'') + '" style="padding:4px;margin:2px;width:200px;">';
+    },
+    label: function(text) {
+      return '<label style="display:block;margin:4px;">' + text + '</label>';
+    },
+    select: function(id, options) {
+      return '<select id="' + id + '" style="padding:4px;margin:2px;">' +
+        options.map(o => '<option value="' + o.value + '">' + o.label + '</option>').join('') + '</select>';
+    },
+    panel: function(content) {
+      return '<div style="padding:10px;background:#f0f0f0;border:1px solid #ccc;margin:4px;">' + content + '</div>';
+    }
+  },
+
+  // Save file to server
+  saveFile: function(name, content, type) {
+    // Save to server
+    fetch(API_BASE + '/files/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + sessionToken
+      },
+      body: JSON.stringify({ path: name, content: content, type: type || 'text' })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        // Also keep in local array for desktop icons
+        if (window.savedFiles) {
+          const existing = window.savedFiles.findIndex(f => f.name === name);
+          if (existing >= 0) {
+            window.savedFiles[existing] = { name, content, type: type || 'text' };
+          } else {
+            window.savedFiles.push({ name, content, type: type || 'text' });
+          }
+          if (window.createDesktopIcons) window.createDesktopIcons();
+        }
+        console.log('File saved:', data.path);
+      } else {
+        console.error('Save failed:', data.error);
+      }
+    })
+    .catch(e => console.error('Save error:', e));
+    return true;
+  },
+
+  // Show notification
+  notify: function(message) {
+    if (window.algoSpeak) window.algoSpeak(message);
+    else alert(message);
+  },
+
+  // Get element value
+  getValue: function(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : null;
+  },
+
+  // Set element content
+  setContent: function(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+};
+`;
+
+const IDE_EXAMPLES = {
+  'hello': {
+    name: 'Hello World',
+    code: `// Hello World App
+ALGO.app.name = 'Hello App';
+ALGO.app.icon = '👋';
+
+// Create a simple window
+ALGO.createWindow({
+  title: 'Hello World',
+  width: 300,
+  height: 150,
+  content: ALGO.ui.panel(
+    '<h2>Hello, World!</h2>' +
+    '<p>Welcome to JavaScript.IDE</p>' +
+    ALGO.ui.button('Say Hi', function() {
+      ALGO.notify('Hello from my app!');
+    })
+  )
+});
+
+console.log('Hello World app created!');`
+  },
+  'counter': {
+    name: 'Counter App',
+    code: `// Counter App
+ALGO.app.name = 'Counter';
+ALGO.app.icon = '🔢';
+
+window.counterVal = 0;
+
+window.counterUpdate = function() {
+  ALGO.setContent('counter-display', '<h1 style="text-align:center;font-size:48px;">' + window.counterVal + '</h1>');
+};
+
+ALGO.createWindow({
+  title: 'Counter',
+  width: 250,
+  height: 200,
+  content: '<div style="padding:20px;text-align:center;">' +
+    '<div id="counter-display"><h1 style="font-size:48px;">0</h1></div>' +
+    '<div>' +
+      '<button onclick="window.counterVal--;window.counterUpdate();" style="padding:10px 20px;font-size:20px;">-</button>' +
+      ' ' +
+      '<button onclick="window.counterVal++;window.counterUpdate();" style="padding:10px 20px;font-size:20px;">+</button>' +
+    '</div>' +
+  '</div>'
+});
+
+console.log('Counter app ready!');`
+  },
+  'notepad': {
+    name: 'Mini Notepad',
+    code: `// Mini Notepad
+ALGO.app.name = 'Mini Notepad';
+ALGO.app.icon = '📝';
+
+window.saveNote = function() {
+  const text = ALGO.getValue('notepad-text');
+  if (text) {
+    ALGO.saveFile('note-' + Date.now() + '.txt', text, 'text');
+    ALGO.notify('Note saved!');
+  }
+};
+
+window.clearNote = function() {
+  document.getElementById('notepad-text').value = '';
+};
+
+ALGO.createWindow({
+  title: 'Mini Notepad',
+  width: 400,
+  height: 300,
+  content: '<div style="display:flex;flex-direction:column;height:100%;">' +
+    '<div style="padding:4px;background:#c0c0c0;">' +
+      '<button onclick="window.saveNote()">Save</button>' +
+      '<button onclick="window.clearNote()">Clear</button>' +
+    '</div>' +
+    '<textarea id="notepad-text" style="flex:1;padding:8px;border:none;resize:none;font-family:monospace;"></textarea>' +
+  '</div>'
+});
+
+console.log('Mini Notepad ready!');`
+  },
+  'calculator': {
+    name: 'Calculator',
+    code: `// Simple Calculator
+ALGO.app.name = 'Calculator';
+ALGO.app.icon = '🧮';
+
+window.calcDisplay = '0';
+window.calcLastOp = null;
+window.calcLastNum = 0;
+
+window.updateCalc = function() {
+  document.getElementById('calc-display').value = window.calcDisplay;
+};
+
+window.calcDigit = function(d) {
+  if (window.calcDisplay === '0') window.calcDisplay = d;
+  else window.calcDisplay += d;
+  window.updateCalc();
+};
+
+window.calcOp = function(op) {
+  window.calcLastNum = parseFloat(window.calcDisplay);
+  window.calcLastOp = op;
+  window.calcDisplay = '0';
+};
+
+window.calcEquals = function() {
+  const curr = parseFloat(window.calcDisplay);
+  if (window.calcLastOp === '+') window.calcDisplay = String(window.calcLastNum + curr);
+  else if (window.calcLastOp === '-') window.calcDisplay = String(window.calcLastNum - curr);
+  else if (window.calcLastOp === '*') window.calcDisplay = String(window.calcLastNum * curr);
+  else if (window.calcLastOp === '/') window.calcDisplay = String(window.calcLastNum / curr);
+  window.calcLastOp = null;
+  window.updateCalc();
+};
+
+window.calcClear = function() {
+  window.calcDisplay = '0';
+  window.calcLastOp = null;
+  window.calcLastNum = 0;
+  window.updateCalc();
+};
+
+const btnStyle = 'width:40px;height:35px;margin:2px;font-size:16px;';
+ALGO.createWindow({
+  title: 'Calculator',
+  width: 220,
+  height: 280,
+  content: '<div style="padding:10px;">' +
+    '<input id="calc-display" value="0" readonly style="width:100%;padding:8px;font-size:18px;text-align:right;margin-bottom:8px;">' +
+    '<div>' +
+      '<button onclick="window.calcDigit(\\'7\\')" style="' + btnStyle + '">7</button>' +
+      '<button onclick="window.calcDigit(\\'8\\')" style="' + btnStyle + '">8</button>' +
+      '<button onclick="window.calcDigit(\\'9\\')" style="' + btnStyle + '">9</button>' +
+      '<button onclick="window.calcOp(\\'/\\')" style="' + btnStyle + '">/</button>' +
+    '</div><div>' +
+      '<button onclick="window.calcDigit(\\'4\\')" style="' + btnStyle + '">4</button>' +
+      '<button onclick="window.calcDigit(\\'5\\')" style="' + btnStyle + '">5</button>' +
+      '<button onclick="window.calcDigit(\\'6\\')" style="' + btnStyle + '">6</button>' +
+      '<button onclick="window.calcOp(\\'*\\')" style="' + btnStyle + '">*</button>' +
+    '</div><div>' +
+      '<button onclick="window.calcDigit(\\'1\\')" style="' + btnStyle + '">1</button>' +
+      '<button onclick="window.calcDigit(\\'2\\')" style="' + btnStyle + '">2</button>' +
+      '<button onclick="window.calcDigit(\\'3\\')" style="' + btnStyle + '">3</button>' +
+      '<button onclick="window.calcOp(\\'-\\')" style="' + btnStyle + '">-</button>' +
+    '</div><div>' +
+      '<button onclick="window.calcClear()" style="' + btnStyle + '">C</button>' +
+      '<button onclick="window.calcDigit(\\'0\\')" style="' + btnStyle + '">0</button>' +
+      '<button onclick="window.calcEquals()" style="' + btnStyle + '">=</button>' +
+      '<button onclick="window.calcOp(\\'+\\')" style="' + btnStyle + '">+</button>' +
+    '</div>' +
+  '</div>'
+});
+
+console.log('Calculator ready!');`
+  },
+  'counter': {
+    name: 'Counter',
+    code: `// Counter App
+ALGO.app.name = 'Counter';
+ALGO.app.icon = '🔢';
+
+window.counterVal = 0;
+
+window.counterInc = function() {
+  window.counterVal++;
+  document.getElementById('counter-display').innerHTML = '<h1 style="text-align:center;font-size:48px;">' + window.counterVal + '</h1>';
+};
+
+window.counterDec = function() {
+  window.counterVal--;
+  document.getElementById('counter-display').innerHTML = '<h1 style="text-align:center;font-size:48px;">' + window.counterVal + '</h1>';
+};
+
+ALGO.createWindow({
+  title: 'Counter',
+  width: 250,
+  height: 200,
+  content: '<div style="padding:20px;text-align:center;">' +
+    '<div id="counter-display"><h1 style="font-size:48px;">0</h1></div>' +
+    '<div>' +
+      '<button onclick="window.counterDec()" style="padding:10px 20px;font-size:20px;">-</button>' +
+      ' ' +
+      '<button onclick="window.counterInc()" style="padding:10px 20px;font-size:20px;">+</button>' +
+    '</div>' +
+  '</div>'
+});
+
+console.log('Counter app ready!');`
+  },
+  'filehandler': {
+    name: 'File Handler Demo',
+    code: `// File Handler Demo - registers for .demo files
+ALGO.app.name = 'Demo Viewer';
+ALGO.app.icon = '📋';
+
+// Register to handle .demo files
+ALGO.registerFileType('demo', function(content, filename) {
+  ALGO.createWindow({
+    title: 'Viewing: ' + filename,
+    width: 400,
+    height: 300,
+    content: '<div style="padding:15px;">' +
+      '<h3>Demo File Contents:</h3>' +
+      '<pre style="background:#f0f0f0;padding:10px;overflow:auto;">' + content + '</pre>' +
+    '</div>'
+  });
+});
+
+// Create a sample .demo file
+ALGO.saveFile('sample.demo', 'This is a demo file!\\nIt was created by JavaScript.IDE.\\nDouble-click to open with Demo Viewer.', 'text');
+
+ALGO.notify('Demo Viewer registered for .demo files!');
+console.log('File handler registered. Created sample.demo on desktop.');`
+  }
+};
+
+function openJSIDE(content, filename) {
+  content = content || '';
+  filename = filename || '';
+  const id = winId;
+
+  const defaultCode = `// Function Server App
+// Use the ALGO API to create apps!
+
+ALGO.app.name = 'My App';
+ALGO.app.icon = '🚀';
+
+// Create a window
+ALGO.createWindow({
+  title: 'My First App',
+  width: 300,
+  height: 200,
+  content: '<div style="padding:20px;text-align:center;">' +
+    '<h2>Welcome!</h2>' +
+    '<p>Edit this code to build your app.</p>' +
+    '<button onclick="ALGO.notify(\\'Hello!\\')">Click Me</button>' +
+  '</div>'
+});
+
+console.log('App started!');`;
+
+  const exampleOptions = Object.entries(IDE_EXAMPLES).map(([k, v]) =>
+    '<option value="' + k + '">' + v.name + '</option>'
+  ).join('');
+
+  createWindow({
+    title: filename || 'Untitled - JavaScript.IDE',
+    stateKey: 'JavaScript.IDE',
+    icon: '📜',
+    width: 850, height: 500,
+    menubar: '<div class="window-menubar">' +
+      '<div class="menu-item" onclick="toggleMenu(\'ide-menu-' + id + '\')">' +
+        'File' +
+        '<div class="dropdown-menu" id="ide-menu-' + id + '">' +
+          '<div class="dropdown-item" onclick="ideNew(' + id + ')">New</div>' +
+          '<div class="dropdown-item" onclick="ideSave(' + id + ')">Save to Desktop</div>' +
+          '<div class="dropdown-item" onclick="ideInstall(' + id + ')">Install as Program</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="menu-item" onclick="toggleMenu(\'ide-help-' + id + '\')">' +
+        'Help' +
+        '<div class="dropdown-menu" id="ide-help-' + id + '">' +
+          '<div class="dropdown-item" onclick="ideShowAPI(' + id + ')">API Reference</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>',
+    content: '<div class="ide-container">' +
+      '<div class="ide-main">' +
+        '<div class="ide-editor">' +
+          '<div class="ide-toolbar">' +
+            '<button onclick="ideRun(' + id + ')">▶ Run</button>' +
+            '<button onclick="ideStop(' + id + ')">⬛ Stop</button>' +
+            '<button onclick="ideSave(' + id + ')">💾 Save</button>' +
+            '<button onclick="idePublish(' + id + ')" style="background:#2d5a2d;color:white;">🌐 Publish</button>' +
+            '<select onchange="ideLoadExample(' + id + ', this.value)">' +
+              '<option value="">-- Examples --</option>' +
+              exampleOptions +
+            '</select>' +
+          '</div>' +
+          '<textarea id="ide-code-' + id + '" spellcheck="false">' + escapeHtml(content || defaultCode) + '</textarea>' +
+        '</div>' +
+        '<div class="ide-preview">' +
+          '<div class="ide-preview-header">' +
+            '<span>Preview</span>' +
+            '<button onclick="ideRefresh(' + id + ')" style="padding:1px 6px;font-size:10px;">↻ Refresh</button>' +
+          '</div>' +
+          '<div class="ide-preview-content" id="ide-preview-' + id + '">' +
+            '<div style="padding:20px;color:#888;text-align:center;">Click Run to see your app</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ide-console" id="ide-console-' + id + '">' +
+        '<div class="ide-console-header" onclick="ideToggleConsole(' + id + ')">' +
+          '<span>Console</span>' +
+          '<span id="ide-console-toggle-' + id + '">▼</span>' +
+        '</div>' +
+        '<div class="ide-console-content" id="ide-console-content-' + id + '"></div>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function ideRun(id) {
+  const code = document.getElementById('ide-code-' + id).value;
+  const consoleEl = document.getElementById('ide-console-content-' + id);
+  const previewEl = document.getElementById('ide-preview-' + id);
+  consoleEl.innerHTML = '';
+  // Update preview area
+  previewEl.innerHTML = '<div style="padding:15px;color:#666;"><p><strong>Running app...</strong></p><p style="font-size:11px;margin-top:10px;">Apps create their own windows. Check your desktop for the new window.</p></div>';
+
+  // Custom console that logs to our console pane
+  const ideConsole = {
+    log: function() {
+      const args = Array.prototype.slice.call(arguments);
+      const text = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ');
+      consoleEl.innerHTML += '<div>' + escapeHtml(text) + '</div>';
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    },
+    error: function() {
+      const args = Array.prototype.slice.call(arguments);
+      const text = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ');
+      consoleEl.innerHTML += '<div class="error">Error: ' + escapeHtml(text) + '</div>';
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    },
+    warn: function() {
+      const args = Array.prototype.slice.call(arguments);
+      const text = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ');
+      consoleEl.innerHTML += '<div class="warn">Warning: ' + escapeHtml(text) + '</div>';
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    },
+    info: function() {
+      const args = Array.prototype.slice.call(arguments);
+      const text = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ');
+      consoleEl.innerHTML += '<div class="info">' + escapeHtml(text) + '</div>';
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+  };
+
+  try {
+    // Combine ALGO API with user code
+    const fullCode = ALGO_API_CODE + '\n' + code;
+    // Store original console and replace with IDE console
+    const origConsole = window.console;
+    window.console = ideConsole;
+    // Execute in global scope using indirect eval
+    (0, eval)(fullCode);
+    // Restore original console
+    window.console = origConsole;
+    ideConsole.info('App executed successfully');
+    previewEl.innerHTML = '<div style="padding:15px;color:#2d5a2d;"><p><strong>App running</strong></p><p style="font-size:11px;margin-top:10px;">Your app window should be visible. Check console below for output.</p></div>';
+  } catch (e) {
+    ideConsole.error(e.message);
+    previewEl.innerHTML = '<div style="padding:15px;color:#8B0000;"><p><strong>Error</strong></p><p style="font-size:11px;margin-top:5px;">' + escapeHtml(e.message) + '</p></div>';
+    if (e.stack) {
+      const stackLines = e.stack.split('\n').slice(1, 3).join('\n');
+      consoleEl.innerHTML += '<div class="error" style="font-size:10px;opacity:0.7;">' + escapeHtml(stackLines) + '</div>';
+    }
+  }
+}
+
+function ideStop(id) {
+  const consoleEl = document.getElementById('ide-console-content-' + id);
+  consoleEl.innerHTML += '<div class="warn">Execution stopped</div>';
+}
+
+function ideToggleConsole(id) {
+  const consoleEl = document.getElementById('ide-console-' + id);
+  const toggleEl = document.getElementById('ide-console-toggle-' + id);
+  consoleEl.classList.toggle('collapsed');
+  toggleEl.textContent = consoleEl.classList.contains('collapsed') ? '▲' : '▼';
+}
+
+function ideLoadExample(id, exampleKey) {
+  if (!exampleKey || !IDE_EXAMPLES[exampleKey]) return;
+  document.getElementById('ide-code-' + id).value = IDE_EXAMPLES[exampleKey].code;
+  const consoleEl = document.getElementById('ide-console-content-' + id);
+  consoleEl.innerHTML = '<div class="info">Loaded example: ' + IDE_EXAMPLES[exampleKey].name + '</div>';
+}
+
+function ideRefresh(id) {
+  ideRun(id);
+}
+
+function ideShowAPI(id) {
+  hideMenus();
+  createWindow({
+    title: 'ALGO API Reference',
+    icon: '📖',
+    width: 450, height: 400,
+    content: '<div style="padding:15px;overflow:auto;height:100%;font-size:11px;">' +
+      '<h2>ALGO API Reference</h2>' +
+      '<h3>App Metadata</h3>' +
+      '<pre>ALGO.app.name = "My App";\nALGO.app.icon = "📱";</pre>' +
+      '<h3>Create Window</h3>' +
+      '<pre>ALGO.createWindow({\n  title: "Window Title",\n  width: 400, height: 300,\n  content: "&lt;div&gt;HTML content&lt;/div&gt;"\n});</pre>' +
+      '<h3>UI Helpers</h3>' +
+      '<pre>ALGO.ui.button(label, onclick)\nALGO.ui.input(id, placeholder)\nALGO.ui.label(text)\nALGO.ui.select(id, [{value, label}])\nALGO.ui.panel(content)</pre>' +
+      '<h3>File Operations</h3>' +
+      '<pre>ALGO.saveFile(name, content, type)\nALGO.registerFileType(ext, handler)</pre>' +
+      '<h3>Utilities</h3>' +
+      '<pre>ALGO.notify(message)\nALGO.getValue(elementId)\nALGO.setContent(elementId, html)</pre>' +
+    '</div>'
+  });
+}
+
+function ideNew(id) {
+  const defaultCode = `// Function Server App
+ALGO.app.name = 'My App';
+ALGO.app.icon = '🚀';
+
+ALGO.createWindow({
+  title: 'My App',
+  width: 300,
+  height: 200,
+  content: '<div style="padding:20px;text-align:center;">' +
+    '<h2>Hello!</h2>' +
+  '</div>'
+});`;
+  document.getElementById('ide-code-' + id).value = defaultCode;
+  document.querySelector('#win-' + id + ' .title').innerHTML = '📜 Untitled - JavaScript.IDE';
+  document.getElementById('ide-console-content-' + id).innerHTML = '';
+  hideMenus();
+}
+
+function ideSave(id) {
+  const code = document.getElementById('ide-code-' + id).value.trim();
+  if (!code) return;
+  const m = code.match(/ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]/);
+  const appName = m ? m[1] : 'script';
+  let filename = appName.replace(/\s+/g, '-').toLowerCase() + '.js';
+
+  // Save to server
+  ALGO.saveFile(filename, code, 'javascript');
+  hideMenus();
+  algoSpeak('Saved ' + filename + '!');
+}
+
+function idePublish(id) {
+  const code = document.getElementById('ide-code-' + id).value.trim();
+  if (!code) return;
+
+  // Extract app name for filename
+  const m = code.match(/ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]/);
+  const appName = m ? m[1] : 'My App';
+  const filename = appName.replace(/\s+/g, '-').toLowerCase() + '.html';
+
+  // Create standalone HTML that includes the ALGO API and runs the code
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(appName)}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: #f0f0f0; min-height: 100vh; }
+.window { position: absolute; background: #c0c0c0; border: 2px outset #fff; box-shadow: 2px 2px 8px rgba(0,0,0,0.3); }
+.window-titlebar { background: linear-gradient(90deg, #000080, #1084d0); color: white; padding: 4px 8px; font-weight: bold; display: flex; justify-content: space-between; }
+.window-content { background: white; padding: 10px; }
+button { padding: 4px 12px; margin: 2px; cursor: pointer; }
+input, select { padding: 4px; margin: 2px; }
+</style>
+</head>
+<body>
+<script>
+// ALGO Mini API for standalone apps
+const ALGO = {
+  app: { name: 'App', icon: '📱' },
+  createWindow: function(opts) {
+    const win = document.createElement('div');
+    win.className = 'window';
+    win.style.cssText = 'left:50px;top:50px;width:' + (opts.width||300) + 'px;';
+    win.innerHTML = '<div class="window-titlebar"><span>' + (opts.icon||this.app.icon) + ' ' + (opts.title||this.app.name) + '</span></div><div class="window-content">' + (opts.content||'') + '</div>';
+    document.body.appendChild(win);
+    return win;
+  },
+  ui: {
+    button: (label, fn) => '<button onclick="(' + fn.toString() + ')()">' + label + '</button>',
+    input: (id, ph) => '<input id="' + id + '" placeholder="' + (ph||'') + '">',
+    label: (t) => '<label>' + t + '</label>',
+    panel: (c) => '<div style="padding:10px;background:#f5f5f5;border:1px solid #ccc;margin:4px;">' + c + '</div>'
+  },
+  notify: (msg) => alert(msg),
+  getValue: (id) => document.getElementById(id)?.value,
+  setContent: (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; },
+  saveFile: () => {},
+  registerFileType: () => {}
+};
+<\/script>
+<script>
+${code}
+<\/script>
+</body>
+</html>`;
+
+  // Save to public folder
+  const publicPath = 'public/' + filename;
+
+  fetch(API_BASE + '/files/save', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + sessionToken
+    },
+    body: JSON.stringify({ path: publicPath, content: html, type: 'html' })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      const url = '/' + currentUser + '/' + filename;
+      algoSpeak('Published! View at ' + url);
+
+      // Show success dialog with link
+      createWindow({
+        title: '🌐 Published!',
+        icon: '✓',
+        width: 400,
+        height: 200,
+        content: '<div style="padding:20px;text-align:center;">' +
+          '<h3 style="color:green;">App Published Successfully!</h3>' +
+          '<p style="margin:15px 0;">Your app is now live at:</p>' +
+          '<a href="' + url + '" target="_blank" style="font-size:16px;color:#0066cc;">' + location.origin + url + '</a>' +
+          '<p style="margin-top:15px;"><button onclick="window.open(\'' + url + '\', \'_blank\')">Open in New Tab</button></p>' +
+        '</div>'
+      });
+    } else {
+      algoSpeak('Publish failed: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(e => {
+    algoSpeak('Publish error: ' + e.message);
+  });
+}
+
+function ideInstall(id) {
+  const code = document.getElementById('ide-code-' + id).value.trim();
+  if (!code) return;
+
+  // Extract app metadata
+  const nameMatch = code.match(/ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]/);
+  const iconMatch = code.match(/ALGO\.app\.icon\s*=\s*['"]([^'"]+)['"]/);
+  const appName = nameMatch ? nameMatch[1] : 'My App';
+  const appIcon = iconMatch ? iconMatch[1] : '📱';
+
+  // Install as program
+  const progId = 'ide-' + Date.now();
+  installedPrograms.push({
+    id: progId,
+    name: appName,
+    icon: appIcon,
+    code: code
+  });
+  updateProgramsMenu();
+  saveState();
+  createDesktopIcons();
+  hideMenus();
+  algoSpeak('Installed ' + appName + '!');
+}
+
+// ==================== WEB BROWSER ====================
+function openBrowser(url) {
+  const id = winId;
+  const startUrl = url || 'https://laserbarf.com';
+  createWindow({
+    title: 'Web Browser',
+    stateKey: 'Web Browser',
+    icon: '🌐',
+    width: 700, height: 500,
+    content: '<div style="display:flex;flex-direction:column;height:100%;">' +
+      '<div class="browser-toolbar">' +
+        '<button onclick="browserBack(' + id + ')">←</button>' +
+        '<button onclick="browserFwd(' + id + ')">→</button>' +
+        '<input type="text" class="browser-url" id="browser-url-' + id + '" value="' + escapeHtml(startUrl) + '" onkeydown="if(event.key===\'Enter\')browserGo(' + id + ')">' +
+        '<button onclick="browserGo(' + id + ')">Go</button>' +
+      '</div>' +
+      '<iframe class="browser-frame" id="browser-frame-' + id + '" src="' + startUrl + '"></iframe>' +
+    '</div>'
+  });
+}
+
+function browserGo(id) {
+  let url = document.getElementById('browser-url-' + id).value;
+  if (!url.startsWith('http')) url = 'https://' + url;
+  document.getElementById('browser-frame-' + id).src = url;
+}
+
+function browserBack(id) {
+  try { document.getElementById('browser-frame-' + id).contentWindow.history.back(); } catch(e) {}
+}
+
+function browserFwd(id) {
+  try { document.getElementById('browser-frame-' + id).contentWindow.history.forward(); } catch(e) {}
+}
+
+// ==================== AGENTS ====================
+function openAgents() {
+  hideStartMenu();
+  const id = winId;
+  const savedClaude = apiKeys['claude'] || '';
+  const savedGemini = apiKeys['gemini'] || '';
+  const savedGpt = apiKeys['gpt'] || '';
+
+  createWindow({
+    title: 'Agents',
+    stateKey: 'Agents',
+    icon: '⚡',
+    width: 550, height: 520,
+    content: '<div class="agents-container">' +
+      '<div class="agents-header">' +
+        '<h2>⚡ AI Agents</h2>' +
+        '<p>Generate code, build apps, or run as ticket worker</p>' +
+      '</div>' +
+      '<div class="agents-form">' +
+        '<div class="agents-row">' +
+          '<label>Model:</label>' +
+          '<select id="agent-model-' + id + '" onchange="agentModelChange(' + id + ')">' +
+            '<option value="claude">Claude (Anthropic)</option>' +
+            '<option value="gemini">Gemini (Google)</option>' +
+            '<option value="gpt">GPT (OpenAI)</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="agents-row">' +
+          '<label>API Key:</label>' +
+          '<input type="password" id="agent-key-' + id + '" value="' + savedClaude + '" placeholder="Enter API key">' +
+          '<button onclick="agentSaveKey(' + id + ')">Save</button>' +
+        '</div>' +
+        '<div class="agents-row">' +
+          '<label>Mode:</label>' +
+          '<select id="agent-mode-' + id + '">' +
+            '<option value="generate">Generate App</option>' +
+            '<option value="code">Generate Code</option>' +
+            '<option value="ticket">Ticket Worker</option>' +
+          '</select>' +
+        '</div>' +
+        '<label>Prompt:</label>' +
+        '<textarea id="agent-prompt-' + id + '" placeholder="Describe what you want to build..."></textarea>' +
+        '<div class="agents-buttons">' +
+          '<button onclick="agentGenerate(' + id + ')">⚡ Run Agent</button>' +
+          '<button onclick="agentStop(' + id + ')" id="agent-stop-' + id + '" style="display:none;">⏹ Stop</button>' +
+        '</div>' +
+        '<div class="agents-output" id="agent-output-' + id + '">Ready</div>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function agentModelChange(id) {
+  const model = document.getElementById('agent-model-' + id).value;
+  const keyInput = document.getElementById('agent-key-' + id);
+  keyInput.value = apiKeys[model] || '';
+}
+
+function agentSaveKey(id) {
+  const model = document.getElementById('agent-model-' + id).value;
+  const key = document.getElementById('agent-key-' + id).value.trim();
+  if (key) {
+    apiKeys[model] = key;
+    saveState();
+    document.getElementById('agent-output-' + id).textContent = 'API key saved for ' + model;
+  }
+}
+
+let agentRunning = false;
+
+function agentGenerate(id) {
+  const model = document.getElementById('agent-model-' + id).value;
+  const key = document.getElementById('agent-key-' + id).value.trim();
+  const mode = document.getElementById('agent-mode-' + id).value;
+  const prompt = document.getElementById('agent-prompt-' + id).value.trim();
+  const output = document.getElementById('agent-output-' + id);
+  const stopBtn = document.getElementById('agent-stop-' + id);
+
+  if (!key) { output.textContent = 'Please enter an API key'; return; }
+  if (!prompt) { output.textContent = 'Please enter a prompt'; return; }
+
+  agentRunning = true;
+  stopBtn.style.display = 'inline-block';
+  output.textContent = 'Running agent...';
+
+  // Map model to provider key
+  const providerMap = { claude: 'anthropic', gemini: 'google', gpt: 'openai' };
+  const provider = providerMap[model];
+
+  fetch('/api/ai-create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: provider, apiKey: key, prompt: prompt, mode: mode })
+  })
+  .then(r => r.json())
+  .then(data => {
+    agentRunning = false;
+    stopBtn.style.display = 'none';
+
+    if (data.error) {
+      output.textContent = 'Error: ' + data.error;
+      return;
+    }
+
+    if (mode === 'code') {
+      // Just show the code
+      output.innerHTML = '<pre style="white-space:pre-wrap;font-size:11px;">' + escapeHtml(data.code || data.html || 'No output') + '</pre>';
+    } else if (data.html) {
+      // Save as app
+      const words = prompt.split(/\\s+/).slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'app';
+      const name = words + '-' + Date.now().toString(36);
+
+      // Save to local storage as installed program with code
+      installedPrograms.push({
+        id: name,
+        name: name,
+        icon: '✨',
+        code: data.html
+      });
+      saveState();
+      createDesktopIcons();
+      updateProgramsMenu();
+      output.textContent = 'Created: ' + name;
+      algoSpeak('New app: ' + name);
+    } else {
+      output.textContent = data.message || 'Done';
+    }
+  })
+  .catch(e => {
+    agentRunning = false;
+    stopBtn.style.display = 'none';
+    output.textContent = 'Error: ' + e.message;
+  });
+}
+
+function agentStop(id) {
+  agentRunning = false;
+  document.getElementById('agent-stop-' + id).style.display = 'none';
+  document.getElementById('agent-output-' + id).textContent = 'Stopped';
+}
+
+// ==================== DESIGNER ====================
+function openDesigner() {
+  hideStartMenu();
+  const id = winId;
+  createWindow({
+    title: 'Designer',
+    stateKey: 'Designer',
+    icon: '📐',
+    width: 700, height: 500,
+    content: '<div class="designer-container">' +
+      '<div class="designer-toolbar">' +
+        '<select id="designer-screen-' + id + '" onchange="designerLoadScreen(' + id + ')">' +
+          '<option value="">New Screen</option>' +
+        '</select>' +
+        '<button onclick="designerNewScreen(' + id + ')">+ Screen</button>' +
+        '<button onclick="designerSave(' + id + ')">💾 Save</button>' +
+        '<button onclick="designerPreview(' + id + ')">▶ Preview</button>' +
+      '</div>' +
+      '<div class="designer-main">' +
+        '<div class="designer-components">' +
+          '<h4>Components</h4>' +
+          '<div class="comp-item" draggable="true" data-type="button">Button</div>' +
+          '<div class="comp-item" draggable="true" data-type="text">Text</div>' +
+          '<div class="comp-item" draggable="true" data-type="input">Input</div>' +
+          '<div class="comp-item" draggable="true" data-type="image">Image</div>' +
+          '<div class="comp-item" draggable="true" data-type="container">Container</div>' +
+        '</div>' +
+        '<div class="designer-canvas" id="designer-canvas-' + id + '">' +
+          '<div class="canvas-placeholder">Drag components here</div>' +
+        '</div>' +
+        '<div class="designer-props" id="designer-props-' + id + '">' +
+          '<h4>Properties</h4>' +
+          '<p style="color:#666;font-size:11px;">Select a component</p>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function designerNewScreen(id) {
+  const name = prompt('Screen name:', 'screen-' + Date.now().toString(36));
+  if (!name) return;
+  const canvas = document.getElementById('designer-canvas-' + id);
+  canvas.innerHTML = '';
+  canvas.dataset.screen = name;
+  const select = document.getElementById('designer-screen-' + id);
+  const opt = document.createElement('option');
+  opt.value = name;
+  opt.textContent = name;
+  select.appendChild(opt);
+  select.value = name;
+}
+
+function designerSave(id) {
+  const canvas = document.getElementById('designer-canvas-' + id);
+  const screenName = canvas.dataset.screen || 'untitled';
+  const layout = { screen: screenName, components: [] };
+  // TODO: Extract components from canvas
+  const filename = screenName + '.layout';
+  savedFiles.push({ name: filename, type: 'text', content: JSON.stringify(layout, null, 2) });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + filename);
+}
+
+function designerPreview(id) {
+  algoSpeak('Preview coming soon');
+}
+
+function designerLoadScreen(id) {
+  // TODO: Load screen from saved layouts
+}
+
+// ==================== CRAFT ====================
+function openCraft() {
+  hideStartMenu();
+  const id = winId;
+  createWindow({
+    title: 'Craft',
+    stateKey: 'Craft',
+    icon: '🔧',
+    width: 650, height: 480,
+    content: '<div class="craft-container">' +
+      '<div class="craft-toolbar">' +
+        '<select id="craft-component-' + id + '" onchange="craftLoadComponent(' + id + ')">' +
+          '<option value="">New Component</option>' +
+        '</select>' +
+        '<button onclick="craftNew(' + id + ')">+ Component</button>' +
+        '<button onclick="craftSave(' + id + ')">💾 Save</button>' +
+        '<button onclick="craftTest(' + id + ')">▶ Test</button>' +
+      '</div>' +
+      '<div class="craft-main">' +
+        '<div class="craft-editor">' +
+          '<h4>Component Definition</h4>' +
+          '<textarea id="craft-code-' + id + '" style="width:100%;height:200px;font-family:monospace;font-size:12px;">' +
+'ALGO.component(\'MyButton\', {\n' +
+'  props: [\'text\', \'onClick\'],\n' +
+'  render: (props) => `\n' +
+'    <button onclick="${props.onClick}">\n' +
+'      ${props.text}\n' +
+'    </button>\n' +
+'  `\n' +
+'});</textarea>' +
+        '</div>' +
+        '<div class="craft-preview" id="craft-preview-' + id + '">' +
+          '<h4>Preview</h4>' +
+          '<div style="padding:20px;border:1px dashed #ccc;min-height:100px;">' +
+            '<p style="color:#888;">Click Test to preview</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function craftNew(id) {
+  const name = prompt('Component name:', 'MyComponent');
+  if (!name) return;
+  document.getElementById('craft-code-' + id).value =
+    'ALGO.component(\'' + name + '\', {\n' +
+    '  props: [\'text\'],\n' +
+    '  render: (props) => `\n' +
+    '    <div>${props.text}</div>\n' +
+    '  `\n' +
+    '});';
+}
+
+function craftSave(id) {
+  const code = document.getElementById('craft-code-' + id).value;
+  const match = code.match(/ALGO\.component\(['"](\w+)['"]/);
+  const name = match ? match[1] : 'component';
+  const filename = name.toLowerCase() + '.ui';
+  savedFiles.push({ name: filename, type: 'text', content: code });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + filename);
+}
+
+function craftTest(id) {
+  const code = document.getElementById('craft-code-' + id).value;
+  const preview = document.getElementById('craft-preview-' + id);
+  try {
+    // Simple eval for preview
+    eval(code);
+    preview.innerHTML = '<h4>Preview</h4><div style="padding:20px;border:1px solid #ccc;">Component registered</div>';
+  } catch (e) {
+    preview.innerHTML = '<h4>Preview</h4><div style="padding:20px;color:red;">Error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function craftLoadComponent(id) {
+  // TODO: Load component from saved .ui files
+}
+
+// ==================== P2P CHAT ====================
+function openChat() {
+  const id = winId;
+  chatWinId = id;
+  chatName = localStorage.getItem('algo-chat-name') || 'anon';
+  createWindow({
+    title: 'Chat (P2P)',
+    stateKey: 'Chat',
+    icon: '💬',
+    width: 500, height: 400,
+    content: '<div class="chat-container">' +
+      '<div style="padding:4px;background:#c0c0c0;border-bottom:1px solid #808080;display:flex;gap:4px;align-items:center;">' +
+        '<label>Name:</label>' +
+        '<input type="text" id="chat-name-' + id + '" value="' + escapeHtml(chatName) + '" style="width:80px;padding:2px;border:2px inset #808080;" onchange="updateChatName(' + id + ')">' +
+        '<span style="margin-left:auto;font-size:10px;color:#666;" id="chat-status-' + id + '">Connecting...</span>' +
+      '</div>' +
+      '<div style="display:flex;flex:1;overflow:hidden;">' +
+        '<div class="chat-messages" id="chat-messages-' + id + '"></div>' +
+        '<div class="users-list" id="chat-users-' + id + '">' +
+          '<h4>Online</h4>' +
+          '<div id="online-users-' + id + '"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="chat-input-area">' +
+        '<input type="text" id="chat-input-' + id + '" placeholder="Type a message..." onkeydown="if(event.key===\'Enter\')sendChatP2P(' + id + ')">' +
+        '<button onclick="sendChatP2P(' + id + ')">Send</button>' +
+      '</div>' +
+    '</div>',
+    onClose: () => { leaveChat(); }
+  });
+
+  joinChat();
+}
+
+function updateChatName(id) {
+  chatName = document.getElementById('chat-name-' + id).value.trim() || 'anon';
+  localStorage.setItem('algo-chat-name', chatName);
+  // Broadcast name to all peers
+  Object.values(chatPeers).forEach(peer => {
+    if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+      peer.dataChannel.send(JSON.stringify({ type: 'name', name: chatName }));
+    }
+  });
+  updateChatUsers();
+}
+
+function joinChat() {
+  fetch('/api/signal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'join', room: chatRoom, peerId: chatPeerId })
+  }).then(() => {
+    if (chatWinId !== null) {
+      const status = document.getElementById('chat-status-' + chatWinId);
+      if (status) status.textContent = 'Connected';
+    }
+    chatPollInterval = setInterval(pollChatSignals, 1000);
+    pollChatSignals();
+  });
+}
+
+function leaveChat() {
+  if (chatPollInterval) clearInterval(chatPollInterval);
+  chatPollInterval = null;
+
+  fetch('/api/signal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'leave', room: chatRoom, peerId: chatPeerId })
+  });
+
+  Object.keys(chatPeers).forEach(pid => {
+    if (chatPeers[pid].pc) chatPeers[pid].pc.close();
+    if (chatPeers[pid].dataChannel) chatPeers[pid].dataChannel.close();
+  });
+  chatPeers = {};
+  chatWinId = null;
+}
+
+async function pollChatSignals() {
+  if (chatWinId === null) return;
+  try {
+    const res = await fetch('/api/signal?room=' + chatRoom + '&peerId=' + chatPeerId);
+    const data = await res.json();
+
+    // Connect to new peers
+    data.peers.forEach(pid => {
+      if (pid !== chatPeerId && !chatPeers[pid]) {
+        initiateChatConnection(pid);
+      }
+    });
+
+    // Handle signals
+    data.signals.forEach(sig => {
+      handleChatSignal(sig.from, sig.signal);
+    });
+
+    // Clean up disconnected peers
+    Object.keys(chatPeers).forEach(pid => {
+      if (!data.peers.includes(pid)) {
+        removeChatPeer(pid);
+      }
+    });
+
+    updateChatUsers();
+  } catch (e) {}
+}
+
+function createChatPeerConnection(remotePeerId, isInitiator) {
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+
+  chatPeers[remotePeerId] = { pc, dataChannel: null, connected: false, name: remotePeerId.substr(0, 8), iceCandidateQueue: [] };
+
+  if (isInitiator) {
+    const dc = pc.createDataChannel('chat');
+    setupChatDataChannel(dc, remotePeerId);
+    chatPeers[remotePeerId].dataChannel = dc;
+  } else {
+    pc.ondatachannel = (e) => {
+      setupChatDataChannel(e.channel, remotePeerId);
+      chatPeers[remotePeerId].dataChannel = e.channel;
+    };
+  }
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      sendChatSignal(remotePeerId, { type: 'ice', candidate: e.candidate });
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      chatPeers[remotePeerId].connected = true;
+      addChatMessage('', remotePeerId.substr(0, 8) + ' joined', true);
+      updateChatUsers();
+    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      removeChatPeer(remotePeerId);
+    }
+  };
+
+  return pc;
+}
+
+function setupChatDataChannel(dc, peerId) {
+  dc.onopen = () => {
+    dc.send(JSON.stringify({ type: 'name', name: chatName }));
+  };
+  dc.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'chat') {
+        addChatMessage(data.name || peerId.substr(0, 8), data.text);
+      } else if (data.type === 'name') {
+        chatPeers[peerId].name = data.name;
+        updateChatUsers();
+      }
+    } catch (e) {}
+  };
+}
+
+function removeChatPeer(peerId) {
+  const peer = chatPeers[peerId];
+  if (peer) {
+    if (peer.pc) peer.pc.close();
+    delete chatPeers[peerId];
+    addChatMessage('', (peer.name || peerId.substr(0, 8)) + ' left', true);
+    updateChatUsers();
+  }
+}
+
+async function sendChatSignal(to, signal) {
+  await fetch('/api/signal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'signal', room: chatRoom, peerId: chatPeerId, to, signal })
+  });
+}
+
+async function handleChatSignal(from, signal) {
+  if (signal.type === 'offer') {
+    // Handle glare (both peers sent offers) using polite peer pattern
+    // The peer with the higher ID is "impolite" and ignores incoming offers if they already sent one
+    const existingPeer = chatPeers[from];
+    if (existingPeer && existingPeer.pc) {
+      const isPolite = chatPeerId < from; // Lower ID is polite
+      const isStable = existingPeer.pc.signalingState === 'stable';
+      const hasLocalOffer = existingPeer.pc.signalingState === 'have-local-offer';
+
+      if (hasLocalOffer && !isPolite) {
+        // Impolite peer ignores incoming offer if we already sent one
+        console.log('Ignoring offer due to glare (impolite peer)');
+        return;
+      }
+      // Polite peer or stable state - close existing and accept new offer
+      existingPeer.pc.close();
+      delete chatPeers[from];
+    }
+
+    const pc = createChatPeerConnection(from, false);
+    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+    await processIceCandidateQueue(from);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    sendChatSignal(from, { type: 'answer', sdp: pc.localDescription });
+  } else if (signal.type === 'answer') {
+    const peer = chatPeers[from];
+    if (peer && peer.pc && peer.pc.signalingState === 'have-local-offer') {
+      await peer.pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      await processIceCandidateQueue(from);
+    }
+  } else if (signal.type === 'ice') {
+    const peer = chatPeers[from];
+    if (peer && peer.pc) {
+      if (peer.pc.remoteDescription) {
+        try {
+          await peer.pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        } catch (e) {
+          // Ignore errors - may happen during renegotiation
+        }
+      } else {
+        // Queue the candidate for later
+        peer.iceCandidateQueue = peer.iceCandidateQueue || [];
+        peer.iceCandidateQueue.push(signal.candidate);
+      }
+    }
+  }
+}
+
+// Process queued ICE candidates after remote description is set
+async function processIceCandidateQueue(peerId) {
+  const peer = chatPeers[peerId];
+  if (peer && peer.iceCandidateQueue && peer.pc && peer.pc.remoteDescription) {
+    for (const candidate of peer.iceCandidateQueue) {
+      try {
+        await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {}
+    }
+    peer.iceCandidateQueue = [];
+  }
+}
+
+async function initiateChatConnection(remotePeerId) {
+  const pc = createChatPeerConnection(remotePeerId, true);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  sendChatSignal(remotePeerId, { type: 'offer', sdp: pc.localDescription });
+}
+
+function addChatMessage(name, text, isSystem = false) {
+  // Auto-open chat when receiving a message (but not system messages like join/leave)
+  if (chatWinId === null) {
+    if (!isSystem) {
+      openChat();
+    } else {
+      return;
+    }
+  }
+  const container = document.getElementById('chat-messages-' + chatWinId);
+  if (!container) return;
+
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (isSystem) {
+    div.innerHTML = '<span class="time">' + time + '</span> <span style="color:#888;">' + escapeHtml(text) + '</span>';
+  } else {
+    div.innerHTML = '<span class="name">' + escapeHtml(name) + '</span> <span class="time">' + time + '</span><div>' + escapeHtml(text) + '</div>';
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function updateChatUsers() {
+  if (chatWinId === null) return;
+  const usersEl = document.getElementById('online-users-' + chatWinId);
+  if (!usersEl) return;
+
+  const users = [chatName + ' (you)'];
+  Object.values(chatPeers).forEach(peer => {
+    if (peer.connected) users.push(peer.name);
+  });
+
+  usersEl.innerHTML = users.map(u =>
+    '<div class="user-item"><div class="user-dot"></div> ' + escapeHtml(u) + '</div>'
+  ).join('');
+}
+
+function sendChatP2P(id) {
+  const input = document.getElementById('chat-input-' + id);
+  const text = input.value.trim();
+  if (!text) return;
+
+  addChatMessage(chatName, text);
+
+  Object.values(chatPeers).forEach(peer => {
+    if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+      peer.dataChannel.send(JSON.stringify({ type: 'chat', name: chatName, text }));
+    }
+  });
+
+  input.value = '';
+}
+
+// ==================== WEBCAM ====================
+let webcamStream = null;
+
+function openWebcam() {
+  createWindow({
+    title: 'Webcam',
+    stateKey: 'Webcam',
+    icon: '📹',
+    width: 500, height: 400,
+    content: '<div style="display:flex;flex-direction:column;height:100%;background:#000;">' +
+      '<video id="webcam-video" autoplay playsinline style="flex:1;background:#111;object-fit:cover;"></video>' +
+      '<div style="padding:8px;background:#222;display:flex;gap:8px;">' +
+        '<button onclick="webcamStart()" style="color:#fff;background:#444;border:1px solid #666;padding:4px 12px;">📷 Start</button>' +
+        '<button onclick="webcamSnapshot()" style="color:#fff;background:#444;border:1px solid #666;padding:4px 12px;">📸 Snapshot</button>' +
+        '<button onclick="webcamStop()" style="color:#fff;background:#444;border:1px solid #666;padding:4px 12px;">⏹ Stop</button>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function webcamStart() {
+  const video = document.getElementById('webcam-video');
+  if (!video) return;
+  navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    .then(stream => {
+      webcamStream = stream;
+      video.srcObject = stream;
+    })
+    .catch(e => algoSpeak('Camera error: ' + e.message));
+}
+
+function webcamStop() {
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(t => t.stop());
+    webcamStream = null;
+  }
+  const video = document.getElementById('webcam-video');
+  if (video) video.srcObject = null;
+}
+
+function webcamSnapshot() {
+  const video = document.getElementById('webcam-video');
+  if (!video || !video.srcObject) {
+    algoSpeak('Start camera first');
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const dataUrl = canvas.toDataURL('image/png');
+  const name = 'snapshot-' + Date.now() + '.png';
+  savedFiles.push({ name: name, type: 'image', data: dataUrl });
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + name);
+}
+
+// ==================== AUDIO ====================
+let audioCtx = null;
+
+function getAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// Windows-style sound effects
+function playChime(type) {
+  const ctx = getAudioContext();
+  const now = ctx.currentTime;
+
+  const presets = {
+    startup: [
+      { freq: 523.25, start: 0, dur: 0.3, vol: 0.4 },      // C5
+      { freq: 659.25, start: 0.15, dur: 0.3, vol: 0.4 },   // E5
+      { freq: 783.99, start: 0.3, dur: 0.5, vol: 0.5 },    // G5
+      { freq: 1046.50, start: 0.45, dur: 0.6, vol: 0.4 }   // C6
+    ],
+    error: [
+      { freq: 440, start: 0, dur: 0.15, vol: 0.5 },
+      { freq: 349.23, start: 0.12, dur: 0.2, vol: 0.5 }
+    ],
+    notify: [
+      { freq: 880, start: 0, dur: 0.1, vol: 0.3 },
+      { freq: 1108.73, start: 0.08, dur: 0.15, vol: 0.3 }
+    ],
+    warning: [
+      { freq: 440, start: 0, dur: 0.2, vol: 0.4 },
+      { freq: 440, start: 0.25, dur: 0.2, vol: 0.4 }
+    ],
+    success: [
+      { freq: 523.25, start: 0, dur: 0.15, vol: 0.4 },
+      { freq: 659.25, start: 0.1, dur: 0.15, vol: 0.4 },
+      { freq: 783.99, start: 0.2, dur: 0.25, vol: 0.5 }
+    ],
+    click: [
+      { freq: 1000, start: 0, dur: 0.03, vol: 0.2, wave: 'square' }
+    ],
+    shutdown: [
+      { freq: 783.99, start: 0, dur: 0.25, vol: 0.4 },
+      { freq: 659.25, start: 0.2, dur: 0.25, vol: 0.4 },
+      { freq: 523.25, start: 0.4, dur: 0.4, vol: 0.4 },
+      { freq: 392.00, start: 0.6, dur: 0.5, vol: 0.3 }
+    ],
+    maximize: [
+      { freq: 600, start: 0, dur: 0.08, vol: 0.2 },
+      { freq: 800, start: 0.06, dur: 0.1, vol: 0.25 }
+    ],
+    minimize: [
+      { freq: 800, start: 0, dur: 0.08, vol: 0.2 },
+      { freq: 600, start: 0.06, dur: 0.1, vol: 0.2 }
+    ]
+  };
+
+  const notes = presets[type] || presets.notify;
+
+  notes.forEach(note => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = note.wave || 'sine';
+    osc.frequency.setValueAtTime(note.freq, now + note.start);
+
+    gain.gain.setValueAtTime(0, now + note.start);
+    gain.gain.linearRampToValueAtTime(note.vol, now + note.start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + note.start + note.dur);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now + note.start);
+    osc.stop(now + note.start + note.dur + 0.1);
+  });
+}
+
+// ==================== STICKY NOTES ====================
+function createStickyNote(x, y, text, color) {
+  hideStartMenu();
+  const id = stickyNoteId++;
+  const note = {
+    id: id,
+    x: x || 200 + (id % 5) * 30,
+    y: y || 100 + (id % 5) * 30,
+    text: text || '',
+    color: color || 'yellow'
+  };
+  stickyNotes.push(note);
+  renderStickyNote(note);
+  saveStickyNotes();
+}
+
+function renderStickyNote(note) {
+  const el = document.createElement('div');
+  el.className = 'sticky-note' + (note.color !== 'yellow' ? ' ' + note.color : '');
+  el.id = 'sticky-' + note.id;
+  el.style.left = note.x + 'px';
+  el.style.top = note.y + 'px';
+  el.innerHTML =
+    '<div class="sticky-note-header" data-stickyid="' + note.id + '">' +
+      '<span>📌 Note</span>' +
+      '<span class="close-btn" onclick="deleteStickyNote(' + note.id + ')">×</span>' +
+    '</div>' +
+    '<div class="sticky-note-content">' +
+      '<textarea id="sticky-text-' + note.id + '" placeholder="Type your note...">' + escapeHtml(note.text) + '</textarea>' +
+    '</div>' +
+    '<div class="sticky-note-colors">' +
+      '<span class="c-yellow" onclick="setStickyColor(' + note.id + ',\'yellow\')"></span>' +
+      '<span class="c-pink" onclick="setStickyColor(' + note.id + ',\'pink\')"></span>' +
+      '<span class="c-blue" onclick="setStickyColor(' + note.id + ',\'blue\')"></span>' +
+      '<span class="c-green" onclick="setStickyColor(' + note.id + ',\'green\')"></span>' +
+    '</div>';
+
+  // Save text on change
+  el.querySelector('textarea').addEventListener('input', function() {
+    const n = stickyNotes.find(s => s.id === note.id);
+    if (n) { n.text = this.value; saveStickyNotes(); }
+  });
+
+  // Drag handling
+  el.querySelector('.sticky-note-header').addEventListener('mousedown', function(e) {
+    if (e.target.classList.contains('close-btn')) return;
+    dragStickyNote = note;
+    stickyDragOffset.x = e.clientX - el.offsetLeft;
+    stickyDragOffset.y = e.clientY - el.offsetTop;
+    e.preventDefault();
+  });
+
+  document.getElementById('desktop').appendChild(el);
+}
+
+function setStickyColor(id, color) {
+  const note = stickyNotes.find(s => s.id === id);
+  if (!note) return;
+  note.color = color;
+  const el = document.getElementById('sticky-' + id);
+  if (el) {
+    el.className = 'sticky-note' + (color !== 'yellow' ? ' ' + color : '');
+  }
+  saveStickyNotes();
+}
+
+function deleteStickyNote(id) {
+  stickyNotes = stickyNotes.filter(s => s.id !== id);
+  const el = document.getElementById('sticky-' + id);
+  if (el) el.remove();
+  saveStickyNotes();
+}
+
+function saveStickyNotes() {
+  localStorage.setItem('algo-sticky-notes', JSON.stringify(stickyNotes));
+}
+
+function loadStickyNotes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('algo-sticky-notes') || '[]');
+    saved.forEach(note => {
+      note.id = stickyNoteId++;
+      stickyNotes.push(note);
+      renderStickyNote(note);
+    });
+  } catch(e) {}
+}
+
+// ==================== DOCUMENTATION ====================
+const DOCS = {
+  'getting-started': {
+    title: 'Getting Started',
+    content: `
+      <h2>🚀 Getting Started with Function Server</h2>
+      <p>Welcome to Function Server - a cloud operating system in your browser.</p>
+      <h3>Quick Start</h3>
+      <ul>
+        <li><b>Create files:</b> Right-click the desktop and select "New File"</li>
+        <li><b>Save snippets:</b> Use the Notepad to write and save text files</li>
+        <li><b>Build apps:</b> Open JavaScript.IDE to create interactive apps</li>
+        <li><b>Use AI:</b> Launch AI Wizards from the Start menu for coding help</li>
+      </ul>
+      <h3>Desktop Features</h3>
+      <ul>
+        <li>Drag icons to rearrange them</li>
+        <li>Double-click to open apps and files</li>
+        <li>Right-click for context menus</li>
+        <li>Resize and move windows freely</li>
+      </ul>
+    `
+  },
+  'apps': {
+    title: 'Building Apps',
+    content: `
+      <h2>🛠️ Building Apps</h2>
+      <p>Function Server includes a JavaScript IDE for creating interactive apps.</p>
+      <h3>The ALGO API</h3>
+      <pre style="background:#e8e0f0;color:#222;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">
+// Set window title
+ALGO.title('My App');
+
+// Display content
+ALGO.html('&lt;h1&gt;Hello!&lt;/h1&gt;');
+
+// Create buttons
+ALGO.ui.button('Click Me', () => {
+  ALGO.notify('Button clicked!');
+});
+
+// Store data
+ALGO.state.count = 0;
+      </pre>
+      <h3>Examples</h3>
+      <p>Use the IDE's dropdown menu to load examples like Calculator, Counter, and Clock.</p>
+    `
+  },
+  'terminal': {
+    title: 'Terminal & SSH',
+    content: `
+      <h2>💻 Terminal Access</h2>
+      <p>Registered users get SSH access to their home directory.</p>
+      <h3>Connecting</h3>
+      <pre style="background:#e8e0f0;color:#222;padding:12px;border-radius:6px;font-size:12px;">ssh username@functionserver.com</pre>
+      <h3>Claude Code</h3>
+      <p>Run <code>claude</code> in the terminal to get AI-powered coding assistance.</p>
+      <h3>Available Commands</h3>
+      <p>Standard Unix tools: ls, cd, cat, mkdir, rm, git, node, python, and more.</p>
+    `
+  }
+};
+
+function openDocumentation() {
+  hideStartMenu();
+  createWindow({
+    title: 'Documentation',
+    stateKey: 'Documentation',
+    icon: '📕',
+    width: 400, height: 350,
+    content: '<div class="folder-content">' +
+      '<div class="folder-item" ondblclick="openDocViewer(\'getting-started\')">' +
+        '<div class="icon-img" style="color:#8B0000;">📕</div>' +
+        '<span>Getting Started</span>' +
+      '</div>' +
+      '<div class="folder-item" ondblclick="openDocViewer(\'apps\')">' +
+        '<div class="icon-img" style="color:#8B0000;">📕</div>' +
+        '<span>Building Apps</span>' +
+      '</div>' +
+      '<div class="folder-item" ondblclick="openDocViewer(\'terminal\')">' +
+        '<div class="icon-img" style="color:#8B0000;">📕</div>' +
+        '<span>Terminal & SSH</span>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function openDocViewer(docId) {
+  const doc = DOCS[docId];
+  if (!doc) return;
+  createWindow({
+    title: doc.title + ' - Documentation',
+    stateKey: 'Doc:' + docId,
+    icon: '📕',
+    width: 550, height: 450,
+    content: '<div style="padding:20px;overflow:auto;height:100%;font-size:13px;line-height:1.6;">' +
+      doc.content + '</div>'
+  });
+}
+
+function openHelp() {
+  hideStartMenu();
+  createWindow({
+    title: 'Help',
+    stateKey: 'Help',
+    icon: '📙',
+    width: 600, height: 450,
+    content: '<div class="chm-viewer">' +
+      '<div class="chm-sidebar">' +
+        Object.entries(HELP_CONTENT).map(function(e) {
+          return '<div class="chm-tree-item" onclick="showHelpTopic(\'' + e[0] + '\',this)"><span class="book-icon">📖</span> ' + e[1].title + '</div>';
+        }).join('') +
+      '</div>' +
+      '<div class="chm-content" id="help-content">' + HELP_CONTENT.welcome.content + '</div>' +
+    '</div>'
+  });
+}
+
+function showHelpTopic(key, el) {
+  document.querySelectorAll('.chm-tree-item').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const helpContent = document.getElementById('help-content');
+  if (helpContent && HELP_CONTENT[key]) {
+    helpContent.innerHTML = HELP_CONTENT[key].content;
+  }
+}
+
+// ==================== PROGRAMS ====================
+function runProgram(prog) {
+  // Handle IDE-installed apps with code
+  if (prog.code) {
+    try {
+      const fullCode = ALGO_API_CODE + '\n' + prog.code;
+      // Execute in global scope using indirect eval
+      (0, eval)(fullCode);
+    } catch (e) {
+      algoSpeak('Error running ' + prog.name + ': ' + e.message);
+    }
+    return;
+  }
+
+  // Handle URL-based apps (artifacts)
+  createWindow({
+    title: prog.name,
+    stateKey: 'App:' + prog.id,
+    icon: prog.icon || '🎮',
+    width: 600, height: 500,
+    content: '<iframe src="' + prog.url + '" style="width:100%;height:100%;border:none;"></iframe>'
+  });
+}
+
+function updateProgramsMenu() {
+  const el = document.getElementById('installed-programs-menu');
+  if (!el) return;
+
+  let html = '';
+
+  // System apps (admin-provided, minus uninstalled)
+  const visibleSystemApps = systemApps.filter(a => !uninstalledSystemApps.includes(a.id));
+  if (visibleSystemApps.length > 0) {
+    html += '<div class="start-separator-label">System Apps</div>';
+    html += visibleSystemApps.map(a =>
+      '<div class="start-item" onclick="runApp(systemApps.find(x=>x.id===\'' + a.id + '\'));hideStartMenu()" ' +
+      'oncontextmenu="event.preventDefault();event.stopPropagation();showSystemAppMenu(event,\'' + a.id + '\')">' +
+      '<span>' + (a.icon||'📱') + '</span> ' + a.name + '</div>'
+    ).join('');
+  }
+
+  // User-installed apps
+  if (installedPrograms.length > 0) {
+    if (visibleSystemApps.length > 0) {
+      html += '<div class="start-separator"></div>';
+    }
+    html += '<div class="start-separator-label">My Apps</div>';
+    html += installedPrograms.map(p =>
+      '<div class="start-item" onclick="runProgram(installedPrograms.find(x=>x.id===\'' + p.id + '\'));hideStartMenu()" ' +
+      'oncontextmenu="event.preventDefault();event.stopPropagation();showUserAppMenu(event,\'' + p.id + '\')">' +
+      '<span>' + (p.icon||'🎮') + '</span> ' + p.name + '</div>'
+    ).join('');
+  }
+
+  // Show reinstall option if any system apps are uninstalled
+  if (uninstalledSystemApps.length > 0) {
+    html += '<div class="start-separator"></div>';
+    html += '<div class="start-item" onclick="showReinstallMenu()"><span>📦</span> Restore Apps...</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// Context menu for system apps
+function showSystemAppMenu(e, appId) {
+  const app = systemApps.find(a => a.id === appId);
+  if (!app) return;
+
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML =
+    '<div class="ctx-item" onclick="runApp(systemApps.find(a=>a.id===\'' + appId + '\'))">▶️ Run</div>' +
+    '<div class="ctx-item" onclick="forkSystemApp(\'' + appId + '\')">📋 Fork (Make Copy)</div>' +
+    '<div class="ctx-separator"></div>' +
+    '<div class="ctx-item" onclick="uninstallSystemApp(\'' + appId + '\')">🗑️ Uninstall</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.style.display = 'block';
+}
+
+// Context menu for user apps
+function showUserAppMenu(e, appId) {
+  const app = installedPrograms.find(a => a.id === appId);
+  if (!app) return;
+
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML =
+    '<div class="ctx-item" onclick="runProgram(installedPrograms.find(a=>a.id===\'' + appId + '\'))">▶️ Run</div>' +
+    '<div class="ctx-item" onclick="editUserApp(\'' + appId + '\')">✏️ Edit</div>' +
+    '<div class="ctx-separator"></div>' +
+    '<div class="ctx-item" onclick="uninstallUserApp(\'' + appId + '\')">🗑️ Uninstall</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.style.display = 'block';
+}
+
+// Edit user app in JS.IDE
+function editUserApp(appId) {
+  const app = installedPrograms.find(a => a.id === appId);
+  if (app && app.code) {
+    openJSIDE(app.code, app.name + '.js');
+  }
+  hideContextMenu();
+}
+
+// Uninstall user app (delete it)
+function uninstallUserApp(appId) {
+  installedPrograms = installedPrograms.filter(p => p.id !== appId);
+  saveState();
+  updateProgramsMenu();
+  createDesktopIcons();
+  algoSpeak('App uninstalled.');
+  hideContextMenu();
+}
+
+// Show menu to reinstall system apps
+function showReinstallMenu() {
+  hideStartMenu();
+  const apps = systemApps.filter(a => uninstalledSystemApps.includes(a.id));
+  if (apps.length === 0) return;
+
+  createWindow({
+    title: 'Restore Apps',
+    icon: '📦',
+    width: 300,
+    height: 250,
+    content: '<div style="padding:10px;">' +
+      '<p style="margin-bottom:10px;">Click to restore:</p>' +
+      apps.map(a =>
+        '<div style="padding:5px;cursor:pointer;border:1px solid #ccc;margin:2px;" ' +
+        'onclick="reinstallSystemApp(\'' + a.id + '\');closeWindow(' + winId + ')">' +
+        a.icon + ' ' + a.name + '</div>'
+      ).join('') +
+    '</div>'
+  });
+}
+
+function createDesktopShortcut(artifactName) {
+  // Check if shortcut already exists
+  if (installedPrograms.some(p => p.id === artifactName)) {
+    return;
+  }
+
+  // Add to installed programs
+  installedPrograms.push({
+    id: artifactName,
+    name: artifactName,
+    url: '/' + artifactName,
+    icon: '🔗'
+  });
+
+  saveState();
+  createDesktopIcons();
+  updateProgramsMenu();
+}
+
+// ==================== FOLDER SYSTEM ====================
+function initFolders() {
+  // Create default folders if they don't exist
+  if (!folders.find(f => f.id === FOLDER_PROGRAMS)) {
+    folders.push({
+      id: FOLDER_PROGRAMS,
+      name: 'Programs',
+      icon: '📁',
+      parent: FOLDER_DESKTOP,
+      isSystem: true,
+      subfolders: [
+        { id: 'prog-ai', name: 'AI Wizards', icon: '🤖' },
+        { id: 'prog-media', name: 'Media', icon: '🎵' },
+        { id: 'prog-tools', name: 'Tools', icon: '🔧' },
+        { id: 'prog-games', name: 'Games', icon: '🎮' }
+      ]
+    });
+  }
+  if (!folders.find(f => f.id === FOLDER_RECYCLE)) {
+    folders.push({
+      id: FOLDER_RECYCLE,
+      name: 'Recycle Bin',
+      icon: '🗑️',
+      parent: FOLDER_DESKTOP,
+      isSystem: true
+    });
+  }
+}
+
+function createFolder(name, parentId = FOLDER_DESKTOP) {
+  const id = 'folder-' + Date.now();
+  const folder = {
+    id: id,
+    name: name || 'New Folder',
+    icon: '📁',
+    parent: parentId,
+    items: []
+  };
+  folders.push(folder);
+  saveState();
+  createDesktopIcons();
+  return folder;
+}
+
+function openFolder(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  // Special handling for Recycle Bin
+  if (folderId === FOLDER_RECYCLE) {
+    openRecycleBin();
+    return;
+  }
+
+  // Special handling for Programs folder
+  if (folderId === FOLDER_PROGRAMS) {
+    openProgramsFolder();
+    return;
+  }
+
+  const id = winId;
+  let itemsHtml = '<div class="folder-view" data-folder-id="' + folderId + '">';
+
+  // Add back button if not root
+  if (folder.parent && folder.parent !== FOLDER_DESKTOP) {
+    itemsHtml += '<div class="folder-item" ondblclick="openFolder(\'' + folder.parent + '\')">' +
+      '<div class="folder-icon">⬆️</div><div class="folder-name">..</div></div>';
+  }
+
+  // Show subfolders
+  const subfolders = folders.filter(f => f.parent === folderId);
+  subfolders.forEach(sf => {
+    itemsHtml += '<div class="folder-item" data-item-id="' + sf.id + '" data-type="folder" ondblclick="openFolder(\'' + sf.id + '\')" oncontextmenu="showFolderItemMenu(event, \'' + sf.id + '\', \'folder\')">' +
+      '<div class="folder-icon">' + (sf.icon || '📁') + '</div><div class="folder-name">' + sf.name + '</div></div>';
+  });
+
+  // Show files in this folder
+  const folderFiles = savedFiles.filter(f => f.parent === folderId);
+  folderFiles.forEach((f, i) => {
+    const icon = ALGO.getFileIcon(f.name);
+    itemsHtml += '<div class="folder-item" data-item-id="file-' + savedFiles.indexOf(f) + '" data-type="file" ondblclick="openSavedFile(savedFiles[' + savedFiles.indexOf(f) + '])" oncontextmenu="showFolderItemMenu(event, \'file-' + savedFiles.indexOf(f) + '\', \'file\')">' +
+      '<div class="folder-icon">' + icon + '</div><div class="folder-name">' + f.name + '</div></div>';
+  });
+
+  itemsHtml += '</div>';
+
+  createWindow({
+    title: folder.name,
+    icon: folder.icon || '📁',
+    width: 500,
+    height: 400,
+    stateKey: 'folder-' + folderId,
+    menubar: '<div class="menubar"><div class="menu-item" onclick="toggleMenu(\'folder-file-menu-' + id + '\')">File<div class="dropdown-menu" id="folder-file-menu-' + id + '">' +
+      '<div class="menu-option" onclick="createFolderInWindow(\'' + folderId + '\')">New Folder</div>' +
+      '<div class="menu-option" onclick="createFileInFolder(\'' + folderId + '\')">New File</div>' +
+      '</div></div></div>',
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + itemsHtml
+  });
+}
+
+function openProgramsFolder() {
+  const id = winId;
+  let html = '<div class="folder-view">';
+
+  // AI Wizards subfolder
+  html += '<div class="folder-item" ondblclick="openProgramCategory(\'ai\')"><div class="folder-icon">🤖</div><div class="folder-name">AI Wizards</div></div>';
+  // Media subfolder
+  html += '<div class="folder-item" ondblclick="openProgramCategory(\'media\')"><div class="folder-icon">🎵</div><div class="folder-name">Media</div></div>';
+  // Tools subfolder
+  html += '<div class="folder-item" ondblclick="openProgramCategory(\'tools\')"><div class="folder-icon">🔧</div><div class="folder-name">Tools</div></div>';
+
+  // Show installed programs
+  installedPrograms.forEach(p => {
+    html += '<div class="folder-item" ondblclick="runProgram(installedPrograms.find(x=>x.id===\'' + p.id + '\'))">' +
+      '<div class="folder-icon">' + (p.icon || '📱') + '</div><div class="folder-name">' + p.name + '</div></div>';
+  });
+
+  html += '</div>';
+
+  createWindow({
+    title: 'Programs',
+    icon: '📁',
+    width: 500,
+    height: 400,
+    stateKey: 'folder-programs',
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + html
+  });
+}
+
+function openProgramCategory(category) {
+  const id = winId;
+  let html = '<div class="folder-view">';
+
+  const categories = {
+    'ai': {
+      name: 'AI Wizards',
+      icon: '🤖',
+      items: [
+        { name: 'Claude Wizard', icon: '🤖', action: 'openClaudeWizard' },
+        { name: 'Gemini Wizard', icon: '💎', action: 'openGeminiWizard' },
+        { name: 'GPT Wizard', icon: '🧠', action: 'openGPTWizard' }
+      ]
+    },
+    'media': {
+      name: 'Media',
+      icon: '🎵',
+      items: [
+        { name: 'Music Player', icon: '🎵', action: 'openMusicPlayer' },
+        { name: 'MIDI Editor', icon: '🎹', action: 'openMidiEditor' },
+        { name: 'Webcam', icon: '📹', action: 'openWebcam' }
+      ]
+    },
+    'tools': {
+      name: 'Tools',
+      icon: '🔧',
+      items: [
+        { name: 'Notepad', icon: '📝', action: 'openNotepad' },
+        { name: 'JavaScript.IDE', icon: '📜', action: 'openJSIDE' },
+        { name: 'Web Browser', icon: '🌐', action: 'openBrowser' },
+        { name: 'Calendar', icon: '📅', action: 'openCalendarApp' },
+        { name: 'Todo Manager', icon: '📋', action: 'openTodoApp' }
+      ]
+    }
+  };
+
+  const cat = categories[category];
+  if (!cat) return;
+
+  // Back button
+  html += '<div class="folder-item" ondblclick="openProgramsFolder()"><div class="folder-icon">⬆️</div><div class="folder-name">..</div></div>';
+
+  cat.items.forEach(item => {
+    html += '<div class="folder-item" ondblclick="' + item.action + '()">' +
+      '<div class="folder-icon">' + item.icon + '</div><div class="folder-name">' + item.name + '</div></div>';
+  });
+
+  html += '</div>';
+
+  createWindow({
+    title: cat.name,
+    icon: cat.icon,
+    width: 500,
+    height: 400,
+    stateKey: 'folder-prog-' + category,
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + html
+  });
+}
+
+function openRecycleBin() {
+  const id = winId;
+  let html = '<div class="folder-view">';
+
+  if (recycleBin.length === 0) {
+    html += '<div style="padding:20px;color:#666;text-align:center;">Recycle Bin is empty</div>';
+  } else {
+    recycleBin.forEach((item, i) => {
+      const icon = item.type === 'folder' ? '📁' : ALGO.getFileIcon(item.name || 'file.txt');
+      html += '<div class="folder-item" data-recycle-idx="' + i + '" oncontextmenu="showRecycleItemMenu(event, ' + i + ')">' +
+        '<div class="folder-icon">' + icon + '</div><div class="folder-name">' + (item.name || 'Item') + '</div></div>';
+    });
+  }
+
+  html += '</div>';
+
+  createWindow({
+    title: 'Recycle Bin',
+    icon: recycleBin.length > 0 ? '🗑️' : '🗑️',
+    width: 500,
+    height: 400,
+    stateKey: 'folder-recycle',
+    menubar: '<div class="menubar"><div class="menu-item" onclick="toggleMenu(\'recycle-menu-' + id + '\')">File<div class="dropdown-menu" id="recycle-menu-' + id + '">' +
+      '<div class="menu-option" onclick="emptyRecycleBin()">Empty Recycle Bin</div>' +
+      '</div></div></div>',
+    content: '<style>.folder-view{display:grid;grid-template-columns:repeat(auto-fill,80px);gap:10px;padding:10px;}.folder-item{text-align:center;padding:5px;cursor:pointer;border-radius:4px;}.folder-item:hover{background:#cce5ff;}.folder-icon{font-size:32px;}.folder-name{font-size:11px;word-break:break-word;max-width:70px;margin:0 auto;}</style>' + html
+  });
+}
+
+function moveToRecycleBin(itemId, itemType) {
+  let item = null;
+  let originalParent = FOLDER_DESKTOP;
+
+  if (itemType === 'file') {
+    const idx = parseInt(itemId.replace('file-', ''));
+    item = savedFiles[idx];
+    if (item) {
+      originalParent = item.parent || FOLDER_DESKTOP;
+      savedFiles.splice(idx, 1);
+    }
+  } else if (itemType === 'folder') {
+    const folder = folders.find(f => f.id === itemId);
+    if (folder && !folder.isSystem) {
+      item = { ...folder, type: 'folder' };
+      originalParent = folder.parent || FOLDER_DESKTOP;
+      folders = folders.filter(f => f.id !== itemId);
+    }
+  } else if (itemType === 'program') {
+    const prog = installedPrograms.find(p => p.id === itemId);
+    if (prog) {
+      item = { ...prog, type: 'program' };
+      installedPrograms = installedPrograms.filter(p => p.id !== itemId);
+      updateProgramsMenu();
+    }
+  }
+
+  if (item) {
+    recycleBin.push({
+      ...item,
+      originalParent: originalParent,
+      deletedAt: Date.now()
+    });
+    saveState();
+    createDesktopIcons();
+    ALGO.notify('Moved to Recycle Bin');
+  }
+}
+
+function restoreFromRecycleBin(idx) {
+  const item = recycleBin[idx];
+  if (!item) return;
+
+  if (item.type === 'folder') {
+    folders.push({
+      id: item.id,
+      name: item.name,
+      icon: item.icon,
+      parent: item.originalParent
+    });
+  } else if (item.type === 'program') {
+    installedPrograms.push({
+      id: item.id,
+      name: item.name,
+      icon: item.icon,
+      code: item.code
+    });
+    updateProgramsMenu();
+  } else {
+    // It's a file
+    savedFiles.push({
+      name: item.name,
+      content: item.content,
+      type: item.fileType || 'text',
+      parent: item.originalParent
+    });
+  }
+
+  recycleBin.splice(idx, 1);
+  saveState();
+  createDesktopIcons();
+  ALGO.notify('Restored');
+}
+
+function emptyRecycleBin() {
+  if (recycleBin.length === 0) return;
+  if (confirm('Permanently delete all items in Recycle Bin?')) {
+    recycleBin = [];
+    saveState();
+    ALGO.notify('Recycle Bin emptied');
+  }
+}
+
+function showRecycleItemMenu(e, idx) {
+  e.preventDefault();
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '<div class="ctx-item" onclick="restoreFromRecycleBin(' + idx + ');hideContextMenu()">Restore</div>' +
+    '<div class="ctx-sep"></div>' +
+    '<div class="ctx-item" onclick="recycleBin.splice(' + idx + ',1);saveState();hideContextMenu();openRecycleBin()">Delete Permanently</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('visible');
+}
+
+function showFolderItemMenu(e, itemId, itemType) {
+  e.preventDefault();
+  e.stopPropagation();
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML = '<div class="ctx-item" onclick="ctxOpenFolderItem(\'' + itemId + '\', \'' + itemType + '\')">Open</div>' +
+    '<div class="ctx-item" onclick="ctxRenameFolderItem(\'' + itemId + '\', \'' + itemType + '\')">Rename</div>' +
+    '<div class="ctx-sep"></div>' +
+    '<div class="ctx-item" onclick="moveToRecycleBin(\'' + itemId + '\', \'' + itemType + '\');hideContextMenu()">Delete</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('visible');
+}
+
+function ctxOpenFolderItem(itemId, itemType) {
+  if (itemType === 'folder') {
+    openFolder(itemId);
+  } else if (itemType === 'file') {
+    const idx = parseInt(itemId.replace('file-', ''));
+    openSavedFile(savedFiles[idx]);
+  }
+  hideContextMenu();
+}
+
+function ctxRenameFolderItem(itemId, itemType) {
+  const newName = prompt('Enter new name:');
+  if (!newName) return;
+
+  if (itemType === 'folder') {
+    const folder = folders.find(f => f.id === itemId);
+    if (folder) folder.name = newName;
+  } else if (itemType === 'file') {
+    const idx = parseInt(itemId.replace('file-', ''));
+    if (savedFiles[idx]) savedFiles[idx].name = newName;
+  }
+  saveState();
+  createDesktopIcons();
+  hideContextMenu();
+}
+
+function createFolderInWindow(parentId) {
+  const name = prompt('Folder name:', 'New Folder');
+  if (name) {
+    createFolder(name, parentId);
+    openFolder(parentId); // Refresh
+  }
+  hideMenus();
+}
+
+function createFileInFolder(folderId) {
+  // Open notepad and set the file's parent folder
+  openNotepad(null, folderId);
+  hideMenus();
+}
+
+// Snap coordinates to grid
+function snapToGrid(x, y) {
+  return {
+    x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+    y: Math.round(y / GRID_SIZE) * GRID_SIZE
+  };
+}
+
+// ==================== CONTEXT MENU ====================
+function showContextMenu(e) {
+  e.preventDefault();
+  const menu = document.getElementById('context-menu');
+  const icon = e.target.closest('.desktop-icon');
+  contextTarget = { icon: icon };
+
+  let html = '';
+  if (icon) {
+    const type = icon.dataset.iconType;
+    const iconId = icon.dataset.iconId || icon.id;
+    html = '<div class="ctx-item" onclick="ctxOpen()">Open</div>';
+
+    // Find file info for "Open With" menu
+    let fileInfo = null;
+    if (iconId && iconId.startsWith('file-')) {
+      const idx = parseInt(iconId.replace('file-',''));
+      fileInfo = savedFiles[idx];
+    } else if (iconId && (iconId.startsWith('shader-') || iconId.startsWith('box-'))) {
+      fileInfo = desktopIcons.find(i => i.id === iconId);
+    }
+
+    if (fileInfo && fileInfo.name) {
+      const handlers = getFileHandlers(fileInfo.name, fileInfo.content);
+      if (handlers.length > 0) {
+        html += '<div class="ctx-item has-submenu">Open With<div class="ctx-submenu">';
+        handlers.forEach((h, idx) => {
+          html += '<div class="ctx-item" onclick="ctxOpenWith(' + idx + ')">' + h.icon + ' ' + h.name + '</div>';
+        });
+        html += '</div></div>';
+        contextTarget.handlers = handlers;
+        contextTarget.fileInfo = fileInfo;
+      }
+
+      // Add "Set as Background" for images
+      if (fileInfo.type === 'image') {
+        const imageFiles = savedFiles.filter(f => f.type === 'image');
+        const imgIdx = imageFiles.indexOf(fileInfo);
+        if (imgIdx >= 0) {
+          html += '<div class="ctx-item" onclick="setImageAsBackground(' + imgIdx + ')">Set as Background</div>';
+        }
+      }
+    }
+
+    if (type === 'openFile' || type === 'runProgram' || type === 'openRoomFolder' || type === 'openFolder') {
+      html += '<div class="ctx-item" onclick="ctxRename()">Rename</div>';
+      html += '<div class="ctx-sep"></div><div class="ctx-item" onclick="ctxDelete()">🗑️ Move to Recycle Bin</div>';
+    }
+    // Add "Reset Position" option if icon has been moved
+    if (iconPositions[iconId]) {
+      html += '<div class="ctx-sep"></div><div class="ctx-item" onclick="ctxResetIconPosition()">Reset Position</div>';
+    }
+  } else {
+    html = '<div class="ctx-item" id="ctx-paste-item" onclick="ctxPaste()">Paste</div>' +
+           '<div class="ctx-sep"></div>' +
+           '<div class="ctx-item" onclick="ctxNewFolder()">📁 New Folder</div>' +
+           '<div class="ctx-item" onclick="openNotepad()">📝 New Text File</div>' +
+           '<div class="ctx-item" onclick="openJSIDE()">📜 New JavaScript</div>' +
+           '<div class="ctx-item" onclick="createStickyNote(' + e.clientX + ',' + e.clientY + ')">📌 New Sticky Note</div>' +
+           '<div class="ctx-sep"></div>' +
+           '<div class="ctx-item" onclick="location.reload()">🔄 Refresh</div>';
+    // Try to read clipboard and show preview
+    setTimeout(updatePastePreview, 0);
+  }
+
+  menu.innerHTML = html;
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('visible');
+
+  // Adjust position if menu extends beyond viewport
+  const rect = menu.getBoundingClientRect();
+  const viewWidth = window.innerWidth;
+  const viewHeight = window.innerHeight;
+
+  if (rect.right > viewWidth) {
+    menu.style.left = Math.max(0, viewWidth - rect.width) + 'px';
+  }
+  if (rect.bottom > viewHeight) {
+    menu.style.top = Math.max(0, viewHeight - rect.height) + 'px';
+  }
+}
+
+function ctxOpen() {
+  if (contextTarget.icon && contextTarget.icon.ondblclick) contextTarget.icon.ondblclick();
+  hideContextMenu();
+}
+
+function ctxOpenWith(idx) {
+  if (contextTarget.handlers && contextTarget.handlers[idx] && contextTarget.fileInfo) {
+    const handler = contextTarget.handlers[idx];
+    const file = contextTarget.fileInfo;
+    handler.handler(file.content, file.name);
+  }
+  hideContextMenu();
+}
+
+function ctxDelete() {
+  const icon = contextTarget.icon;
+  if (!icon) return;
+  const id = icon.dataset.iconId;
+  if (id.startsWith('file-')) {
+    moveToRecycleBin(id, 'file');
+  } else if (id.startsWith('prog-')) {
+    const pid = id.replace('prog-','');
+    moveToRecycleBin(pid, 'program');
+  } else if (id.startsWith('folder-')) {
+    moveToRecycleBin(id, 'folder');
+  } else if (id.startsWith('room-')) {
+    const roomName = id.replace('room-','');
+    roomFolders = roomFolders.filter(r => r.name !== roomName);
+    savedFiles = savedFiles.filter(f => f.room !== roomName);
+    saveState();
+    createDesktopIcons();
+  }
+  hideContextMenu();
+}
+
+function ctxRename() {
+  const icon = contextTarget.icon;
+  if (!icon) return;
+  const id = icon.dataset.iconId;
+  const newName = prompt('Enter new name:');
+  if (!newName) { hideContextMenu(); return; }
+
+  if (id.startsWith('file-')) {
+    const idx = parseInt(id.replace('file-',''));
+    if (savedFiles[idx]) savedFiles[idx].name = newName;
+  } else if (id.startsWith('prog-')) {
+    const pid = id.replace('prog-','');
+    const prog = installedPrograms.find(p => p.id === pid);
+    if (prog) prog.name = newName;
+    updateProgramsMenu();
+  } else if (id.startsWith('folder-')) {
+    const folder = folders.find(f => f.id === id);
+    if (folder) folder.name = newName;
+  }
+  saveState();
+  createDesktopIcons();
+  hideContextMenu();
+}
+
+function ctxNewFolder() {
+  const name = prompt('Folder name:', 'New Folder');
+  if (name) {
+    createFolder(name, FOLDER_DESKTOP);
+  }
+  hideContextMenu();
+}
+
+function ctxResetIconPosition() {
+  const icon = contextTarget.icon;
+  if (!icon) return;
+  const iconId = icon.dataset.iconId;
+  if (iconPositions[iconId]) {
+    delete iconPositions[iconId];
+    localStorage.setItem('algo-icon-positions', JSON.stringify(iconPositions));
+    // Reset to default position
+    const defaultX = icon.dataset.defaultX || '20';
+    const defaultY = icon.dataset.defaultY || '20';
+    icon.style.left = defaultX + 'px';
+    icon.style.top = defaultY + 'px';
+  }
+  hideContextMenu();
+}
+
+async function updatePastePreview() {
+  const pasteItem = document.getElementById('ctx-paste-item');
+  if (!pasteItem) return;
+
+  try {
+    // Try to read clipboard (requires permission)
+    const clipboardItems = await navigator.clipboard.read();
+    for (const item of clipboardItems) {
+      // Check for images first
+      if (item.types.includes('image/png') || item.types.includes('image/jpeg')) {
+        const filename = generatePasteFilename('img', '.png');
+        pasteItem.textContent = 'Paste ' + filename;
+        pasteItem.dataset.clipboardType = 'image';
+        return;
+      }
+      // Check for text
+      if (item.types.includes('text/plain')) {
+        const blob = await item.getType('text/plain');
+        const text = await blob.text();
+        if (text.length > 0) {
+          // Check if it's a URL/artifact link
+          if (text.match(/laserbarf\.com\/([a-z0-9-]+)/i)) {
+            const name = text.match(/laserbarf\.com\/([a-z0-9-]+)/i)[1];
+            pasteItem.textContent = 'Paste shortcut: ' + name;
+          } else {
+            const preview = text.substring(0, 20) + (text.length > 20 ? '...' : '');
+            const filename = generatePasteFilename('note', '.txt');
+            pasteItem.textContent = 'Paste "' + preview + '"';
+          }
+          pasteItem.dataset.clipboardType = 'text';
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    // Clipboard API not available or permission denied - keep default "Paste"
+  }
+}
+
+function ctxPaste() {
+  hideContextMenu();
+  // Open a paste dialog - clipboard API is too restricted in browsers
+  openPasteDialog();
+}
+
+function openPasteDialog() {
+  createWindow({
+    title: 'Paste',
+    stateKey: 'Paste Dialog',
+    icon: '📋',
+    width: 400, height: 300,
+    content: '<div style="padding:15px;height:100%;display:flex;flex-direction:column;">' +
+      '<p style="margin-bottom:10px;">Paste your content below (Ctrl+V), then click Save:</p>' +
+      '<div id="paste-drop-zone" style="flex:1;border:2px dashed #999;margin-bottom:10px;display:flex;align-items:center;justify-content:center;background:#fff;position:relative;min-height:120px;">' +
+        '<textarea id="paste-textarea" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;resize:none;padding:8px;font-family:monospace;font-size:12px;" placeholder="Click here and press Ctrl+V to paste text or images..."></textarea>' +
+        '<img id="paste-preview" style="max-width:100%;max-height:100%;display:none;position:absolute;">' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+        '<button onclick="closePasteDialog()">Cancel</button>' +
+        '<button onclick="savePastedContent()">Save to Desktop</button>' +
+      '</div>' +
+    '</div>'
+  });
+
+  // Set up paste handler for the textarea
+  setTimeout(() => {
+    const textarea = document.getElementById('paste-textarea');
+    const preview = document.getElementById('paste-preview');
+    if (textarea) {
+      textarea.focus();
+      textarea.addEventListener('paste', function(e) {
+        const items = (e.clipboardData || window.clipboardData).items;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            e.preventDefault();
+            const blob = items[i].getAsFile();
+            const reader = new FileReader();
+            reader.onload = function(event) {
+              textarea.style.display = 'none';
+              preview.src = event.target.result;
+              preview.style.display = 'block';
+              preview.dataset.imageData = event.target.result;
+            };
+            reader.readAsDataURL(blob);
+            return;
+          }
+        }
+      });
+    }
+  }, 100);
+}
+
+function savePastedContent() {
+  const textarea = document.getElementById('paste-textarea');
+  const preview = document.getElementById('paste-preview');
+
+  if (preview && preview.dataset.imageData) {
+    // Save image
+    const filename = generatePasteFilename('img', '.png');
+    savedFiles.push({ name: filename, content: preview.dataset.imageData, type: 'image' });
+    saveState();
+    createDesktopIcons();
+    algoSpeak('Saved ' + filename);
+    closePasteDialog();
+  } else if (textarea && textarea.value.trim()) {
+    // Save text
+    const text = textarea.value.trim();
+    if (text.match(/laserbarf\.com\/([a-z0-9-]+)/i)) {
+      const artifactName = text.match(/laserbarf\.com\/([a-z0-9-]+)/i)[1];
+      createDesktopShortcut(artifactName);
+      algoSpeak('Added shortcut: ' + artifactName);
+    } else {
+      const filename = generatePasteFilename('note', '.txt');
+      savedFiles.push({ name: filename, content: text, type: 'text' });
+      saveState();
+      createDesktopIcons();
+      algoSpeak('Saved ' + filename);
+    }
+    closePasteDialog();
+  } else {
+    algoSpeak('Nothing to save');
+  }
+}
+
+function closePasteDialog() {
+  const win = windows.find(w => w.title === 'Paste');
+  if (win) closeWindow(win.id);
+}
+
+// ==================== DRAG ====================
+function startDrag(e) {
+  const titlebar = e.target.closest('.window-titlebar');
+  if (titlebar && !e.target.classList.contains('window-btn')) {
+    const id = parseInt(titlebar.dataset.winid);
+    dragWin = windows.find(w => w.id === id);
+    if (dragWin) {
+      const el = document.getElementById('win-' + id);
+      dragOffset.x = e.clientX - el.offsetLeft;
+      dragOffset.y = e.clientY - el.offsetTop;
+    }
+    return;
+  }
+  // Desktop icon dragging
+  const icon = e.target.closest('.desktop-icon');
+  if (icon && !dragWin) {
+    dragIcon = icon;
+    iconDragOffset.x = e.clientX - icon.offsetLeft;
+    iconDragOffset.y = e.clientY - icon.offsetTop;
+    icon.classList.add('selected');
+    document.querySelectorAll('.desktop-icon').forEach(i => {
+      if (i !== icon) i.classList.remove('selected');
+    });
+  }
+}
+
+function onDrag(e) {
+  if (dragWin) {
+    const el = document.getElementById('win-' + dragWin.id);
+    dragWin.x = e.clientX - dragOffset.x;
+    dragWin.y = e.clientY - dragOffset.y;
+    el.style.left = dragWin.x + 'px';
+    el.style.top = dragWin.y + 'px';
+  }
+  if (dragStickyNote) {
+    const el = document.getElementById('sticky-' + dragStickyNote.id);
+    dragStickyNote.x = e.clientX - stickyDragOffset.x;
+    dragStickyNote.y = e.clientY - stickyDragOffset.y;
+    el.style.left = dragStickyNote.x + 'px';
+    el.style.top = dragStickyNote.y + 'px';
+  }
+  if (dragIcon) {
+    let newX = e.clientX - iconDragOffset.x;
+    let newY = e.clientY - iconDragOffset.y;
+    // Keep icon on screen
+    const desktop = document.getElementById('desktop');
+    const maxX = desktop.clientWidth - dragIcon.offsetWidth;
+    const maxY = desktop.clientHeight - dragIcon.offsetHeight - 40; // Account for taskbar
+    newX = Math.max(0, Math.min(newX, maxX));
+    newY = Math.max(0, Math.min(newY, maxY));
+    dragIcon.style.left = newX + 'px';
+    dragIcon.style.top = newY + 'px';
+  }
+}
+
+function endDrag() {
+  if (dragWin) {
+    const stateKey = dragWin.stateKey || dragWin.title;
+    windowStates[stateKey] = { x: dragWin.x, y: dragWin.y, width: dragWin.width, height: dragWin.height };
+    saveState();
+  }
+  if (dragStickyNote) {
+    saveStickyNotes();
+  }
+  if (dragIcon) {
+    const iconId = dragIcon.dataset.iconId;
+    const iconType = dragIcon.dataset.iconType;
+    let x = parseInt(dragIcon.style.left);
+    let y = parseInt(dragIcon.style.top);
+
+    // Check if dropped on Recycle Bin
+    const recycleBinIcon = document.getElementById('icon-' + FOLDER_RECYCLE);
+    if (recycleBinIcon && iconId !== FOLDER_RECYCLE && iconId !== FOLDER_PROGRAMS) {
+      const rbRect = recycleBinIcon.getBoundingClientRect();
+      const dragRect = dragIcon.getBoundingClientRect();
+      // Check overlap
+      if (dragRect.left < rbRect.right && dragRect.right > rbRect.left &&
+          dragRect.top < rbRect.bottom && dragRect.bottom > rbRect.top) {
+        // Dropped on Recycle Bin - delete the item
+        if (iconId.startsWith('file-')) {
+          moveToRecycleBin(iconId, 'file');
+        } else if (iconId.startsWith('prog-')) {
+          moveToRecycleBin(iconId.replace('prog-', ''), 'program');
+        } else if (iconId.startsWith('folder-')) {
+          moveToRecycleBin(iconId, 'folder');
+        }
+        dragIcon = null;
+        return;
+      }
+    }
+
+    // Snap to grid
+    const snapped = snapToGrid(x, y);
+    dragIcon.style.left = snapped.x + 'px';
+    dragIcon.style.top = snapped.y + 'px';
+
+    iconPositions[iconId] = { x: snapped.x, y: snapped.y };
+    localStorage.setItem('algo-icon-positions', JSON.stringify(iconPositions));
+  }
+  dragWin = null;
+  dragStickyNote = null;
+  dragIcon = null;
+}
+
+// ==================== MUSIC PLAYER ====================
+let musicPlayerState = { tracks: [], currentTrack: -1, isPlaying: false, audio: null, winId: null };
+
+function openMusicPlayer() {
+  hideStartMenu();
+  const id = winId;
+  musicPlayerState.winId = id;
+
+  createWindow({
+    title: 'ALGO Music Player',
+    stateKey: 'Music Player',
+    icon: '🎵',
+    width: 320, height: 400,
+    content: '<div class="winamp-player">' +
+      '<div class="winamp-header">' +
+        '<span class="title">🎵 ALGO.MP3</span>' +
+      '</div>' +
+      '<div class="winamp-display">' +
+        '<div class="track-title" id="music-title-' + id + '">No track loaded</div>' +
+        '<div class="track-time" id="music-time-' + id + '">--:-- / --:--</div>' +
+      '</div>' +
+      '<div class="winamp-controls">' +
+        '<button class="winamp-btn" onclick="musicPrev(' + id + ')" title="Previous">⏮</button>' +
+        '<button class="winamp-btn" onclick="musicPlay(' + id + ')" id="music-playbtn-' + id + '" title="Play">▶</button>' +
+        '<button class="winamp-btn" onclick="musicPause(' + id + ')" title="Pause">⏸</button>' +
+        '<button class="winamp-btn" onclick="musicStop(' + id + ')" title="Stop">⏹</button>' +
+        '<button class="winamp-btn" onclick="musicNext(' + id + ')" title="Next">⏭</button>' +
+      '</div>' +
+      '<div class="winamp-volume">' +
+        '<span>🔊</span>' +
+        '<input type="range" min="0" max="100" value="80" onchange="musicVolume(this.value)" id="music-vol-' + id + '">' +
+        '<span id="music-vol-val-' + id + '">80%</span>' +
+      '</div>' +
+      '<div id="music-embed-' + id + '" style="display:none;background:#1a1a1a;margin:4px;padding:4px;border:2px inset #333;"></div>' +
+      '<div class="winamp-playlist" id="music-playlist-' + id + '">' +
+        '<div style="padding:20px;text-align:center;color:#009900;">Loading tracks...</div>' +
+      '</div>' +
+      '<div class="winamp-status" id="music-status-' + id + '">Loading...</div>' +
+    '</div>',
+    onClose: () => {
+      musicStop(id);
+      musicPlayerState.winId = null;
+    }
+  });
+
+  loadMusicTracks(id);
+}
+
+function loadMusicTracks(winId) {
+  fetch('/api/media?type=audio')
+    .then(r => r.json())
+    .then(data => {
+      musicPlayerState.tracks = data.audio || [];
+      renderMusicPlaylist(winId);
+      const status = document.getElementById('music-status-' + winId);
+      if (status) status.textContent = musicPlayerState.tracks.length + ' track(s) found';
+      updateMiniPlayer();
+    })
+    .catch(e => {
+      const status = document.getElementById('music-status-' + winId);
+      if (status) status.textContent = 'Error loading tracks';
+    });
+}
+
+function renderMusicPlaylist(winId) {
+  const playlist = document.getElementById('music-playlist-' + winId);
+  if (!playlist) return;
+
+  if (musicPlayerState.tracks.length === 0) {
+    playlist.innerHTML = '<div style="padding:20px;text-align:center;color:#009900;">No audio tracks found.<br>Post links to .mp3 files!</div>';
+    return;
+  }
+
+  playlist.innerHTML = musicPlayerState.tracks.map((t, i) =>
+    '<div class="winamp-track' + (i === musicPlayerState.currentTrack ? ' active' : '') + '" onclick="musicSelectTrack(' + i + ',' + winId + ')">' +
+      '<span class="track-num">' + (i+1) + '.</span>' +
+      '<span class="track-name">' + escapeHtml(t.title || 'Track ' + (i+1)) + '</span>' +
+    '</div>'
+  ).join('');
+}
+
+function musicSelectTrack(idx, winId) {
+  musicPlayerState.currentTrack = idx;
+  renderMusicPlaylist(winId);
+  musicPlay(winId);
+}
+
+function musicPlay(winId) {
+  if (musicPlayerState.tracks.length === 0) return;
+  if (musicPlayerState.currentTrack < 0) musicPlayerState.currentTrack = 0;
+
+  const track = musicPlayerState.tracks[musicPlayerState.currentTrack];
+  if (!track) return;
+
+  const title = document.getElementById('music-title-' + winId);
+  const time = document.getElementById('music-time-' + winId);
+  const embed = document.getElementById('music-embed-' + winId);
+
+  // Update title
+  if (title) title.textContent = track.title || 'Track ' + (musicPlayerState.currentTrack + 1);
+
+  // Handle different track types
+  if (track.type === 'bandcamp') {
+    // Stop any playing audio
+    if (musicPlayerState.audio) {
+      musicPlayerState.audio.pause();
+      musicPlayerState.audio.src = '';
+    }
+    // Show Bandcamp embed
+    if (embed) {
+      embed.style.display = 'block';
+      embed.innerHTML = '<iframe style="border:0;width:100%;height:120px;" src="https://bandcamp.com/EmbeddedPlayer/' +
+        (track.url.includes('/album/') ? 'album' : 'track') + '=0/size=large/bgcol=232323/linkcol=00ff00/tracklist=false/artwork=small/" seamless>' +
+        '<a href="' + track.url + '">' + escapeHtml(track.title) + '</a></iframe>' +
+        '<div style="text-align:center;margin-top:4px;"><a href="' + track.url + '" target="_blank" style="color:#00ff00;font-size:10px;">Open in Bandcamp ↗</a></div>';
+    }
+    if (time) time.textContent = '🎸 Bandcamp';
+    musicPlayerState.isPlaying = true;
+    renderMusicPlaylist(winId);
+    updateMiniPlayer();
+    return;
+  }
+
+  if (track.type === 'soundcloud') {
+    // Stop any playing audio
+    if (musicPlayerState.audio) {
+      musicPlayerState.audio.pause();
+      musicPlayerState.audio.src = '';
+    }
+    // Show SoundCloud embed
+    if (embed) {
+      embed.style.display = 'block';
+      embed.innerHTML = '<iframe width="100%" height="120" scrolling="no" frameborder="no" allow="autoplay" ' +
+        'src="' + track.embedUrl + '"></iframe>' +
+        '<div style="text-align:center;margin-top:4px;"><a href="' + track.url + '" target="_blank" style="color:#00ff00;font-size:10px;">Open in SoundCloud ↗</a></div>';
+    }
+    if (time) time.textContent = '☁️ SoundCloud';
+    musicPlayerState.isPlaying = true;
+    renderMusicPlaylist(winId);
+    updateMiniPlayer();
+    return;
+  }
+
+  // Regular audio file - hide embed area
+  if (embed) {
+    embed.style.display = 'none';
+    embed.innerHTML = '';
+  }
+
+  // Create or update audio element
+  if (!musicPlayerState.audio) {
+    musicPlayerState.audio = new Audio();
+    musicPlayerState.audio.addEventListener('timeupdate', () => updateMusicTime(winId));
+    musicPlayerState.audio.addEventListener('ended', () => musicNext(winId));
+    musicPlayerState.audio.addEventListener('error', () => {
+      const status = document.getElementById('music-status-' + winId);
+      if (status) status.textContent = 'Error playing track';
+    });
+  }
+
+  if (musicPlayerState.audio.src !== track.url) {
+    musicPlayerState.audio.src = track.url;
+  }
+
+  musicPlayerState.audio.play().then(() => {
+    musicPlayerState.isPlaying = true;
+    renderMusicPlaylist(winId);
+    updateMiniPlayer();
+  }).catch(e => {
+    const status = document.getElementById('music-status-' + winId);
+    if (status) status.textContent = 'Cannot play: ' + (e.message || 'blocked');
+  });
+}
+
+function musicPause(winId) {
+  if (musicPlayerState.audio) {
+    musicPlayerState.audio.pause();
+    musicPlayerState.isPlaying = false;
+    updateMiniPlayer();
+  }
+}
+
+function musicStop(winId) {
+  if (musicPlayerState.audio) {
+    musicPlayerState.audio.pause();
+    musicPlayerState.audio.currentTime = 0;
+    musicPlayerState.isPlaying = false;
+    updateMiniPlayer();
+  }
+  const time = document.getElementById('music-time-' + winId);
+  if (time) time.textContent = '--:-- / --:--';
+}
+
+function musicPrev(winId) {
+  if (musicPlayerState.tracks.length === 0) return;
+  musicPlayerState.currentTrack--;
+  if (musicPlayerState.currentTrack < 0) musicPlayerState.currentTrack = musicPlayerState.tracks.length - 1;
+  renderMusicPlaylist(winId);
+  if (musicPlayerState.isPlaying) musicPlay(winId);
+}
+
+function musicNext(winId) {
+  if (musicPlayerState.tracks.length === 0) return;
+  musicPlayerState.currentTrack++;
+  if (musicPlayerState.currentTrack >= musicPlayerState.tracks.length) musicPlayerState.currentTrack = 0;
+  renderMusicPlaylist(winId);
+  if (musicPlayerState.isPlaying) musicPlay(winId);
+}
+
+function musicVolume(val) {
+  if (musicPlayerState.audio) {
+    musicPlayerState.audio.volume = val / 100;
+  }
+  const volVal = document.getElementById('music-vol-val-' + musicPlayerState.winId);
+  if (volVal) volVal.textContent = val + '%';
+}
+
+function updateMusicTime(winId) {
+  const audio = musicPlayerState.audio;
+  if (!audio) return;
+  const time = document.getElementById('music-time-' + winId);
+  if (!time) return;
+
+  const formatTime = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = Math.floor(s % 60);
+    return mins + ':' + (secs < 10 ? '0' : '') + secs;
+  };
+
+  const current = formatTime(audio.currentTime || 0);
+  const total = formatTime(audio.duration || 0);
+  time.textContent = current + ' / ' + total;
+}
+
+// ==================== MINI PLAYER ====================
+function updateMiniPlayer() {
+  const miniPlayer = document.getElementById('mini-player');
+  const miniTitle = document.getElementById('mini-player-title');
+  const miniPlayBtn = document.getElementById('mini-play-btn');
+
+  // Show mini player if music is playing or has tracks loaded
+  if (musicPlayerState.tracks.length > 0) {
+    miniPlayer.classList.add('visible');
+    const track = musicPlayerState.tracks[musicPlayerState.currentTrack];
+    if (track) {
+      miniTitle.textContent = '🎵 ' + (track.title || 'Track ' + (musicPlayerState.currentTrack + 1));
+    }
+    miniPlayBtn.textContent = musicPlayerState.isPlaying ? '⏸' : '▶';
+  } else {
+    miniPlayer.classList.remove('visible');
+  }
+}
+
+function miniPlayerToggle() {
+  if (musicPlayerState.isPlaying) {
+    musicPause();
+  } else {
+    musicPlay(musicPlayerState.winId);
+  }
+  updateMiniPlayer();
+}
+
+function miniPlayerPrev() {
+  musicPrev(musicPlayerState.winId);
+  updateMiniPlayer();
+}
+
+function miniPlayerNext() {
+  musicNext(musicPlayerState.winId);
+  updateMiniPlayer();
+}
+
+function miniPlayerOpen() {
+  // If music player window exists, focus it; otherwise open new one
+  const win = windows.find(w => w.title === 'ALGO Music Player');
+  if (win) {
+    focusWindow(win.id);
+    const el = document.getElementById('win-' + win.id);
+    if (el && el.classList.contains('minimized')) {
+      el.classList.remove('minimized');
+      win.minimized = false;
+    }
+  } else {
+    openMusicPlayer();
+  }
+}
+
+// ==================== MIDI EDITOR ====================
+function openMidiEditor() {
+  hideStartMenu();
+  createWindow({
+    title: 'MIDI Editor',
+    stateKey: 'MIDI Editor',
+    icon: '🎹',
+    width: 800, height: 500,
+    content: '<iframe src="/midi-editor" style="width:100%;height:100%;border:none;"></iframe>'
+  });
+}
+
+// ==================== TODO APP ====================
+function loadTodos() {
+  try {
+    todoLists = JSON.parse(localStorage.getItem('algo-todos') || '[]');
+    todoOverlayHidden = localStorage.getItem('algo-todo-overlay-hidden') === 'true';
+  } catch (e) {
+    todoLists = [];
+  }
+
+  // Create default list if none exist
+  if (todoLists.length === 0) {
+    todoLists.push({
+      id: Date.now(),
+      name: 'My Tasks',
+      items: []
+    });
+    saveTodos();
+  }
+
+  updateTodoOverlay();
+}
+
+function saveTodos() {
+  localStorage.setItem('algo-todos', JSON.stringify(todoLists));
+  localStorage.setItem('algo-todo-overlay-hidden', todoOverlayHidden);
+}
+
+function updateTodoOverlay() {
+  const overlay = document.getElementById('todo-overlay');
+  const content = document.getElementById('todo-overlay-content');
+
+  // Count pending items
+  let pendingItems = [];
+  todoLists.forEach(list => {
+    list.items.filter(i => !i.done).forEach(item => {
+      pendingItems.push({ ...item, listName: list.name });
+    });
+  });
+
+  // Show/hide overlay
+  if (pendingItems.length === 0 || todoOverlayHidden) {
+    overlay.classList.remove('visible');
+    return;
+  }
+
+  overlay.classList.add('visible');
+
+  // Render items (max 5)
+  const displayItems = pendingItems.slice(0, 5);
+  content.innerHTML = displayItems.map(item =>
+    '<div class="todo-item">' +
+      '<input type="checkbox" onchange="toggleTodoFromOverlay(' + item.id + ')">' +
+      '<span>' + escapeHtml(item.text) + '</span>' +
+    '</div>'
+  ).join('') +
+  (pendingItems.length > 5 ? '<div style="color:#888;font-size:10px;text-align:center;">+' + (pendingItems.length - 5) + ' more...</div>' : '');
+}
+
+function toggleTodoFromOverlay(itemId) {
+  todoLists.forEach(list => {
+    const item = list.items.find(i => i.id === itemId);
+    if (item) {
+      item.done = !item.done;
+    }
+  });
+  saveTodos();
+  updateTodoOverlay();
+  if (todoWinId !== null) renderTodoApp(todoWinId);
+}
+
+function hideTodoOverlay() {
+  todoOverlayHidden = true;
+  saveTodos();
+  document.getElementById('todo-overlay').classList.remove('visible');
+}
+
+function showTodoOverlay() {
+  todoOverlayHidden = false;
+  saveTodos();
+  updateTodoOverlay();
+}
+
+function openTodoApp() {
+  hideStartMenu();
+  const id = winId;
+  todoWinId = id;
+
+  createWindow({
+    title: 'Todo Manager',
+    stateKey: 'Todo Manager',
+    icon: '📋',
+    width: 450, height: 350,
+    content: '<div class="todo-app">' +
+      '<div class="todo-app-toolbar">' +
+        '<button onclick="addTodoList(' + id + ')">+ New List</button>' +
+        '<div style="flex:1;"></div>' +
+        '<button onclick="showTodoOverlay()">Show Overlay</button>' +
+      '</div>' +
+      '<div class="todo-app-content">' +
+        '<div class="todo-lists" id="todo-lists-' + id + '"></div>' +
+        '<div class="todo-items" id="todo-items-' + id + '"></div>' +
+      '</div>' +
+      '<div class="todo-add-form">' +
+        '<input type="text" id="todo-input-' + id + '" placeholder="Add new task..." onkeypress="if(event.key===\'Enter\')addTodoItem(' + id + ')">' +
+        '<button onclick="addTodoItem(' + id + ')">Add</button>' +
+      '</div>' +
+    '</div>',
+    onClose: () => { todoWinId = null; }
+  });
+
+  // Select first list by default
+  if (!window.selectedTodoListId && todoLists.length > 0) {
+    window.selectedTodoListId = todoLists[0].id;
+  }
+
+  renderTodoApp(id);
+}
+
+function renderTodoApp(winId) {
+  const listsContainer = document.getElementById('todo-lists-' + winId);
+  const itemsContainer = document.getElementById('todo-items-' + winId);
+  if (!listsContainer || !itemsContainer) return;
+
+  // Render lists
+  listsContainer.innerHTML = todoLists.map(list => {
+    const pendingCount = list.items.filter(i => !i.done).length;
+    return '<div class="todo-list-item' + (window.selectedTodoListId === list.id ? ' active' : '') + '" onclick="selectTodoList(' + list.id + ',' + winId + ')">' +
+      '<span>📋</span> ' + escapeHtml(list.name) +
+      (pendingCount > 0 ? '<span class="count">' + pendingCount + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  // Render items for selected list
+  const selectedList = todoLists.find(l => l.id === window.selectedTodoListId);
+  if (!selectedList) {
+    itemsContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Select a list</div>';
+    return;
+  }
+
+  if (selectedList.items.length === 0) {
+    itemsContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">No tasks yet. Add one below!</div>';
+    return;
+  }
+
+  itemsContainer.innerHTML = selectedList.items.map(item =>
+    '<div class="todo-full-item">' +
+      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleTodoItem(' + item.id + ',' + winId + ')">' +
+      '<div class="todo-text' + (item.done ? ' done' : '') + '">' + escapeHtml(item.text) + '</div>' +
+      '<span class="todo-delete" onclick="deleteTodoItem(' + item.id + ',' + winId + ')">×</span>' +
+    '</div>'
+  ).join('');
+}
+
+function selectTodoList(listId, winId) {
+  window.selectedTodoListId = listId;
+  renderTodoApp(winId);
+}
+
+function addTodoList(winId) {
+  const name = prompt('New list name:', 'New List');
+  if (!name) return;
+
+  todoLists.push({
+    id: Date.now(),
+    name: name,
+    items: []
+  });
+  saveTodos();
+  renderTodoApp(winId);
+}
+
+function addTodoItem(winId) {
+  const input = document.getElementById('todo-input-' + winId);
+  const text = input.value.trim();
+  if (!text) return;
+
+  const list = todoLists.find(l => l.id === window.selectedTodoListId);
+  if (!list) return;
+
+  list.items.push({
+    id: Date.now(),
+    text: text,
+    done: false,
+    created: new Date().toISOString()
+  });
+
+  input.value = '';
+  saveTodos();
+  updateTodoOverlay();
+  renderTodoApp(winId);
+}
+
+function toggleTodoItem(itemId, winId) {
+  todoLists.forEach(list => {
+    const item = list.items.find(i => i.id === itemId);
+    if (item) {
+      item.done = !item.done;
+    }
+  });
+  saveTodos();
+  updateTodoOverlay();
+  renderTodoApp(winId);
+}
+
+function deleteTodoItem(itemId, winId) {
+  todoLists.forEach(list => {
+    list.items = list.items.filter(i => i.id !== itemId);
+  });
+  saveTodos();
+  updateTodoOverlay();
+  renderTodoApp(winId);
+}
+
+// ==================== CALENDAR APP ====================
+const US_HOLIDAYS = [
+  { month: 0, day: 1, title: "New Year's Day" },
+  { month: 0, day: 20, title: "MLK Day" },
+  { month: 1, day: 14, title: "Valentine's Day" },
+  { month: 1, day: 17, title: "Presidents Day" },
+  { month: 2, day: 17, title: "St. Patrick's Day" },
+  { month: 3, day: 20, title: "Easter" },
+  { month: 4, day: 26, title: "Memorial Day" },
+  { month: 5, day: 19, title: "Juneteenth" },
+  { month: 6, day: 4, title: "Independence Day" },
+  { month: 8, day: 1, title: "Labor Day" },
+  { month: 9, day: 13, title: "Columbus Day" },
+  { month: 9, day: 31, title: "Halloween" },
+  { month: 10, day: 11, title: "Veterans Day" },
+  { month: 10, day: 27, title: "Thanksgiving" },
+  { month: 11, day: 25, title: "Christmas" },
+  { month: 11, day: 31, title: "New Year's Eve" }
+];
+
+function loadCalendar() {
+  try {
+    calendarEvents = JSON.parse(localStorage.getItem('algo-calendar') || '[]');
+    calendarWidgetHidden = localStorage.getItem('algo-calendar-hidden') === 'true';
+    const savedPos = localStorage.getItem('algo-calendar-widget-pos');
+    if (savedPos) {
+      calendarWidgetPos = JSON.parse(savedPos);
+    }
+  } catch (e) {
+    calendarEvents = [];
+  }
+  updateCalendarWidget();
+}
+
+function saveCalendar() {
+  localStorage.setItem('algo-calendar', JSON.stringify(calendarEvents));
+  localStorage.setItem('algo-calendar-hidden', calendarWidgetHidden);
+  if (calendarWidgetPos.x !== null) {
+    localStorage.setItem('algo-calendar-widget-pos', JSON.stringify(calendarWidgetPos));
+  }
+}
+
+function getEventsForDate(year, month, day) {
+  const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  const events = calendarEvents.filter(e => e.date === dateStr);
+
+  // Add holidays
+  US_HOLIDAYS.forEach(h => {
+    if (h.month === month && h.day === day) {
+      events.push({ title: h.title, isHoliday: true });
+    }
+  });
+
+  return events;
+}
+
+function updateCalendarWidget() {
+  const widget = document.getElementById('calendar-widget');
+  if (calendarWidgetHidden) {
+    widget.classList.remove('visible');
+    return;
+  }
+  widget.classList.add('visible');
+
+  // Apply saved position or default to top-left (avoiding todo overlay)
+  if (calendarWidgetPos.x !== null && calendarWidgetPos.y !== null) {
+    widget.style.left = calendarWidgetPos.x + 'px';
+    widget.style.top = calendarWidgetPos.y + 'px';
+  } else {
+    // Default position: top-left, but below any todo overlay
+    const todoOverlay = document.getElementById('todo-overlay');
+    const defaultTop = (todoOverlay && !todoOverlayHidden) ? 140 : 10;
+    widget.style.left = '10px';
+    widget.style.top = defaultTop + 'px';
+  }
+
+  // Update month display
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  document.getElementById('calendar-widget-month').textContent =
+    monthNames[calendarWidgetMonth] + ' ' + calendarWidgetYear;
+
+  // Build calendar grid
+  const grid = document.getElementById('calendar-widget-grid');
+  const firstDay = new Date(calendarWidgetYear, calendarWidgetMonth, 1).getDay();
+  const daysInMonth = new Date(calendarWidgetYear, calendarWidgetMonth + 1, 0).getDate();
+  const today = new Date();
+
+  let html = '<div class="calendar-row">';
+  ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(d => {
+    html += '<div class="calendar-cell header">' + d + '</div>';
+  });
+  html += '</div><div class="calendar-row">';
+
+  // Empty cells for days before first of month
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="calendar-cell other-month"></div>';
+  }
+
+  // Days of month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isToday = today.getDate() === day &&
+      today.getMonth() === calendarWidgetMonth &&
+      today.getFullYear() === calendarWidgetYear;
+    const events = getEventsForDate(calendarWidgetYear, calendarWidgetMonth, day);
+    const hasEvent = events.length > 0;
+
+    html += '<div class="calendar-cell' +
+      (isToday ? ' today' : '') +
+      (hasEvent && !isToday ? ' has-event' : '') +
+      '" onclick="calendarWidgetDayClick(' + day + ')">' + day + '</div>';
+
+    if ((firstDay + day) % 7 === 0 && day < daysInMonth) {
+      html += '</div><div class="calendar-row">';
+    }
+  }
+  html += '</div>';
+  grid.innerHTML = html;
+
+  // Update upcoming events
+  updateUpcomingEvents();
+}
+
+function updateUpcomingEvents() {
+  const upcoming = document.getElementById('calendar-widget-upcoming');
+  const today = new Date();
+  const events = [];
+
+  // Get events for next 7 days
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const dayEvents = getEventsForDate(d.getFullYear(), d.getMonth(), d.getDate());
+    dayEvents.forEach(e => {
+      events.push({
+        ...e,
+        date: d,
+        dateStr: (d.getMonth() + 1) + '/' + d.getDate()
+      });
+    });
+  }
+
+  if (events.length === 0) {
+    upcoming.innerHTML = '<div style="font-size:9px;color:#666;text-align:center;">No upcoming events</div>';
+    return;
+  }
+
+  upcoming.innerHTML = events.slice(0, 3).map(e =>
+    '<div class="upcoming-item">' +
+      '<span class="date">' + e.dateStr + '</span>' +
+      '<span>' + escapeHtml(e.title) + '</span>' +
+    '</div>'
+  ).join('');
+}
+
+function calendarWidgetPrev() {
+  calendarWidgetMonth--;
+  if (calendarWidgetMonth < 0) {
+    calendarWidgetMonth = 11;
+    calendarWidgetYear--;
+  }
+  updateCalendarWidget();
+}
+
+function calendarWidgetNext() {
+  calendarWidgetMonth++;
+  if (calendarWidgetMonth > 11) {
+    calendarWidgetMonth = 0;
+    calendarWidgetYear++;
+  }
+  updateCalendarWidget();
+}
+
+function calendarWidgetDayClick(day) {
+  const title = prompt('Add event for ' + (calendarWidgetMonth + 1) + '/' + day + ':');
+  if (!title) return;
+
+  const dateStr = calendarWidgetYear + '-' +
+    String(calendarWidgetMonth + 1).padStart(2, '0') + '-' +
+    String(day).padStart(2, '0');
+
+  calendarEvents.push({
+    id: Date.now(),
+    title: title,
+    date: dateStr,
+    isHoliday: false
+  });
+
+  saveCalendar();
+  updateCalendarWidget();
+  if (calendarWinId !== null) renderCalendarApp(calendarWinId);
+}
+
+function hideCalendarWidget() {
+  calendarWidgetHidden = true;
+  saveCalendar();
+  document.getElementById('calendar-widget').classList.remove('visible');
+}
+
+function showCalendarWidget() {
+  calendarWidgetHidden = false;
+  saveCalendar();
+  updateCalendarWidget();
+}
+
+function startCalendarWidgetDrag(e) {
+  // Don't drag if clicking close button
+  if (e.target.classList.contains('close-btn')) return;
+
+  const widget = document.getElementById('calendar-widget');
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  calendarWidgetDragOffset.x = clientX - widget.offsetLeft;
+  calendarWidgetDragOffset.y = clientY - widget.offsetTop;
+  calendarWidgetDragging = true;
+
+  if (e.touches) {
+    e.preventDefault();
+  }
+
+  // Add move/end listeners
+  document.addEventListener('mousemove', moveCalendarWidget);
+  document.addEventListener('mouseup', endCalendarWidgetDrag);
+  document.addEventListener('touchmove', moveCalendarWidget, { passive: false });
+  document.addEventListener('touchend', endCalendarWidgetDrag);
+}
+
+function moveCalendarWidget(e) {
+  if (!calendarWidgetDragging) return;
+
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  const widget = document.getElementById('calendar-widget');
+  const newX = clientX - calendarWidgetDragOffset.x;
+  const newY = clientY - calendarWidgetDragOffset.y;
+
+  // Constrain to viewport
+  const maxX = window.innerWidth - widget.offsetWidth;
+  const maxY = window.innerHeight - widget.offsetHeight - 28; // 28 = taskbar
+
+  calendarWidgetPos.x = Math.max(0, Math.min(newX, maxX));
+  calendarWidgetPos.y = Math.max(0, Math.min(newY, maxY));
+
+  widget.style.left = calendarWidgetPos.x + 'px';
+  widget.style.top = calendarWidgetPos.y + 'px';
+
+  if (e.touches) {
+    e.preventDefault();
+  }
+}
+
+function endCalendarWidgetDrag() {
+  if (calendarWidgetDragging) {
+    calendarWidgetDragging = false;
+    saveCalendar();
+  }
+
+  document.removeEventListener('mousemove', moveCalendarWidget);
+  document.removeEventListener('mouseup', endCalendarWidgetDrag);
+  document.removeEventListener('touchmove', moveCalendarWidget);
+  document.removeEventListener('touchend', endCalendarWidgetDrag);
+}
+
+function openCalendarApp() {
+  hideStartMenu();
+  const id = winId;
+  calendarWinId = id;
+
+  createWindow({
+    title: 'Calendar',
+    stateKey: 'Calendar',
+    icon: '📅',
+    width: 550, height: 400,
+    content: '<div class="calendar-app">' +
+      '<div class="calendar-app-header">' +
+        '<button onclick="calendarAppPrev(' + id + ')">◀ Prev</button>' +
+        '<span id="calendar-app-month-' + id + '"></span>' +
+        '<button onclick="calendarAppNext(' + id + ')">Next ▶</button>' +
+        '<div style="flex:1;"></div>' +
+        '<button onclick="showCalendarWidget()">Show Widget</button>' +
+      '</div>' +
+      '<div class="calendar-app-content">' +
+        '<div class="calendar-main" id="calendar-main-' + id + '"></div>' +
+        '<div class="calendar-sidebar">' +
+          '<h4>📋 Events</h4>' +
+          '<div id="calendar-events-' + id + '"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>',
+    onClose: () => { calendarWinId = null; }
+  });
+
+  renderCalendarApp(id);
+}
+
+function renderCalendarApp(winId) {
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Update month header
+  const monthEl = document.getElementById('calendar-app-month-' + winId);
+  if (monthEl) {
+    monthEl.textContent = monthNames[calendarAppMonth] + ' ' + calendarAppYear;
+  }
+
+  // Build calendar grid
+  const main = document.getElementById('calendar-main-' + winId);
+  if (!main) return;
+
+  const firstDay = new Date(calendarAppYear, calendarAppMonth, 1).getDay();
+  const daysInMonth = new Date(calendarAppYear, calendarAppMonth + 1, 0).getDate();
+  const today = new Date();
+
+  let html = '<div class="full-grid"><div class="row">';
+  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(d => {
+    html += '<div class="cell header">' + d + '</div>';
+  });
+  html += '</div><div class="row">';
+
+  // Empty cells
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="cell"></div>';
+  }
+
+  // Days
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isToday = today.getDate() === day &&
+      today.getMonth() === calendarAppMonth &&
+      today.getFullYear() === calendarAppYear;
+    const events = getEventsForDate(calendarAppYear, calendarAppMonth, day);
+
+    html += '<div class="cell' + (isToday ? ' today' : '') +
+      '" onclick="calendarAppDayClick(' + day + ',' + winId + ')">' +
+      '<div class="day-num">' + day + '</div>';
+
+    events.forEach(e => {
+      html += '<div class="event' + (e.isHoliday ? ' holiday' : '') + '">' +
+        escapeHtml(e.title) + '</div>';
+    });
+
+    html += '</div>';
+
+    if ((firstDay + day) % 7 === 0 && day < daysInMonth) {
+      html += '</div><div class="row">';
+    }
+  }
+  html += '</div></div>';
+  main.innerHTML = html;
+
+  // Render events sidebar
+  const eventsEl = document.getElementById('calendar-events-' + winId);
+  if (eventsEl) {
+    const monthEvents = calendarEvents.filter(e => {
+      const d = new Date(e.date);
+      return d.getMonth() === calendarAppMonth && d.getFullYear() === calendarAppYear;
+    }).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (monthEvents.length === 0) {
+      eventsEl.innerHTML = '<div style="color:#888;font-size:10px;">No events this month</div>';
+    } else {
+      eventsEl.innerHTML = monthEvents.map(e =>
+        '<div class="event-item">' +
+          '<span class="event-delete" onclick="deleteCalendarEvent(' + e.id + ',' + winId + ')">×</span>' +
+          '<div>' + escapeHtml(e.title) + '</div>' +
+          '<div class="event-date">' + e.date + '</div>' +
+        '</div>'
+      ).join('');
+    }
+  }
+}
+
+function calendarAppPrev(winId) {
+  calendarAppMonth--;
+  if (calendarAppMonth < 0) {
+    calendarAppMonth = 11;
+    calendarAppYear--;
+  }
+  renderCalendarApp(winId);
+}
+
+function calendarAppNext(winId) {
+  calendarAppMonth++;
+  if (calendarAppMonth > 11) {
+    calendarAppMonth = 0;
+    calendarAppYear++;
+  }
+  renderCalendarApp(winId);
+}
+
+function calendarAppDayClick(day, winId) {
+  const title = prompt('Add event for ' + (calendarAppMonth + 1) + '/' + day + ':');
+  if (!title) return;
+
+  const dateStr = calendarAppYear + '-' +
+    String(calendarAppMonth + 1).padStart(2, '0') + '-' +
+    String(day).padStart(2, '0');
+
+  calendarEvents.push({
+    id: Date.now(),
+    title: title,
+    date: dateStr,
+    isHoliday: false
+  });
+
+  saveCalendar();
+  updateCalendarWidget();
+  renderCalendarApp(winId);
+}
+
+function deleteCalendarEvent(eventId, winId) {
+  calendarEvents = calendarEvents.filter(e => e.id !== eventId);
+  saveCalendar();
+  updateCalendarWidget();
+  renderCalendarApp(winId);
+}
+
+// ==================== BOX EDITOR ====================
+// File type registration system
+const FILE_TYPE_HANDLERS = {}; // extension -> [{ name, icon, handler }]
+
+function registerFileHandler(extension, name, icon, handler) {
+  if (!FILE_TYPE_HANDLERS[extension]) FILE_TYPE_HANDLERS[extension] = [];
+  FILE_TYPE_HANDLERS[extension].push({ name, icon, handler });
+}
+
+function getFileExtension(filename) {
+  const match = filename.match(/\.([^.]+)$/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function getFileHandlers(filename, content) {
+  const handlers = [];
+  const ext = getFileExtension(filename);
+
+  // Check by extension
+  if (ext && FILE_TYPE_HANDLERS[ext]) {
+    handlers.push(...FILE_TYPE_HANDLERS[ext]);
+  }
+
+  // Check for .box files (start with //)
+  if (content && content.trim().startsWith('//')) {
+    if (FILE_TYPE_HANDLERS['box']) {
+      handlers.push(...FILE_TYPE_HANDLERS['box']);
+    }
+  }
+
+  return handlers;
+}
+
+// ==================== START MENU ====================
+function toggleStartMenu() {
+  document.getElementById('start-menu').classList.toggle('visible');
+  document.getElementById('start-btn').classList.toggle('active');
+}
+
+function hideStartMenu() {
+  document.getElementById('start-menu').classList.remove('visible');
+  document.getElementById('start-btn').classList.remove('active');
+  // Close any open submenus
+  document.querySelectorAll('.start-item.submenu-open').forEach(el => el.classList.remove('submenu-open'));
+}
+
+let submenuCloseTimeout = null;
+
+function openSubmenu(el) {
+  if (submenuCloseTimeout) {
+    clearTimeout(submenuCloseTimeout);
+    submenuCloseTimeout = null;
+  }
+  // Close other submenus
+  document.querySelectorAll('.start-item.submenu-open').forEach(item => {
+    if (item !== el) {
+      item.classList.remove('submenu-open');
+      const sub = item.querySelector('.start-submenu');
+      if (sub) sub.style.position = '';
+    }
+  });
+  // Open this submenu
+  el.classList.add('submenu-open');
+  const submenu = el.querySelector('.start-submenu');
+  if (submenu) {
+    const rect = el.getBoundingClientRect();
+    submenu.style.position = 'fixed';
+    submenu.style.left = rect.right + 'px';
+    submenu.style.top = 'auto';
+    submenu.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+  }
+}
+
+function closeSubmenuDelay(el) {
+  submenuCloseTimeout = setTimeout(() => {
+    el.classList.remove('submenu-open');
+    const submenu = el.querySelector('.start-submenu');
+    if (submenu) submenu.style.position = '';
+  }, 300);
+}
+
+function toggleSubmenu(e, el) {
+  e.stopPropagation();
+  const isOpen = el.classList.contains('submenu-open');
+  if (isOpen) {
+    el.classList.remove('submenu-open');
+    const submenu = el.querySelector('.start-submenu');
+    if (submenu) submenu.style.position = '';
+  } else {
+    openSubmenu(el);
+  }
+}
+
+// ==================== UTILITIES ====================
+function globalClick(e) {
+  if (!e.target.closest('#start-menu') && !e.target.closest('#start-btn')) hideStartMenu();
+  if (!e.target.closest('#context-menu')) hideContextMenu();
+  if (!e.target.closest('.dropdown-menu') && !e.target.closest('.menu-item')) hideMenus();
+}
+
+function hideContextMenu() { document.getElementById('context-menu').classList.remove('visible'); }
+function hideMenus() { document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('visible')); }
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function postToLaserbarf(text, room) {
+  // Legacy function - now just saves locally
+  const name = 'post-' + Date.now() + '.txt';
+  savedFiles.push({ name: name, type: 'text', content: text });
+  saveState();
+}
+
+function algoSpeak(text) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'algo-toast';
+  toast.innerHTML = '<span class="toast-icon">🖥️</span><span class="toast-text">' + escapeHtml(text) + '</span>';
+
+  container.appendChild(toast);
+
+  // Animate in
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  // Remove after delay
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+
+function showAbout() {
+  hideStartMenu();
+  createWindow({
+    title: 'About Function Server',
+    stateKey: 'About',
+    icon: '🖥️',
+    width: 320, height: 240,
+    content: '<div style="padding:20px;text-align:center;">' +
+      '<div style="font-size:48px;">🖥️</div>' +
+      '<h2>Function Server</h2>' +
+      '<p style="color:#666;">A Cloud Operating System</p>' +
+      '<p style="margin-top:15px;font-size:11px;">Build apps visually. Share publicly.<br>Run AI agents. All from your browser.</p>' +
+      '<p style="margin-top:15px;font-size:10px;color:#888;">MIT License • Open Source</p>' +
+    '</div>'
+  });
+}
+
+function openSettings() {
+  hideStartMenu();
+  const currentName = localStorage.getItem('algo-username') || '';
+  const currentBg = localStorage.getItem('algo-bg-color') || '#008080';
+  const currentBgMode = localStorage.getItem('algo-bg-mode') || 'cover';
+
+  // Get available images for background
+  const imageFiles = savedFiles.filter(f => f.type === 'image');
+  const imageOptions = imageFiles.length > 0
+    ? '<option value="">-- Select Image --</option>' + imageFiles.map((f, i) =>
+        '<option value="' + i + '">' + escapeHtml(f.name) + '</option>').join('')
+    : '<option value="">No images on desktop</option>';
+
+  createWindow({
+    title: 'Settings',
+    stateKey: 'Settings',
+    icon: '⚙️',
+    width: 380, height: 380,
+    content: '<div style="padding:15px;">' +
+      '<h3 style="margin-bottom:15px;">⚙️ Settings</h3>' +
+      '<div style="margin-bottom:15px;">' +
+        '<label style="display:block;margin-bottom:5px;font-weight:bold;">Username:</label>' +
+        '<input type="text" id="settings-username" value="' + escapeHtml(currentName) + '" ' +
+          'style="width:100%;padding:5px;border:2px inset #fff;" placeholder="Enter your display name">' +
+        '<p style="font-size:10px;color:#666;margin-top:4px;">Used in ALGO Chat and Webcam</p>' +
+      '</div>' +
+      '<hr style="margin:15px 0;border:none;border-top:1px solid #808080;">' +
+      '<div style="margin-bottom:10px;">' +
+        '<label style="display:block;margin-bottom:5px;font-weight:bold;">Desktop Background:</label>' +
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
+          '<label>Color:</label>' +
+          '<input type="color" id="settings-bg-color" value="' + currentBg + '" style="width:50px;height:25px;">' +
+          '<button onclick="clearDesktopBg()" style="padding:3px 8px;font-size:10px;">Reset</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
+          '<label>Image:</label>' +
+          '<select id="settings-bg-image" style="flex:1;padding:3px;">' + imageOptions + '</select>' +
+          '<button onclick="applyBgImage()" style="padding:3px 8px;">Apply</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<label>Style:</label>' +
+          '<select id="settings-bg-mode" style="padding:3px;">' +
+            '<option value="cover"' + (currentBgMode === 'cover' ? ' selected' : '') + '>Fill (Cover)</option>' +
+            '<option value="stretch"' + (currentBgMode === 'stretch' ? ' selected' : '') + '>Stretch</option>' +
+            '<option value="tile"' + (currentBgMode === 'tile' ? ' selected' : '') + '>Tile</option>' +
+            '<option value="center"' + (currentBgMode === 'center' ? ' selected' : '') + '>Center</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+        '<button onclick="saveSettings()" style="padding:5px 15px;">Save</button>' +
+        '<button onclick="closeWindow(getWindowByTitle(\'Settings\').id)" style="padding:5px 15px;">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  });
+}
+
+function saveSettings() {
+  const nameInput = document.getElementById('settings-username');
+  if (nameInput) {
+    const name = nameInput.value.trim();
+    localStorage.setItem('algo-username', name);
+  }
+
+  // Save background color
+  const bgColor = document.getElementById('settings-bg-color');
+  if (bgColor) {
+    localStorage.setItem('algo-bg-color', bgColor.value);
+  }
+
+  // Save background mode
+  const bgMode = document.getElementById('settings-bg-mode');
+  if (bgMode) {
+    localStorage.setItem('algo-bg-mode', bgMode.value);
+    applyBgMode(bgMode.value);
+  }
+
+  algoSpeak('Settings saved!');
+  const win = getWindowByTitle('Settings');
+  if (win) closeWindow(win.id);
+}
+
+function applyBgImage() {
+  const select = document.getElementById('settings-bg-image');
+  if (!select || select.value === '') return;
+
+  const idx = parseInt(select.value);
+  const imageFiles = savedFiles.filter(f => f.type === 'image');
+  if (idx >= 0 && idx < imageFiles.length) {
+    const img = imageFiles[idx];
+    setDesktopBackground(img.content);
+    localStorage.setItem('algo-bg-image', img.content);
+    algoSpeak('Background set to ' + img.name);
+  }
+}
+
+function setDesktopBackground(imageData) {
+  const desktop = document.getElementById('desktop');
+  desktop.style.backgroundImage = 'url(' + imageData + ')';
+  const mode = localStorage.getItem('algo-bg-mode') || 'cover';
+  applyBgMode(mode);
+}
+
+function applyBgMode(mode) {
+  const desktop = document.getElementById('desktop');
+  desktop.classList.remove('bg-tile', 'bg-stretch', 'bg-center');
+  if (mode === 'tile') desktop.classList.add('bg-tile');
+  else if (mode === 'stretch') desktop.classList.add('bg-stretch');
+  else if (mode === 'center') desktop.classList.add('bg-center');
+}
+
+function clearDesktopBg() {
+  const desktop = document.getElementById('desktop');
+  desktop.style.backgroundImage = '';
+  desktop.style.backgroundColor = '#008080';
+  desktop.classList.remove('bg-tile', 'bg-stretch', 'bg-center');
+  localStorage.removeItem('algo-bg-image');
+  localStorage.setItem('algo-bg-color', '#008080');
+  document.getElementById('settings-bg-color').value = '#008080';
+  algoSpeak('Background reset');
+}
+
+function loadDesktopBackground() {
+  const bgImage = localStorage.getItem('algo-bg-image');
+  const bgColor = localStorage.getItem('algo-bg-color') || '#008080';
+  const bgMode = localStorage.getItem('algo-bg-mode') || 'cover';
+
+  const desktop = document.getElementById('desktop');
+  desktop.style.backgroundColor = bgColor;
+
+  if (bgImage) {
+    desktop.style.backgroundImage = 'url(' + bgImage + ')';
+    applyBgMode(bgMode);
+  }
+}
+
+function setImageAsBackground(fileIdx) {
+  const imageFiles = savedFiles.filter(f => f.type === 'image');
+  if (fileIdx >= 0 && fileIdx < imageFiles.length) {
+    const img = imageFiles[fileIdx];
+    setDesktopBackground(img.content);
+    localStorage.setItem('algo-bg-image', img.content);
+    algoSpeak('Background set to ' + img.name);
+  }
+  hideContextMenu();
+}
+
+function getWindowByTitle(title) {
+  return windows.find(w => w.title === title);
+}
+
+// ==================== PERSISTENCE ====================
+async function loadFilesFromServer() {
+  if (!sessionToken) return;
+  try {
+    const resp = await fetch(API_BASE + '/files/list?path=~', {
+      headers: { 'Authorization': 'Bearer ' + sessionToken }
+    });
+    const data = await resp.json();
+    if (data.files) {
+      savedFiles = [];
+      for (const file of data.files) {
+        if (file.type === 'file') {
+          // Load file content
+          const contentResp = await fetch(API_BASE + '/files/get?path=~/' + encodeURIComponent(file.name), {
+            headers: { 'Authorization': 'Bearer ' + sessionToken }
+          });
+          const contentData = await contentResp.json();
+          if (contentData.content !== undefined) {
+            // Detect type from extension
+            let type = 'text';
+            if (file.name.endsWith('.html')) type = 'html';
+            else if (file.name.endsWith('.js')) type = 'javascript';
+            else if (file.name.endsWith('.css')) type = 'css';
+            else if (file.name.endsWith('.json')) type = 'json';
+            else if (file.name.match(/\.(png|jpg|jpeg|gif|webp)$/i)) type = 'image';
+            savedFiles.push({ name: file.name, content: contentData.content, type });
+          }
+        }
+      }
+      if (window.createDesktopIcons) createDesktopIcons();
+    }
+  } catch (e) {
+    console.error('Failed to load files from server:', e);
+  }
+}
+
+// Load system apps from server (admin-controlled, evergreen)
+async function loadSystemApps() {
+  try {
+    const resp = await fetch(API_BASE + '/system-apps');
+    const data = await resp.json();
+    if (data.apps) {
+      systemApps = data.apps;
+      updateProgramsMenu();
+    }
+  } catch (e) {
+    console.error('Failed to load system apps:', e);
+  }
+}
+
+// Run a system or user app
+function runApp(app) {
+  if (app.code) {
+    try {
+      const fullCode = ALGO_API_CODE + '\n' + app.code;
+      (0, eval)(fullCode);
+    } catch (e) {
+      algoSpeak('Error running ' + app.name + ': ' + e.message);
+    }
+  } else if (app.url) {
+    createWindow({
+      title: app.name,
+      stateKey: 'App:' + app.id,
+      icon: app.icon || '📱',
+      width: 600, height: 500,
+      content: '<iframe src="' + app.url + '" style="width:100%;height:100%;border:none;"></iframe>'
+    });
+  }
+}
+
+// Run a system app by ID
+function runSystemApp(appId) {
+  hideStartMenu();
+  const app = systemApps.find(a => a.id === appId);
+  if (app) {
+    runApp(app);
+  } else {
+    algoSpeak('App not found: ' + appId);
+  }
+}
+
+// Uninstall a system app (just hides it for this user)
+function uninstallSystemApp(appId) {
+  if (!uninstalledSystemApps.includes(appId)) {
+    uninstalledSystemApps.push(appId);
+    saveState();
+    updateProgramsMenu();
+    createDesktopIcons();
+    algoSpeak('App hidden. Reinstall from Programs > Get Apps.');
+  }
+}
+
+// Reinstall a system app (unhide it)
+function reinstallSystemApp(appId) {
+  uninstalledSystemApps = uninstalledSystemApps.filter(id => id !== appId);
+  saveState();
+  updateProgramsMenu();
+  createDesktopIcons();
+  algoSpeak('App restored!');
+}
+
+// Fork a system app (create editable copy)
+function forkSystemApp(appId) {
+  const app = systemApps.find(a => a.id === appId);
+  if (!app) return;
+
+  const newName = app.name + ' (Copy)';
+  const newId = 'user-' + Date.now();
+
+  installedPrograms.push({
+    id: newId,
+    name: newName,
+    icon: app.icon,
+    code: app.code.replace(
+      /ALGO\.app\.name\s*=\s*['"][^'"]+['"]/,
+      "ALGO.app.name = '" + newName + "'"
+    )
+  });
+
+  saveState();
+  updateProgramsMenu();
+  createDesktopIcons();
+  algoSpeak('Created editable copy: ' + newName);
+}
+
+function saveState() {
+  // Files are saved to server individually via ALGO.saveFile()
+  // Keep other state in localStorage
+  localStorage.setItem('algo-programs', JSON.stringify(installedPrograms));
+  localStorage.setItem('algo-uninstalled-system', JSON.stringify(uninstalledSystemApps));
+  localStorage.setItem('algo-rooms', JSON.stringify(roomFolders));
+  localStorage.setItem('algo-windows', JSON.stringify(windowStates));
+  localStorage.setItem('algo-apikeys', JSON.stringify(apiKeys));
+  localStorage.setItem('algo-folders', JSON.stringify(folders.filter(f => !f.isSystem)));
+  localStorage.setItem('algo-recycle-bin', JSON.stringify(recycleBin));
+}
+
+// Default external apps - loaded on first run
+const DEFAULT_APPS = [
+  {
+    id: 'look',
+    name: 'Look',
+    icon: '✨',
+    code: `ALGO.app.name = "Look";
+ALGO.app.icon = "✨";
+
+// Register .theme file type
+ALGO.registerFileType('theme', {
+  inputIcon: '🖌️',
+  outputIcon: '🖌️',
+  appName: 'Look',
+  description: 'Theme File'
+});
+
+const themes = {
+  'classic': { name: 'Classic (Win95)', css: '' },
+  'beos': {
+    name: 'BeOS Haiku',
+    css: \`
+      .desktop-icon .icon-img {
+        background: linear-gradient(135deg, #ffffcc 0%, #ffcc66 100%);
+        border-radius: 4px;
+        box-shadow: 1px 1px 0 #aa8833, inset -1px -1px 0 rgba(0,0,0,0.2), inset 1px 1px 0 rgba(255,255,255,0.5);
+        padding: 4px;
+      }
+      .window { border-radius: 4px; }
+      .window-titlebar { background: linear-gradient(180deg, #ffdd44 0%, #cc9900 100%); border-radius: 4px 4px 0 0; }
+    \`
+  },
+  'dark': {
+    name: 'Dark Mode',
+    css: \`
+      #desktop { background: #1a1a2e !important; }
+      .window { background: #16213e; color: #e0e0e0; border-color: #0f3460; }
+      .window-titlebar { background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%); color: #e94560; }
+      .window-content { background: #16213e; color: #e0e0e0; }
+      #taskbar { background: #0f3460; }
+      #start-menu { background: #16213e; color: #e0e0e0; border-color: #0f3460; }
+      .start-item:hover { background: #e94560; }
+      .desktop-icon span { color: #fff; text-shadow: 1px 1px 2px #000; }
+    \`
+  },
+  'miami': {
+    name: 'Miami Vice',
+    css: \`
+      #desktop { background: linear-gradient(135deg, #ff6b9d 0%, #c44569 50%, #6c5ce7 100%) !important; }
+      .window-titlebar { background: linear-gradient(90deg, #ff6b9d 0%, #6c5ce7 100%); }
+      .desktop-icon span { color: #fff; text-shadow: 2px 2px 4px #000; }
+      #taskbar { background: linear-gradient(90deg, #6c5ce7 0%, #00d2d3 100%); }
+    \`
+  },
+  'forest': {
+    name: 'Forest',
+    css: \`
+      #desktop { background: linear-gradient(180deg, #134e5e 0%, #71b280 100%) !important; }
+      .window-titlebar { background: linear-gradient(180deg, #2d5016 0%, #134e5e 100%); }
+      .desktop-icon span { color: #fff; text-shadow: 1px 1px 2px #000; }
+      #taskbar { background: #2d5016; }
+      #start-menu { background: #3a5a1c; }
+    \`
+  }
+};
+
+let currentTheme = localStorage.getItem('algo-theme') || 'classic';
+
+function applyTheme(name) {
+  const theme = themes[name];
+  if (!theme) return;
+  ALGO.injectCSS('look-theme', theme.css);
+  currentTheme = name;
+  localStorage.setItem('algo-theme', name);
+  ALGO.notify('Theme: ' + theme.name);
+}
+
+function saveCustomTheme() {
+  const name = ALGO.getValue('theme-name') || 'custom';
+  const css = ALGO.getValue('theme-css');
+  const content = JSON.stringify({ name, css });
+  ALGO.saveFile(name + '.theme', content, 'theme');
+  ALGO.notify('Saved ' + name + '.theme');
+}
+
+// Build UI
+let content = '<div style="padding:10px;">';
+content += '<h3 style="margin:0 0 10px;">Select Theme</h3>';
+content += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:15px;">';
+for (const [id, theme] of Object.entries(themes)) {
+  const selected = id === currentTheme ? 'border:2px solid #000;' : 'border:2px solid #999;';
+  content += '<button onclick="applyTheme(\\'' + id + '\\')" style="padding:10px;' + selected + 'cursor:pointer;">' + theme.name + '</button>';
+}
+content += '</div>';
+content += '<hr style="margin:15px 0;">';
+content += '<h3 style="margin:0 0 10px;">Custom CSS</h3>';
+content += '<input id="theme-name" placeholder="Theme name" style="width:100%;margin-bottom:5px;">';
+content += '<textarea id="theme-css" placeholder="Enter custom CSS..." style="width:100%;height:100px;font-family:monospace;font-size:11px;"></textarea>';
+content += '<button onclick="saveCustomTheme()" style="margin-top:5px;">Save as .theme</button>';
+content += '</div>';
+
+ALGO.createWindow({
+  title: 'Look',
+  icon: '✨',
+  width: 350,
+  height: 400,
+  content: content
+});
+
+// Apply saved theme on load
+applyTheme(currentTheme);`
+  }
+];
+
+function loadState() {
+  try {
+    // Load files from server
+    loadFilesFromServer();
+    // Load other state from localStorage
+    installedPrograms = JSON.parse(localStorage.getItem('algo-programs') || '[]');
+    uninstalledSystemApps = JSON.parse(localStorage.getItem('algo-uninstalled-system') || '[]');
+    roomFolders = JSON.parse(localStorage.getItem('algo-rooms') || '[]');
+    windowStates = JSON.parse(localStorage.getItem('algo-windows') || '{}');
+    apiKeys = JSON.parse(localStorage.getItem('algo-apikeys') || '{}');
+    iconPositions = JSON.parse(localStorage.getItem('algo-icon-positions') || '{}');
+    folders = JSON.parse(localStorage.getItem('algo-folders') || '[]');
+    recycleBin = JSON.parse(localStorage.getItem('algo-recycle-bin') || '[]');
+
+    // Install default apps if not already installed
+    let needsSave = false;
+    for (const app of DEFAULT_APPS) {
+      if (!installedPrograms.some(p => p.id === app.id)) {
+        installedPrograms.push({ id: app.id, name: app.name, icon: app.icon, code: app.code });
+        needsSave = true;
+      }
+    }
+    if (needsSave) saveState();
+
+    // Apply saved theme
+    const savedTheme = localStorage.getItem('algo-theme');
+    if (savedTheme && savedTheme !== 'classic') {
+      // Re-run Look app's theme application on load
+      setTimeout(() => {
+        const lookApp = installedPrograms.find(p => p.id === 'look');
+        if (lookApp) {
+          try {
+            // Extract and apply theme CSS
+            const themeMatch = lookApp.code.match(/const themes = \{([\s\S]*?)\};/);
+            if (themeMatch) {
+              eval('const themes = {' + themeMatch[1] + '};const t=themes["' + savedTheme + '"];if(t)ALGO.injectCSS("look-theme",t.css);');
+            }
+          } catch(e) {}
+        }
+      }, 100);
+    }
+
+    updateProgramsMenu();
+  } catch(e) { console.error('loadState error:', e); }
+}
+
+// Start
+checkSession(); // Check login before init
+</script>
+</body>
+</html>
