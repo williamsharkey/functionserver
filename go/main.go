@@ -184,8 +184,13 @@ func saveUser(user *User) error {
 
 func createHomeDir(username string) bool {
 	homeDir := filepath.Join(config.HomesDir, username)
-	err := os.MkdirAll(homeDir, 0755)
-	return err == nil
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		return false
+	}
+	// Also create public folder for web hosting
+	publicDir := filepath.Join(homeDir, "public")
+	os.MkdirAll(publicDir, 0755)
+	return true
 }
 
 func isCommandAllowed(cmd string) bool {
@@ -806,22 +811,101 @@ func main() {
 		mux.Handle("/screenshots/", http.StripPrefix("/", fs))
 	}
 
-	// Serve landing page at root
+	// Serve landing page at root, or public folders at /username/
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
+		path := r.URL.Path
+
+		// Root path - serve landing page
+		if path == "/" {
+			landingPaths := []string{"../www/index.html", "./www/index.html"}
+			for _, p := range landingPaths {
+				if content, err := os.ReadFile(p); err == nil {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					w.Write(content)
+					return
+				}
+			}
+			// Fallback to OS if no landing page
+			serveOS(w, r)
 			return
 		}
-		landingPaths := []string{"../www/index.html", "./www/index.html"}
-		for _, p := range landingPaths {
-			if content, err := os.ReadFile(p); err == nil {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+		// Check if path starts with a username (public folder)
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) > 0 && usernameRegex.MatchString(parts[0]) {
+			username := parts[0]
+			// Check if user exists
+			if _, err := os.Stat(getUserFile(username)); err == nil {
+				// User exists, serve from their public folder
+				publicDir := filepath.Join(config.HomesDir, username, "public")
+				subPath := strings.Join(parts[1:], "/")
+				if subPath == "" {
+					subPath = "index.html"
+				}
+				filePath := filepath.Join(publicDir, subPath)
+
+				// Security: ensure path is within public folder
+				resolved, err := filepath.Abs(filePath)
+				if err != nil || !strings.HasPrefix(resolved, publicDir) {
+					http.NotFound(w, r)
+					return
+				}
+
+				// Check if file exists
+				info, err := os.Stat(resolved)
+				if err != nil {
+					http.NotFound(w, r)
+					return
+				}
+
+				// If directory, try index.html
+				if info.IsDir() {
+					resolved = filepath.Join(resolved, "index.html")
+					info, err = os.Stat(resolved)
+					if err != nil {
+						http.NotFound(w, r)
+						return
+					}
+				}
+
+				// Serve the file
+				content, err := os.ReadFile(resolved)
+				if err != nil {
+					http.NotFound(w, r)
+					return
+				}
+
+				// Set content type based on extension
+				ext := strings.ToLower(filepath.Ext(resolved))
+				contentType := "text/plain"
+				switch ext {
+				case ".html", ".htm":
+					contentType = "text/html; charset=utf-8"
+				case ".css":
+					contentType = "text/css; charset=utf-8"
+				case ".js":
+					contentType = "application/javascript; charset=utf-8"
+				case ".json":
+					contentType = "application/json; charset=utf-8"
+				case ".png":
+					contentType = "image/png"
+				case ".jpg", ".jpeg":
+					contentType = "image/jpeg"
+				case ".gif":
+					contentType = "image/gif"
+				case ".svg":
+					contentType = "image/svg+xml"
+				case ".ico":
+					contentType = "image/x-icon"
+				}
+
+				w.Header().Set("Content-Type", contentType)
 				w.Write(content)
 				return
 			}
 		}
-		// Fallback to OS if no landing page
-		serveOS(w, r)
+
+		http.NotFound(w, r)
 	})
 
 	fmt.Printf("\n  %s %s running at http://localhost:%s\n\n", config.OSIcon, config.OSName, config.Port)
