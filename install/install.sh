@@ -191,12 +191,13 @@ cd "$INSTALL_DIR"
 if [ -d ".git" ]; then
     git pull
 else
-    git clone --depth 1 https://github.com/williamsharkey/cecilia.git .
+    git clone --depth 1 -b go-only https://github.com/williamsharkey/cecilia.git .
 fi
 
 # Build
 echo -e "${YELLOW}Building...${NC}"
 cd "$INSTALL_DIR/go"
+go mod download
 go build -o functionserver main.go
 
 # Create data directories
