@@ -76,7 +76,6 @@
         <div class="start-item" onclick="openWebcam()"><span>📹</span> ALGO Webcam</div>
         <div class="start-separator"></div>
         <div class="start-item" onclick="openMusicPlayer()"><span>🎵</span> Music Player</div>
-        <div class="start-item" onclick="openVideoPlayer()"><span>📺</span> Video Player</div>
         <div class="start-item" onclick="openMidiEditor()"><span>🎹</span> MIDI Editor</div>
         <div class="start-item" onclick="openTodoApp()"><span>📋</span> Todo Manager</div>
         <div class="start-item" onclick="openCalendarApp()"><span>📅</span> Calendar</div>
@@ -2873,7 +2872,6 @@ function openProgramCategory(category) {
       icon: '🎵',
       items: [
         { name: 'Music Player', icon: '🎵', action: 'openMusicPlayer' },
-        { name: 'Video Player', icon: '📺', action: 'openVideoPlayer' },
         { name: 'MIDI Editor', icon: '🎹', action: 'openMidiEditor' },
         { name: 'Webcam', icon: '📹', action: 'openWebcam' }
       ]
@@ -3782,122 +3780,6 @@ function miniPlayerOpen() {
     }
   } else {
     openMusicPlayer();
-  }
-}
-
-// ==================== VIDEO PLAYER ====================
-let videoPlayerState = { videos: [], currentVideo: -1, winId: null };
-
-function openVideoPlayer() {
-  hideStartMenu();
-  const id = winId;
-  videoPlayerState.winId = id;
-
-  createWindow({
-    title: 'ALGO Video Player',
-    stateKey: 'Video Player',
-    icon: '📺',
-    width: 480, height: 420,
-    content: '<div class="video-player">' +
-      '<div class="video-display" id="video-display-' + id + '">' +
-        '<span class="no-video">No video loaded</span>' +
-      '</div>' +
-      '<div class="video-controls">' +
-        '<button class="video-btn" onclick="videoPrev(' + id + ')">⏮ Prev</button>' +
-        '<button class="video-btn" onclick="videoNext(' + id + ')">Next ⏭</button>' +
-        '<span style="flex:1;"></span>' +
-        '<span id="video-info-' + id + '" style="font-size:10px;color:#666;">0 / 0</span>' +
-      '</div>' +
-      '<div class="video-playlist" id="video-playlist-' + id + '">' +
-        '<div style="padding:10px;text-align:center;color:#666;">Loading videos...</div>' +
-      '</div>' +
-    '</div>',
-    onClose: () => { videoPlayerState.winId = null; }
-  });
-
-  loadVideos(id);
-}
-
-function loadVideos(winId) {
-  fetch('/api/media?type=video')
-    .then(r => r.json())
-    .then(data => {
-      videoPlayerState.videos = data.video || [];
-      renderVideoPlaylist(winId);
-      updateVideoInfo(winId);
-    })
-    .catch(e => {
-      const playlist = document.getElementById('video-playlist-' + winId);
-      if (playlist) playlist.innerHTML = '<div style="padding:10px;text-align:center;color:#f00;">Error loading videos</div>';
-    });
-}
-
-function renderVideoPlaylist(winId) {
-  const playlist = document.getElementById('video-playlist-' + winId);
-  if (!playlist) return;
-
-  if (videoPlayerState.videos.length === 0) {
-    playlist.innerHTML = '<div style="padding:10px;text-align:center;color:#666;">No videos found.<br>Post YouTube/Vimeo links!</div>';
-    return;
-  }
-
-  playlist.innerHTML = videoPlayerState.videos.map((v, i) =>
-    '<div class="video-item' + (i === videoPlayerState.currentVideo ? ' active' : '') + '" onclick="videoSelect(' + i + ',' + winId + ')">' +
-      (v.thumbUrl ? '<img class="video-thumb" src="' + v.thumbUrl + '" alt="">' : '<div class="video-thumb">📺</div>') +
-      '<div class="video-info">' +
-        '<div class="video-title">' + escapeHtml(v.title || 'Video ' + (i+1)) + '</div>' +
-        '<div class="video-source">' + escapeHtml(v.platform || v.source || 'Unknown') + '</div>' +
-      '</div>' +
-    '</div>'
-  ).join('');
-}
-
-function videoSelect(idx, winId) {
-  videoPlayerState.currentVideo = idx;
-  renderVideoPlaylist(winId);
-  playVideo(winId);
-}
-
-function playVideo(winId) {
-  const display = document.getElementById('video-display-' + winId);
-  if (!display) return;
-
-  if (videoPlayerState.currentVideo < 0 || videoPlayerState.currentVideo >= videoPlayerState.videos.length) {
-    display.innerHTML = '<span class="no-video">No video selected</span>';
-    return;
-  }
-
-  const video = videoPlayerState.videos[videoPlayerState.currentVideo];
-  if (!video.embedUrl) {
-    display.innerHTML = '<span class="no-video">Cannot embed this video</span>';
-    return;
-  }
-
-  display.innerHTML = '<iframe src="' + video.embedUrl + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
-  updateVideoInfo(winId);
-}
-
-function videoPrev(winId) {
-  if (videoPlayerState.videos.length === 0) return;
-  videoPlayerState.currentVideo--;
-  if (videoPlayerState.currentVideo < 0) videoPlayerState.currentVideo = videoPlayerState.videos.length - 1;
-  renderVideoPlaylist(winId);
-  playVideo(winId);
-}
-
-function videoNext(winId) {
-  if (videoPlayerState.videos.length === 0) return;
-  videoPlayerState.currentVideo++;
-  if (videoPlayerState.currentVideo >= videoPlayerState.videos.length) videoPlayerState.currentVideo = 0;
-  renderVideoPlaylist(winId);
-  playVideo(winId);
-}
-
-function updateVideoInfo(winId) {
-  const info = document.getElementById('video-info-' + winId);
-  if (info) {
-    const current = videoPlayerState.currentVideo >= 0 ? videoPlayerState.currentVideo + 1 : 0;
-    info.textContent = current + ' / ' + videoPlayerState.videos.length;
   }
 }
 
