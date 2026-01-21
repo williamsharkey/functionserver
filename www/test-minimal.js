@@ -1,8 +1,9 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 
 async function test() {
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']
   });
 

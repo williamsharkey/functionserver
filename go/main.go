@@ -781,6 +781,69 @@ func main() {
 		handleFileDelete(w, r)
 	})
 
+	// Serve system apps list
+	mux.HandleFunc("/api/system-apps", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		// Find apps directory
+		appsDirs := []string{"../core/apps", "./core/apps"}
+		var appsDir string
+		for _, d := range appsDirs {
+			if info, err := os.Stat(d); err == nil && info.IsDir() {
+				appsDir = d
+				break
+			}
+		}
+
+		if appsDir == "" {
+			json.NewEncoder(w).Encode(map[string]interface{}{"apps": []interface{}{}})
+			return
+		}
+
+		// Read all .js files in apps directory
+		files, err := os.ReadDir(appsDir)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{"apps": []interface{}{}})
+			return
+		}
+
+		var apps []map[string]interface{}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".js") {
+				continue
+			}
+
+			content, err := os.ReadFile(appsDir + "/" + f.Name())
+			if err != nil {
+				continue
+			}
+
+			code := string(content)
+			id := strings.TrimSuffix(f.Name(), ".js")
+
+			// Extract metadata from code comments/ALGO.app assignments
+			name := id
+			icon := "📱"
+			if m := regexp.MustCompile(`ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]`).FindStringSubmatch(code); len(m) > 1 {
+				name = m[1]
+			}
+			if m := regexp.MustCompile(`ALGO\.app\.icon\s*=\s*['"]([^'"]+)['"]`).FindStringSubmatch(code); len(m) > 1 {
+				icon = m[1]
+			}
+
+			apps = append(apps, map[string]interface{}{
+				"id":     id,
+				"name":   name,
+				"icon":   icon,
+				"code":   code,
+				"system": true,
+			})
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{"apps": apps})
+	})
+
 	// Serve install script (proxy from GitHub)
 	mux.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := http.Get("https://raw.githubusercontent.com/williamsharkey/functionserver/go-only/install/install.sh")
@@ -803,6 +866,29 @@ func main() {
 		for _, p := range paths {
 			if content, err := os.ReadFile(p); err == nil {
 				w.Header().Set("Content-Type", "text/css")
+				w.Write(content)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
+	// Serve files from /core/apps/ (for lazy-loaded resources like .md files)
+	mux.HandleFunc("/core/apps/", func(w http.ResponseWriter, r *http.Request) {
+		filename := strings.TrimPrefix(r.URL.Path, "/core/apps/")
+		// Security: only allow specific file types
+		if !strings.HasSuffix(filename, ".md") && !strings.HasSuffix(filename, ".txt") {
+			http.NotFound(w, r)
+			return
+		}
+		paths := []string{"../core/apps/" + filename, "./core/apps/" + filename}
+		for _, p := range paths {
+			if content, err := os.ReadFile(p); err == nil {
+				if strings.HasSuffix(filename, ".md") {
+					w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+				} else {
+					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				}
 				w.Write(content)
 				return
 			}

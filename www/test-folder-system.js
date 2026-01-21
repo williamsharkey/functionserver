@@ -2,7 +2,7 @@
  * Test folder system functionality
  */
 
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const SERVER_URL = 'https://functionserver.com';
 
 async function delay(ms) {
@@ -14,6 +14,7 @@ async function testFolderSystem() {
 
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--no-sandbox', '--disable-web-security']
   });
 

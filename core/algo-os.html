@@ -75,7 +75,6 @@
         <div class="start-item" onclick="openChat()"><span>💬</span> ALGO Chat</div>
         <div class="start-item" onclick="openWebcam()"><span>📹</span> ALGO Webcam</div>
         <div class="start-item" onclick="openPhotobooth()"><span>📸</span> Photobooth</div>
-        <div class="start-item" onclick="openTicketManager()"><span>🎫</span> Ticket Manager</div>
         <div class="start-separator"></div>
         <div class="start-item" onclick="openMusicPlayer()"><span>🎵</span> Music Player</div>
         <div class="start-item" onclick="openVideoPlayer()"><span>📺</span> Video Player</div>
@@ -83,7 +82,6 @@
         <div class="start-item" onclick="openChimeSynth()"><span>🔔</span> Chime Synth</div>
         <div class="start-item" onclick="openTodoApp()"><span>📋</span> Todo Manager</div>
         <div class="start-item" onclick="openCalendarApp()"><span>📅</span> Calendar</div>
-        <div class="start-item" onclick="openShadeStation()"><span>🎨</span> Shade Station</div>
         <div class="start-item" onclick="openBoxEditor()"><span>📦</span> Box Editor</div>
         <div class="start-separator"></div>
         <div id="installed-programs-menu"></div>
@@ -282,7 +280,9 @@ let windows = [];
 let winId = 0;
 let activeWin = null;
 let savedFiles = [];
-let installedPrograms = [];
+let installedPrograms = [];  // User-installed apps
+let systemApps = [];          // Admin-provided system apps (read-only)
+let uninstalledSystemApps = []; // System apps user has uninstalled
 let roomFolders = [];
 let windowStates = {};
 let apiKeys = {};
@@ -542,11 +542,11 @@ const DOC_URLS = {
 // ==================== INIT ====================
 function init() {
   loadState();
+  loadSystemApps(); // Load admin-provided system apps
   createDesktopIcons();
   loadStickyNotes();
   loadTodos();
   loadCalendar();
-  registerShaderFileType();
   registerBoxFileType();
   loadDesktopBackground();
   updateClock();
@@ -2710,426 +2710,6 @@ function playCustomChime(winId) {
   osc.stop(now + dur + 0.1);
 }
 
-// ==================== TICKET MANAGER ====================
-let ticketWinId = null;
-let currentTickets = [];
-let selectedTicketId = null;
-
-function openTicketManager() {
-  hideStartMenu();
-  const id = winId;
-  ticketWinId = id;
-  createWindow({
-    title: 'Ticket Manager',
-    stateKey: 'Ticket Manager',
-    icon: '🎫',
-    width: 550, height: 450,
-    content: '<div class="ticket-container">' +
-      '<div class="ticket-toolbar">' +
-        '<button onclick="refreshTickets(' + id + ')">🔄 Refresh</button>' +
-        '<button onclick="showNewTicketForm(' + id + ')">➕ New Ticket</button>' +
-        '<div class="toolbar-spacer"></div>' +
-        '<button class="icon-btn" onclick="copyAgentInstructionsGeneric()" title="Copy instructions for AI agents to work on tickets">' +
-          '📋' +
-          '<span class="win-tooltip">Copy Agent Instructions<br><small>Copies setup guide for AI agents<br>to work on Laserbarf tickets</small></span>' +
-        '</button>' +
-        '<span style="font-size:10px;color:#666;" id="ticket-status-' + id + '">Loading...</span>' +
-      '</div>' +
-      '<div class="ticket-list" id="ticket-list-' + id + '"></div>' +
-      '<div class="ticket-detail" id="ticket-detail-' + id + '" style="display:none;"></div>' +
-      '<div class="ticket-new" id="ticket-new-' + id + '" style="display:none;">' +
-        '<input type="text" id="ticket-title-' + id + '" placeholder="Ticket title (e.g., Add dark mode option)">' +
-        '<textarea id="ticket-desc-' + id + '" placeholder="Description (optional - explain in detail)"></textarea>' +
-        '<div style="display:flex;gap:4px;justify-content:flex-end;">' +
-          '<button onclick="hideNewTicketForm(' + id + ')">Cancel</button>' +
-          '<button onclick="submitTicket(' + id + ')">Submit Ticket</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>',
-    onClose: () => { ticketWinId = null; }
-  });
-
-  refreshTickets(id);
-}
-
-function refreshTickets(id) {
-  const status = document.getElementById('ticket-status-' + id);
-  const list = document.getElementById('ticket-list-' + id);
-  if (status) status.textContent = 'Loading...';
-
-  fetch('/api/tickets?room=algo-world')
-    .then(r => r.json())
-    .then(data => {
-      currentTickets = data.tickets || [];
-      if (status) status.textContent = currentTickets.length + ' ticket(s)';
-      renderTicketList(id);
-    })
-    .catch(e => {
-      if (status) status.textContent = 'Error loading';
-    });
-}
-
-function renderTicketList(id) {
-  const list = document.getElementById('ticket-list-' + id);
-  if (!list) return;
-
-  if (currentTickets.length === 0) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No tickets yet. Create one!</div>';
-    return;
-  }
-
-  list.innerHTML = currentTickets.map(t =>
-    '<div class="ticket-item' + (selectedTicketId === t.id ? ' selected' : '') + '" onclick="selectTicket(\'' + t.id + '\',' + id + ')">' +
-      '<span class="ticket-status ' + t.status + '">' + t.status + '</span>' +
-      '<div class="ticket-info">' +
-        '<div class="ticket-title">' + escapeHtml(t.title) + '</div>' +
-        '<div class="ticket-desc">' + escapeHtml(t.description || 'No description') + '</div>' +
-        '<div class="ticket-date">' + t.created + ' • ' + (t.replies ? t.replies.length : 0) + ' replies</div>' +
-      '</div>' +
-    '</div>'
-  ).join('');
-}
-
-function selectTicket(ticketId, winId) {
-  selectedTicketId = ticketId;
-  renderTicketList(winId);
-
-  const ticket = currentTickets.find(t => t.id === ticketId);
-  if (!ticket) return;
-
-  const detail = document.getElementById('ticket-detail-' + winId);
-  if (!detail) return;
-
-  let html = '<h3>🎫 ' + escapeHtml(ticket.title) + '</h3>' +
-    '<p><strong>Status:</strong> <span class="ticket-status ' + ticket.status + '">' + ticket.status + '</span></p>' +
-    '<p><strong>Created:</strong> ' + ticket.created + '</p>';
-
-  if (ticket.description) {
-    html += '<p><strong>Description:</strong><br>' + escapeHtml(ticket.description) + '</p>';
-  }
-
-  // Action buttons
-  html += '<div style="margin:10px 0;display:flex;gap:4px;flex-wrap:wrap;">';
-  if (ticket.status !== 'working' && ticket.status !== 'complete') {
-    html += '<button onclick="claimTicket(\'' + ticketId + '\',' + winId + ')">🔧 Claim (Working)</button>';
-  }
-  html += '<button onclick="copyAgentInstructions(\'' + ticketId + '\')">📋 Copy Agent Instructions</button>';
-  html += '</div>';
-
-  if (ticket.replies && ticket.replies.length > 0) {
-    html += '<p><strong>Replies:</strong></p>';
-    ticket.replies.forEach(r => {
-      html += '<div class="ticket-reply">' +
-        '<div class="reply-date">' + r.date + '</div>' +
-        escapeHtml(r.text) +
-      '</div>';
-    });
-  }
-
-  detail.innerHTML = html;
-  detail.style.display = 'block';
-}
-
-function claimTicket(ticketId, winId) {
-  const ticket = currentTickets.find(t => t.id === ticketId);
-  if (!ticket) return;
-
-  const text = '[TICKET-REPLY:' + ticketId + '] Working on this now. [STATUS:working]\n\n#algo-world:dolphin42';
-
-  fetch('/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'text=' + encodeURIComponent(text)
-  }).then(() => {
-    algoSpeak('Claimed ticket!');
-    setTimeout(() => refreshTickets(winId), 1000);
-  });
-}
-
-function copyAgentInstructions(ticketId) {
-  const ticket = currentTickets.find(t => t.id === ticketId);
-  if (!ticket) return;
-
-  const instructions = `# TICKET-AGENT.md - Laserbarf Ticket Instructions
-
-## Your Task
-**Ticket #${ticketId}**: ${ticket.title}
-
-**Description:**
-${ticket.description || 'No description provided'}
-
-**Status:** ${ticket.status}
-
----
-
-## Laserbarf System Overview
-
-Laserbarf is a public paste/artifact site. Users post text, links, or HTML artifacts.
-
-### Key Concepts
-- **Artifacts**: HTML pages (start with \`<!DOCTYPE\` or \`<html>\`), served at \`/artifact-name\`
-- **Private rooms**: \`#room:key\` pattern, keys stored in cookies
-- **Posts**: Stored in \`notes/\` as \`{timestamp}.txt\`
-- **ALGO OS**: Windows 98-style desktop at \`/algo-dolphin:dolphin42\`
-
-### Project Structure
-\`\`\`
-lambda.php          - Main routing & HTML generation
-includes/           - PHP function libraries
-  config.php        - Constants, directories
-  keys.php          - Key hashing
-  screenshots.php   - Screenshot generation
-  artifacts.php     - Artifact detection
-  private.php       - Private rooms, access control
-  text.php          - URL linkification
-routes/
-  api.php           - API endpoints including /api/tickets
-app.js              - Client-side JS
-algo-artifact.html  - ALGO OS artifact (local copy)
-\`\`\`
-
----
-
-## How to Work on Tickets
-
-### 1. SSH Access
-\`\`\`bash
-ssh laserbarf    # Alias configured in ~/.ssh/config
-\`\`\`
-Server path: \`~/html/\`
-
-### 2. Local Development
-Local repo: \`/Users/william/Desktop/laserbarf\`
-GitHub: \`github.com/williamsharkey/laserbarf\` (private)
-
-### 3. Deploy Commands
-\`\`\`bash
-# Deploy main files
-scp lambda.php app.js laserbarf:~/html/
-
-# Deploy includes
-scp includes/*.php laserbarf:~/html/includes/
-
-# Deploy routes
-scp routes/*.php laserbarf:~/html/routes/
-
-# Deploy ALGO OS artifact
-scp algo-artifact.html laserbarf:~/html/
-\`\`\`
-
-### 4. Posting Ticket Replies
-Post to laserbarf.com with this format:
-\`\`\`
-[TICKET-REPLY:${ticketId}] Your message here [STATUS:status]
-
-#algo-world:dolphin42
-\`\`\`
-
-Status options: \`open\`, \`working\`, \`complete\`
-
-Example curl:
-\`\`\`bash
-curl -X POST "https://laserbarf.com/" -d "text=[TICKET-REPLY:${ticketId}] Done! Implemented the feature. [STATUS:complete]
-
-#algo-world:dolphin42"
-\`\`\`
-
-### 5. Testing
-- Main site: https://laserbarf.com/
-- ALGO OS: https://laserbarf.com/algo-dolphin:dolphin42
-- Ticket API: https://laserbarf.com/api/tickets?room=algo-world
-
----
-
-## Important Notes
-- Private room key for ALGO: \`dolphin42\`
-- Always include \`#algo-world:dolphin42\` tag when posting replies
-- Test changes before deploying
-- The artifact \`algo-artifact.html\` is the main ALGO OS codebase
-
-## Start Working
-1. Read the ticket description carefully
-2. Post a "working" status reply
-3. Make your changes locally
-4. Test thoroughly
-5. Deploy to server
-6. Post a "complete" status reply with summary of changes
-`;
-
-  navigator.clipboard.writeText(instructions).then(() => {
-    algoSpeak('Copied agent instructions!');
-  }).catch(() => {
-    // Fallback for older browsers
-    const ta = document.createElement('textarea');
-    ta.value = instructions;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    algoSpeak('Copied agent instructions!');
-  });
-}
-
-function copyAgentInstructionsGeneric() {
-  const instructions = `# TICKET-AGENT.md - Laserbarf Agent Setup
-
-## Overview
-You are an AI agent helping build features for Laserbarf and ALGO OS.
-
-**Check open tickets:** https://laserbarf.com/api/tickets?room=algo-world
-
----
-
-## Laserbarf System Overview
-
-Laserbarf is a public paste/artifact site. Users post text, links, or HTML artifacts.
-
-### Key Concepts
-- **Artifacts**: HTML pages (start with \`<!DOCTYPE\` or \`<html>\`), served at \`/artifact-name\`
-- **Private rooms**: \`#room:key\` pattern, keys stored in cookies
-- **Posts**: Stored in \`notes/\` as \`{timestamp}.txt\`
-- **ALGO OS**: Windows 98-style desktop at \`/algo-dolphin:dolphin42\`
-
-### Project Structure
-\`\`\`
-lambda.php          - Main routing & HTML generation
-includes/           - PHP function libraries
-  config.php        - Constants, directories
-  keys.php          - Key hashing
-  screenshots.php   - Screenshot generation
-  artifacts.php     - Artifact detection
-  private.php       - Private rooms, access control
-  text.php          - URL linkification
-routes/
-  api.php           - API endpoints including /api/tickets
-app.js              - Client-side JS
-algo-artifact.html  - ALGO OS artifact (local copy)
-\`\`\`
-
----
-
-## How to Work on Tickets
-
-### 1. SSH Access
-\`\`\`bash
-ssh laserbarf    # Alias configured in ~/.ssh/config
-\`\`\`
-Server path: \`~/html/\`
-
-### 2. Local Development
-Local repo: \`/Users/william/Desktop/laserbarf\`
-GitHub: \`github.com/williamsharkey/laserbarf\` (private)
-
-### 3. Deploy Commands
-\`\`\`bash
-# Deploy main files
-scp lambda.php app.js laserbarf:~/html/
-
-# Deploy includes
-scp includes/*.php laserbarf:~/html/includes/
-
-# Deploy routes
-scp routes/*.php laserbarf:~/html/routes/
-
-# Deploy ALGO OS artifact
-scp algo-artifact.html laserbarf:~/html/
-\`\`\`
-
-### 4. Posting Ticket Replies
-Post to laserbarf.com with this format:
-\`\`\`
-[TICKET-REPLY:TICKET_ID] Your message here [STATUS:status]
-
-#algo-world:dolphin42
-\`\`\`
-
-Status options: \`open\`, \`working\`, \`complete\`
-
-Example curl:
-\`\`\`bash
-curl -X POST "https://laserbarf.com/" -d "text=[TICKET-REPLY:123456] Done! Implemented the feature. [STATUS:complete]
-
-#algo-world:dolphin42"
-\`\`\`
-
-### 5. Testing
-- Main site: https://laserbarf.com/
-- ALGO OS: https://laserbarf.com/algo-dolphin:dolphin42
-- Ticket API: https://laserbarf.com/api/tickets?room=algo-world
-
----
-
-## Important Notes
-- Private room key for ALGO: \`dolphin42\`
-- Always include \`#algo-world:dolphin42\` tag when posting replies
-- Test changes before deploying
-- The artifact \`algo-artifact.html\` is the main ALGO OS codebase
-
-## Workflow
-1. Check tickets at the API endpoint above
-2. Pick a ticket to work on
-3. Post a "working" status reply
-4. Make your changes locally
-5. Test thoroughly
-6. Deploy to server
-7. Post a "complete" status reply with summary of changes
-`;
-
-  navigator.clipboard.writeText(instructions).then(() => {
-    algoSpeak('Copied agent setup guide!');
-  }).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = instructions;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    algoSpeak('Copied agent setup guide!');
-  });
-}
-
-function showNewTicketForm(id) {
-  document.getElementById('ticket-new-' + id).style.display = 'block';
-  document.getElementById('ticket-detail-' + id).style.display = 'none';
-  document.getElementById('ticket-title-' + id).focus();
-}
-
-function hideNewTicketForm(id) {
-  document.getElementById('ticket-new-' + id).style.display = 'none';
-  document.getElementById('ticket-title-' + id).value = '';
-  document.getElementById('ticket-desc-' + id).value = '';
-}
-
-function submitTicket(id) {
-  const title = document.getElementById('ticket-title-' + id).value.trim();
-  const desc = document.getElementById('ticket-desc-' + id).value.trim();
-
-  if (!title) {
-    alert('Please enter a ticket title');
-    return;
-  }
-
-  const status = document.getElementById('ticket-status-' + id);
-  if (status) status.textContent = 'Submitting...';
-
-  // Format: [TICKET] title\ndescription\n\n#algo-world:dolphin42
-  let postContent = '[TICKET] ' + title;
-  if (desc) postContent += '\n' + desc;
-  postContent += '\n\n#algo-world:dolphin42';
-
-  fetch('/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'yo=489&text=' + encodeURIComponent(postContent) + '&save=POST'
-  }).then(() => {
-    hideNewTicketForm(id);
-    refreshTickets(id);
-    algoSpeak('Ticket submitted! ALGO will review it.');
-  }).catch(e => {
-    if (status) status.textContent = 'Error submitting';
-  });
-}
-
 // ==================== STICKY NOTES ====================
 function createStickyNote(x, y, text, color) {
   hideStartMenu();
@@ -3307,11 +2887,114 @@ function runProgram(prog) {
 
 function updateProgramsMenu() {
   const el = document.getElementById('installed-programs-menu');
-  if (el) {
-    el.innerHTML = installedPrograms.map(p =>
-      '<div class="start-item" onclick="runProgram(installedPrograms.find(x=>x.id===\'' + p.id + '\'));hideStartMenu()"><span>' + (p.icon||'🎮') + '</span> ' + p.name + '</div>'
+  if (!el) return;
+
+  let html = '';
+
+  // System apps (admin-provided, minus uninstalled)
+  const visibleSystemApps = systemApps.filter(a => !uninstalledSystemApps.includes(a.id));
+  if (visibleSystemApps.length > 0) {
+    html += '<div class="start-separator-label">System Apps</div>';
+    html += visibleSystemApps.map(a =>
+      '<div class="start-item" onclick="runApp(systemApps.find(x=>x.id===\'' + a.id + '\'));hideStartMenu()" ' +
+      'oncontextmenu="event.preventDefault();event.stopPropagation();showSystemAppMenu(event,\'' + a.id + '\')">' +
+      '<span>' + (a.icon||'📱') + '</span> ' + a.name + '</div>'
     ).join('');
   }
+
+  // User-installed apps
+  if (installedPrograms.length > 0) {
+    if (visibleSystemApps.length > 0) {
+      html += '<div class="start-separator"></div>';
+    }
+    html += '<div class="start-separator-label">My Apps</div>';
+    html += installedPrograms.map(p =>
+      '<div class="start-item" onclick="runProgram(installedPrograms.find(x=>x.id===\'' + p.id + '\'));hideStartMenu()" ' +
+      'oncontextmenu="event.preventDefault();event.stopPropagation();showUserAppMenu(event,\'' + p.id + '\')">' +
+      '<span>' + (p.icon||'🎮') + '</span> ' + p.name + '</div>'
+    ).join('');
+  }
+
+  // Show reinstall option if any system apps are uninstalled
+  if (uninstalledSystemApps.length > 0) {
+    html += '<div class="start-separator"></div>';
+    html += '<div class="start-item" onclick="showReinstallMenu()"><span>📦</span> Restore Apps...</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// Context menu for system apps
+function showSystemAppMenu(e, appId) {
+  const app = systemApps.find(a => a.id === appId);
+  if (!app) return;
+
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML =
+    '<div class="ctx-item" onclick="runApp(systemApps.find(a=>a.id===\'' + appId + '\'))">▶️ Run</div>' +
+    '<div class="ctx-item" onclick="forkSystemApp(\'' + appId + '\')">📋 Fork (Make Copy)</div>' +
+    '<div class="ctx-separator"></div>' +
+    '<div class="ctx-item" onclick="uninstallSystemApp(\'' + appId + '\')">🗑️ Uninstall</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.style.display = 'block';
+}
+
+// Context menu for user apps
+function showUserAppMenu(e, appId) {
+  const app = installedPrograms.find(a => a.id === appId);
+  if (!app) return;
+
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML =
+    '<div class="ctx-item" onclick="runProgram(installedPrograms.find(a=>a.id===\'' + appId + '\'))">▶️ Run</div>' +
+    '<div class="ctx-item" onclick="editUserApp(\'' + appId + '\')">✏️ Edit</div>' +
+    '<div class="ctx-separator"></div>' +
+    '<div class="ctx-item" onclick="uninstallUserApp(\'' + appId + '\')">🗑️ Uninstall</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.style.display = 'block';
+}
+
+// Edit user app in JS.IDE
+function editUserApp(appId) {
+  const app = installedPrograms.find(a => a.id === appId);
+  if (app && app.code) {
+    openJSIDE(app.code, app.name + '.js');
+  }
+  hideContextMenu();
+}
+
+// Uninstall user app (delete it)
+function uninstallUserApp(appId) {
+  installedPrograms = installedPrograms.filter(p => p.id !== appId);
+  saveState();
+  updateProgramsMenu();
+  createDesktopIcons();
+  algoSpeak('App uninstalled.');
+  hideContextMenu();
+}
+
+// Show menu to reinstall system apps
+function showReinstallMenu() {
+  hideStartMenu();
+  const apps = systemApps.filter(a => uninstalledSystemApps.includes(a.id));
+  if (apps.length === 0) return;
+
+  createWindow({
+    title: 'Restore Apps',
+    icon: '📦',
+    width: 300,
+    height: 250,
+    content: '<div style="padding:10px;">' +
+      '<p style="margin-bottom:10px;">Click to restore:</p>' +
+      apps.map(a =>
+        '<div style="padding:5px;cursor:pointer;border:1px solid #ccc;margin:2px;" ' +
+        'onclick="reinstallSystemApp(\'' + a.id + '\');closeWindow(' + winId + ')">' +
+        a.icon + ' ' + a.name + '</div>'
+      ).join('') +
+    '</div>'
+  });
 }
 
 function createDesktopShortcut(artifactName) {
@@ -3495,11 +3178,9 @@ function openProgramCategory(category) {
         { name: 'Notepad', icon: '📝', action: 'openNotepad' },
         { name: 'JavaScript.IDE', icon: '📜', action: 'openJSIDE' },
         { name: 'Web Browser', icon: '🌐', action: 'openBrowser' },
-        { name: 'Shade Station', icon: '🎨', action: 'openShadeStation' },
         { name: 'Box Editor', icon: '📦', action: 'openBoxEditor' },
         { name: 'Calendar', icon: '📅', action: 'openCalendarApp' },
-        { name: 'Todo Manager', icon: '📋', action: 'openTodoApp' },
-        { name: 'Ticket Manager', icon: '🎫', action: 'openTicketManager' }
+        { name: 'Todo Manager', icon: '📋', action: 'openTodoApp' }
       ]
     }
   };
@@ -5157,336 +4838,6 @@ function deleteCalendarEvent(eventId, winId) {
   renderCalendarApp(winId);
 }
 
-// ==================== SHADE STATION ====================
-const shaderInstances = {}; // winId -> { gl, program, canvas, animFrame, startTime }
-
-const DEFAULT_SHADER = `precision mediump float;
-uniform float u_time;
-uniform vec2 u_resolution;
-uniform vec2 u_mouse;
-
-void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution;
-  vec3 col = 0.5 + 0.5 * cos(u_time + uv.xyx + vec3(0, 2, 4));
-  gl_FragColor = vec4(col, 1.0);
-}`;
-
-const SHADER_PRESETS = {
-  'Rainbow': DEFAULT_SHADER,
-  'Plasma': `precision mediump float;
-uniform float u_time;
-uniform vec2 u_resolution;
-
-void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution;
-  float t = u_time * 0.5;
-  float v = sin(uv.x * 10.0 + t) + sin(uv.y * 10.0 + t);
-  v += sin((uv.x + uv.y) * 10.0 + t);
-  v += sin(sqrt(uv.x*uv.x + uv.y*uv.y) * 10.0 + t);
-  vec3 col = vec3(sin(v), sin(v + 2.0), sin(v + 4.0)) * 0.5 + 0.5;
-  gl_FragColor = vec4(col, 1.0);
-}`,
-  'Circles': `precision mediump float;
-uniform float u_time;
-uniform vec2 u_resolution;
-
-void main() {
-  vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / min(u_resolution.x, u_resolution.y);
-  float d = length(uv);
-  float c = sin(d * 20.0 - u_time * 3.0) * 0.5 + 0.5;
-  gl_FragColor = vec4(vec3(c * 0.2, c * 0.5, c), 1.0);
-}`,
-  'Mouse': `precision mediump float;
-uniform float u_time;
-uniform vec2 u_resolution;
-uniform vec2 u_mouse;
-
-void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution;
-  vec2 mouse = u_mouse / u_resolution;
-  float d = distance(uv, mouse);
-  float glow = 0.02 / d;
-  vec3 col = vec3(glow * 0.5, glow * 0.8, glow);
-  gl_FragColor = vec4(col, 1.0);
-}`
-};
-
-// File type registration for .shader files
-function registerShaderFileType() {
-  if (!window.registeredFileTypes) window.registeredFileTypes = {};
-  window.registeredFileTypes['shader'] = {
-    icon: '🎨',
-    name: 'Shader File',
-    handler: (filename, content) => {
-      openShadeStation(content, filename);
-    }
-  };
-}
-
-function openShadeStation(initialCode, filename) {
-  hideStartMenu();
-  const code = initialCode || DEFAULT_SHADER;
-  const fname = filename || 'untitled.shader';
-  const id = winId;
-
-  createWindow({
-    title: 'Shade Station',
-    stateKey: 'Shade Station',
-    icon: '🎨',
-    width: 700, height: 480,
-    content: ''
-  });
-
-  const win = getWindowById(id);
-  const content = win.querySelector('.window-content');
-  content.style.background = '#1a1a2e';
-  content.style.padding = '0';
-  content.style.overflow = 'hidden';
-
-  content.innerHTML = `
-    <div class="shade-station">
-      <div class="shade-station-toolbar">
-        <button onclick="shaderNew(${id})">New</button>
-        <button onclick="shaderSave(${id})">Save</button>
-        <button onclick="shaderLoad(${id})">Load</button>
-        <select onchange="shaderLoadPreset(${id}, this.value)">
-          <option value="">-- Presets --</option>
-          ${Object.keys(SHADER_PRESETS).map(k => '<option value="' + k + '">' + k + '</option>').join('')}
-        </select>
-        <span style="margin-left:auto;color:#888;" id="shader-filename-${id}">${escapeHtml(fname)}</span>
-      </div>
-      <div class="shade-station-main">
-        <div class="shade-station-canvas-wrap">
-          <canvas id="shader-canvas-${id}"></canvas>
-        </div>
-        <div class="shade-station-editor">
-          <textarea id="shader-code-${id}" spellcheck="false">${escapeHtml(code)}</textarea>
-          <div class="shade-station-uniforms">
-            <label>Speed: <input type="range" min="0" max="2" step="0.1" value="1" id="shader-speed-${id}"></label>
-            <label><input type="checkbox" id="shader-pause-${id}"> Pause</label>
-          </div>
-          <div class="shade-station-status" id="shader-status-${id}">Ready - Edit shader and it auto-compiles</div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Initialize WebGL
-  setTimeout(() => initShader(id), 100);
-
-  // Auto-compile on edit
-  const textarea = document.getElementById('shader-code-' + id);
-  textarea.addEventListener('input', () => compileShader(id));
-}
-
-function initShader(winId) {
-  const canvas = document.getElementById('shader-canvas-' + winId);
-  if (!canvas) return;
-
-  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-  if (!gl) {
-    document.getElementById('shader-status-' + winId).textContent = 'WebGL not supported';
-    document.getElementById('shader-status-' + winId).classList.add('error');
-    return;
-  }
-
-  shaderInstances[winId] = {
-    gl,
-    canvas,
-    program: null,
-    startTime: Date.now(),
-    mouse: [0, 0],
-    animFrame: null
-  };
-
-  // Mouse tracking
-  canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    shaderInstances[winId].mouse = [
-      e.clientX - rect.left,
-      rect.height - (e.clientY - rect.top)
-    ];
-  });
-
-  // Resize observer
-  const resizeObserver = new ResizeObserver(() => {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-  });
-  resizeObserver.observe(canvas.parentElement);
-
-  compileShader(winId);
-}
-
-function compileShader(winId) {
-  const inst = shaderInstances[winId];
-  if (!inst) return;
-
-  const { gl, canvas } = inst;
-  const fragSource = document.getElementById('shader-code-' + winId).value;
-  const statusEl = document.getElementById('shader-status-' + winId);
-
-  const vertSource = `
-    attribute vec2 a_position;
-    void main() { gl_Position = vec4(a_position, 0, 1); }
-  `;
-
-  // Compile vertex shader
-  const vertShader = gl.createShader(gl.VERTEX_SHADER);
-  gl.shaderSource(vertShader, vertSource);
-  gl.compileShader(vertShader);
-
-  // Compile fragment shader
-  const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fragShader, fragSource);
-  gl.compileShader(fragShader);
-
-  if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
-    const err = gl.getShaderInfoLog(fragShader);
-    statusEl.textContent = 'Error: ' + err;
-    statusEl.classList.add('error');
-    return;
-  }
-
-  // Link program
-  const program = gl.createProgram();
-  gl.attachShader(program, vertShader);
-  gl.attachShader(program, fragShader);
-  gl.linkProgram(program);
-
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    statusEl.textContent = 'Link error: ' + gl.getProgramInfoLog(program);
-    statusEl.classList.add('error');
-    return;
-  }
-
-  statusEl.textContent = 'Compiled successfully';
-  statusEl.classList.remove('error');
-
-  // Clean up old program
-  if (inst.program) gl.deleteProgram(inst.program);
-  if (inst.animFrame) cancelAnimationFrame(inst.animFrame);
-
-  inst.program = program;
-  gl.useProgram(program);
-
-  // Set up geometry (full-screen quad)
-  const posBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-
-  const posLoc = gl.getAttribLocation(program, 'a_position');
-  gl.enableVertexAttribArray(posLoc);
-  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-  // Start render loop
-  function render() {
-    const pauseEl = document.getElementById('shader-pause-' + winId);
-    const speedEl = document.getElementById('shader-speed-' + winId);
-
-    if (!pauseEl || !document.getElementById('shader-canvas-' + winId)) {
-      // Window closed
-      return;
-    }
-
-    const paused = pauseEl && pauseEl.checked;
-    const speed = speedEl ? parseFloat(speedEl.value) : 1;
-
-    if (!paused) {
-      inst.time = (inst.time || 0) + 0.016 * speed;
-    }
-
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    const timeLoc = gl.getUniformLocation(program, 'u_time');
-    const resLoc = gl.getUniformLocation(program, 'u_resolution');
-    const mouseLoc = gl.getUniformLocation(program, 'u_mouse');
-
-    if (timeLoc) gl.uniform1f(timeLoc, inst.time || 0);
-    if (resLoc) gl.uniform2f(resLoc, canvas.width, canvas.height);
-    if (mouseLoc) gl.uniform2f(mouseLoc, inst.mouse[0], inst.mouse[1]);
-
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    inst.animFrame = requestAnimationFrame(render);
-  }
-
-  render();
-}
-
-function shaderNew(winId) {
-  document.getElementById('shader-code-' + winId).value = DEFAULT_SHADER;
-  document.getElementById('shader-filename-' + winId).textContent = 'untitled.shader';
-  compileShader(winId);
-}
-
-function shaderLoadPreset(winId, presetName) {
-  if (!presetName || !SHADER_PRESETS[presetName]) return;
-  document.getElementById('shader-code-' + winId).value = SHADER_PRESETS[presetName];
-  document.getElementById('shader-filename-' + winId).textContent = presetName.toLowerCase() + '.shader';
-  compileShader(winId);
-}
-
-function shaderSave(winId) {
-  const code = document.getElementById('shader-code-' + winId).value;
-  const filename = prompt('Save shader as:', document.getElementById('shader-filename-' + winId).textContent);
-  if (!filename) return;
-
-  // Save as desktop file
-  const fname = filename.endsWith('.shader') ? filename : filename + '.shader';
-  document.getElementById('shader-filename-' + winId).textContent = fname;
-
-  // Add to desktop as a file icon
-  const fileId = 'shader-' + Date.now();
-  const desktop = document.getElementById('desktop');
-  const icon = document.createElement('div');
-  icon.className = 'desktop-icon';
-  icon.id = fileId;
-  icon.style.left = '20px';
-  icon.style.top = (100 + desktopIcons.length * 80) + 'px';
-  icon.innerHTML = '<div class="icon-img">🎨</div><span>' + escapeHtml(fname) + '</span>';
-  icon.ondblclick = () => openShadeStation(code, fname);
-  icon.onclick = (e) => selectIcon(e, icon);
-  desktop.appendChild(icon);
-
-  desktopIcons.push({ id: fileId, name: fname, type: 'shader', content: code });
-  saveDesktop();
-}
-
-function shaderLoad(winId) {
-  // Show file picker from desktop shaders
-  const shaderFiles = desktopIcons.filter(i => i.type === 'shader');
-  if (shaderFiles.length === 0) {
-    alert('No shader files on desktop. Save a shader first, or drag a .shader file onto the desktop.');
-    return;
-  }
-
-  const choice = prompt('Load shader:\\n' + shaderFiles.map((f, i) => (i + 1) + '. ' + f.name).join('\\n') + '\\n\\nEnter number:');
-  const idx = parseInt(choice) - 1;
-  if (idx >= 0 && idx < shaderFiles.length) {
-    const file = shaderFiles[idx];
-    document.getElementById('shader-code-' + winId).value = file.content;
-    document.getElementById('shader-filename-' + winId).textContent = file.name;
-    compileShader(winId);
-  }
-}
-
-// Clean up shader instances when window closes
-const origCloseWindow = closeWindow;
-closeWindow = function(winId) {
-  if (shaderInstances[winId]) {
-    if (shaderInstances[winId].animFrame) {
-      cancelAnimationFrame(shaderInstances[winId].animFrame);
-    }
-    delete shaderInstances[winId];
-  }
-  origCloseWindow(winId);
-};
-
 // ==================== BOX EDITOR ====================
 // File type registration system
 const FILE_TYPE_HANDLERS = {}; // extension -> [{ name, icon, handler }]
@@ -6040,10 +5391,89 @@ async function loadFilesFromServer() {
   }
 }
 
+// Load system apps from server (admin-controlled, evergreen)
+async function loadSystemApps() {
+  try {
+    const resp = await fetch(API_BASE + '/system-apps');
+    const data = await resp.json();
+    if (data.apps) {
+      systemApps = data.apps;
+      updateProgramsMenu();
+    }
+  } catch (e) {
+    console.error('Failed to load system apps:', e);
+  }
+}
+
+// Run a system or user app
+function runApp(app) {
+  if (app.code) {
+    try {
+      const fullCode = ALGO_API_CODE + '\n' + app.code;
+      (0, eval)(fullCode);
+    } catch (e) {
+      algoSpeak('Error running ' + app.name + ': ' + e.message);
+    }
+  } else if (app.url) {
+    createWindow({
+      title: app.name,
+      stateKey: 'App:' + app.id,
+      icon: app.icon || '📱',
+      width: 600, height: 500,
+      content: '<iframe src="' + app.url + '" style="width:100%;height:100%;border:none;"></iframe>'
+    });
+  }
+}
+
+// Uninstall a system app (just hides it for this user)
+function uninstallSystemApp(appId) {
+  if (!uninstalledSystemApps.includes(appId)) {
+    uninstalledSystemApps.push(appId);
+    saveState();
+    updateProgramsMenu();
+    createDesktopIcons();
+    algoSpeak('App hidden. Reinstall from Programs > Get Apps.');
+  }
+}
+
+// Reinstall a system app (unhide it)
+function reinstallSystemApp(appId) {
+  uninstalledSystemApps = uninstalledSystemApps.filter(id => id !== appId);
+  saveState();
+  updateProgramsMenu();
+  createDesktopIcons();
+  algoSpeak('App restored!');
+}
+
+// Fork a system app (create editable copy)
+function forkSystemApp(appId) {
+  const app = systemApps.find(a => a.id === appId);
+  if (!app) return;
+
+  const newName = app.name + ' (Copy)';
+  const newId = 'user-' + Date.now();
+
+  installedPrograms.push({
+    id: newId,
+    name: newName,
+    icon: app.icon,
+    code: app.code.replace(
+      /ALGO\.app\.name\s*=\s*['"][^'"]+['"]/,
+      "ALGO.app.name = '" + newName + "'"
+    )
+  });
+
+  saveState();
+  updateProgramsMenu();
+  createDesktopIcons();
+  algoSpeak('Created editable copy: ' + newName);
+}
+
 function saveState() {
   // Files are saved to server individually via ALGO.saveFile()
   // Keep other state in localStorage
   localStorage.setItem('algo-programs', JSON.stringify(installedPrograms));
+  localStorage.setItem('algo-uninstalled-system', JSON.stringify(uninstalledSystemApps));
   localStorage.setItem('algo-rooms', JSON.stringify(roomFolders));
   localStorage.setItem('algo-windows', JSON.stringify(windowStates));
   localStorage.setItem('algo-apikeys', JSON.stringify(apiKeys));
@@ -6171,6 +5601,7 @@ function loadState() {
     loadFilesFromServer();
     // Load other state from localStorage
     installedPrograms = JSON.parse(localStorage.getItem('algo-programs') || '[]');
+    uninstalledSystemApps = JSON.parse(localStorage.getItem('algo-uninstalled-system') || '[]');
     roomFolders = JSON.parse(localStorage.getItem('algo-rooms') || '[]');
     windowStates = JSON.parse(localStorage.getItem('algo-windows') || '{}');
     apiKeys = JSON.parse(localStorage.getItem('algo-apikeys') || '{}');

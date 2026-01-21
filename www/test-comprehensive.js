@@ -3,7 +3,7 @@
  * Tests: JS.IDE, app installation, localStorage, disk storage, all features
  */
 
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const SERVER_URL = 'https://functionserver.com';
 
 function delay(ms) {
@@ -36,6 +36,7 @@ async function runTests() {
 
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--no-sandbox', '--disable-web-security']
   });
 
