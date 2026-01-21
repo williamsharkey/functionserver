@@ -1067,6 +1067,7 @@ body {
 }
 .start-item:hover { background: #000080; color: white; }
 .start-separator { border-top: 1px solid #808080; border-bottom: 1px solid white; margin: 2px 4px; }
+.start-separator-label { font-size: 9px; color: #666; padding: 2px 8px; font-weight: bold; }
 .start-submenu {
   position: absolute;
   left: 100%;
