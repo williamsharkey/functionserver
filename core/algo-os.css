@@ -1071,11 +1071,11 @@ body {
 .start-submenu {
   position: absolute;
   left: 100%;
-  top: 0;
+  bottom: 0;
   background: #c0c0c0;
   border: 2px outset #fff;
   display: none;
-  min-width: 140px;
+  min-width: 180px;
   max-height: calc(100vh - 50px);
   overflow-y: auto;
 }
