@@ -1,8 +1,8 @@
-// Cecilia OS - Go Backend
+// Function Server - Go Backend
 // Multi-tenant web-based operating system
 //
 // Run: go run main.go
-// Build: go build -o cecilia main.go
+// Build: go build -o functionserver main.go
 
 package main
 
@@ -547,8 +547,41 @@ func main() {
 		io.Copy(w, resp.Body)
 	})
 
-	// Serve OS
-	mux.HandleFunc("/", serveOS)
+	// Serve OS at /app
+	mux.HandleFunc("/app", serveOS)
+	mux.HandleFunc("/app/", serveOS)
+
+	// Serve static files from www directory (screenshots, etc)
+	wwwPaths := []string{"../www", "./www"}
+	var wwwDir string
+	for _, p := range wwwPaths {
+		if info, err := os.Stat(p); err == nil && info.IsDir() {
+			wwwDir = p
+			break
+		}
+	}
+	if wwwDir != "" {
+		fs := http.FileServer(http.Dir(wwwDir))
+		mux.Handle("/screenshots/", http.StripPrefix("/", fs))
+	}
+
+	// Serve landing page at root
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		landingPaths := []string{"../www/index.html", "./www/index.html"}
+		for _, p := range landingPaths {
+			if content, err := os.ReadFile(p); err == nil {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Write(content)
+				return
+			}
+		}
+		// Fallback to OS if no landing page
+		serveOS(w, r)
+	})
 
 	fmt.Printf("\n  %s %s running at http://localhost:%s\n\n", config.OSIcon, config.OSName, config.Port)
 	http.ListenAndServe(":"+config.Port, mux)
