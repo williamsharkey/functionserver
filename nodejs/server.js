@@ -15,12 +15,14 @@ const { spawn, execSync } = require('child_process');
 const url = require('url');
 
 // Configuration
+const DATA_DIR_DEFAULT = path.join(__dirname, 'data');
 const config = {
   OS_NAME: process.env.OS_NAME || 'Cecilia',
   OS_ICON: process.env.OS_ICON || '🌼',
   API_BASE: process.env.API_BASE || '/api',
-  DATA_DIR: process.env.DATA_DIR || path.join(__dirname, 'data'),
-  HOMES_DIR: process.env.HOMES_DIR || '/home',
+  DATA_DIR: process.env.DATA_DIR || DATA_DIR_DEFAULT,
+  // Use /home on Linux servers, data/homes locally
+  HOMES_DIR: process.env.HOMES_DIR || (fs.existsSync('/home') && process.platform === 'linux' ? '/home' : path.join(DATA_DIR_DEFAULT, 'homes')),
   SESSION_SECRET: process.env.SESSION_SECRET || 'change-this-secret-key-in-production',
   SESSION_EXPIRY: 86400 * 7 * 1000, // 7 days in ms
   PORT: parseInt(process.env.PORT) || 8080,
@@ -124,20 +126,37 @@ async function verifyPassword(password, hash) {
 function createLinuxUser(username) {
   const homeDir = path.join(config.HOMES_DIR, username);
 
-  // Check if user exists
+  // Ensure parent homes directory exists
   try {
-    execSync(`id ${username}`, { stdio: 'ignore' });
+    fs.mkdirSync(config.HOMES_DIR, { recursive: true });
+  } catch (e) {
+    console.error('Failed to create homes directory:', e.message);
+  }
+
+  // Check if Linux user exists (only on Linux)
+  if (process.platform === 'linux') {
+    try {
+      execSync(`id ${username}`, { stdio: 'ignore' });
+      fs.mkdirSync(homeDir, { recursive: true });
+      return true;
+    } catch {
+      // User doesn't exist, try to create
+      try {
+        execSync(`sudo useradd -m -d ${homeDir} -s /bin/bash ${username}`, { stdio: 'ignore' });
+        return fs.existsSync(homeDir);
+      } catch {
+        // Fall through to create directory manually
+      }
+    }
+  }
+
+  // Create directory (works on any platform)
+  try {
     fs.mkdirSync(homeDir, { recursive: true });
     return true;
-  } catch {
-    // User doesn't exist, try to create
-    try {
-      execSync(`sudo useradd -m -d ${homeDir} -s /bin/bash ${username}`, { stdio: 'ignore' });
-    } catch {
-      // Fallback: just create directory
-      fs.mkdirSync(homeDir, { recursive: true });
-    }
-    return fs.existsSync(homeDir);
+  } catch (e) {
+    console.error('Failed to create home directory:', e.message);
+    return false;
   }
 }
 
