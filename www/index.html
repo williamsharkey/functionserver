@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Function Server - Deploy a web OS with one command</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-dark: #0a0a0a;
+  --bg-light: #ffffff;
+  --text-dark: #ffffff;
+  --text-light: #0a0a0a;
+  --text-muted: #666;
+  --accent: #00d4aa;
+  --code-bg: #1a1a2e;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--text-light);
+  background: var(--bg-light);
+}
+
+/* Sections */
+section {
+  padding: 100px 20px;
+}
+
+.dark {
+  background: var(--bg-dark);
+  color: var(--text-dark);
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Navigation */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  border-bottom: 1px solid #222;
+}
+
+.logo {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo span { color: var(--accent); }
+
+nav a {
+  color: #888;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+nav a:hover { color: var(--text-dark); }
+
+/* Hero */
+#hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding-top: 80px;
+}
+
+#hero .container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+
+#hero h1 {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 24px;
+}
+
+#hero .highlight { color: var(--accent); }
+
+#hero p {
+  font-size: 1.25rem;
+  color: #888;
+  margin-bottom: 40px;
+  max-width: 500px;
+}
+
+.install-box {
+  background: var(--code-bg);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.install-box code {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 0.95rem;
+  color: var(--accent);
+  display: block;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.install-box .copy-btn {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #333;
+  border: none;
+  color: #888;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.install-box .copy-btn:hover {
+  background: #444;
+  color: #fff;
+}
+
+.hero-image {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  border: 1px solid #333;
+}
+
+.hero-image img {
+  width: 100%;
+  display: block;
+}
+
+/* Flow Section */
+#flow h2 {
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.flow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+}
+
+.flow-step {
+  text-align: center;
+}
+
+.flow-step .number {
+  width: 48px;
+  height: 48px;
+  background: var(--accent);
+  color: var(--bg-dark);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+  margin: 0 auto 20px;
+}
+
+.flow-step h3 {
+  font-size: 1.25rem;
+  margin-bottom: 12px;
+}
+
+.flow-step p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.flow-step .screenshot {
+  margin-top: 24px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border: 1px solid #eee;
+}
+
+.flow-step .screenshot img {
+  width: 100%;
+  display: block;
+}
+
+/* Features */
+#features {
+  padding: 120px 20px;
+}
+
+#features h2 {
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+}
+
+.feature {
+  padding: 32px;
+  background: var(--code-bg);
+  border-radius: 12px;
+  border: 1px solid #222;
+}
+
+.feature-icon {
+  font-size: 2rem;
+  margin-bottom: 16px;
+}
+
+.feature h3 {
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+}
+
+.feature p {
+  color: #888;
+  font-size: 0.95rem;
+}
+
+/* Problem/Solution */
+#problem {
+  padding: 120px 20px;
+}
+
+.problem-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+}
+
+.problem-side h3, .solution-side h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.problem-side h2, .solution-side h2 {
+  font-size: 2rem;
+  margin-bottom: 20px;
+}
+
+.solution-side h3 { color: var(--accent); }
+
+.problem-side p, .solution-side p {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+}
+
+/* Footer */
+footer {
+  padding: 60px 20px;
+  text-align: center;
+  border-top: 1px solid #222;
+}
+
+footer p {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  #hero .container,
+  .problem-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  #hero h1 { font-size: 2.5rem; }
+
+  .flow-steps,
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo"><span>⚡</span> Function Server</a>
+  <div>
+    <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
+  </div>
+</nav>
+
+<section id="hero" class="dark">
+  <div class="container">
+    <div>
+      <h1>Deploy a web OS<br>with <span class="highlight">one command</span></h1>
+      <p>A multi-tenant operating system you can install on any server. Register users, run terminals, manage files. All from the browser.</p>
+
+      <div class="install-box">
+        <code>curl -fsSL https://functionserver.com/install | bash</code>
+        <button class="copy-btn" onclick="copyInstall()">Copy</button>
+      </div>
+
+      <p style="color: #666; font-size: 0.9rem;">Works on Ubuntu, Debian, CentOS, Fedora, Alpine, Arch, macOS</p>
+    </div>
+
+    <div class="hero-image">
+      <img src="screenshots/desktop.png" alt="Function Server Desktop">
+    </div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="container">
+    <h2>From zero to running in 60 seconds</h2>
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="number">1</div>
+        <h3>Run the installer</h3>
+        <p>Single command installs Go, downloads the server, creates a systemd service.</p>
+        <div class="screenshot">
+          <img src="screenshots/install-terminal.png" alt="Install command running">
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="number">2</div>
+        <h3>Register a user</h3>
+        <p>Visit your server's IP. Create an account through the Windows 95-style interface.</p>
+        <div class="screenshot">
+          <img src="screenshots/register.png" alt="Registration screen">
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="number">3</div>
+        <h3>Start building</h3>
+        <p>Open the terminal. Clone repos, run code, install Claude Code. Your sandboxed environment.</p>
+        <div class="screenshot">
+          <img src="screenshots/terminal.png" alt="Terminal window">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="problem" class="dark">
+  <div class="container">
+    <div class="problem-grid">
+      <div class="problem-side">
+        <h3>The problem</h3>
+        <h2>Setting up shared dev environments is tedious</h2>
+        <p>SSH keys, user management, permission issues, installing dependencies. Every new server means repeating the same setup ritual.</p>
+      </div>
+
+      <div class="solution-side">
+        <h3>The solution</h3>
+        <h2>One command gives everyone their own space</h2>
+        <p>Function Server handles user isolation, terminal access, and file management. Users register themselves and get a sandboxed home directory instantly.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="dark">
+  <div class="container">
+    <h2>Built for developers</h2>
+
+    <div class="features-grid">
+      <div class="feature">
+        <div class="feature-icon">🔒</div>
+        <h3>Sandboxed users</h3>
+        <p>Each user gets their own home directory. Commands are restricted to prevent system damage.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">💻</div>
+        <h3>Web terminal</h3>
+        <p>Full terminal access from the browser. Run git, node, python, go, and more.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">🤖</div>
+        <h3>Claude Code ready</h3>
+        <p>Install Claude Code in the terminal and start coding with AI assistance immediately.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">📁</div>
+        <h3>File manager</h3>
+        <p>Browse, create, and manage files through the graphical interface.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h3>Single binary</h3>
+        <p>Written in Go. No runtime dependencies. Fast startup, low memory.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">🎨</div>
+        <h3>Customizable</h3>
+        <p>Change the name, icon, and branding. Make it your own OS.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="dark">
+  <div class="container">
+    <p>Function Server is open source. <a href="https://github.com/williamsharkey/functionserver">View on GitHub</a></p>
+  </div>
+</footer>
+
+<script>
+function copyInstall() {
+  const cmd = 'curl -fsSL https://functionserver.com/install | bash';
+  navigator.clipboard.writeText(cmd);
+  document.querySelector('.copy-btn').textContent = 'Copied!';
+  setTimeout(() => {
+    document.querySelector('.copy-btn').textContent = 'Copy';
+  }, 2000);
+}
+</script>
+
+</body>
+</html>
