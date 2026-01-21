@@ -3,40 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Function Server - Deploy a web OS with one command</title>
+<title>Function Server - A Cloud Operating System</title>
+<meta name="description" content="A multi-tenant web OS with app development, AI integration, and public sharing. Build apps visually with Designer & Craft tools.">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
   --bg-dark: #0a0a0a;
   --bg-light: #ffffff;
+  --bg-card: #111;
   --text-dark: #ffffff;
   --text-light: #0a0a0a;
-  --text-muted: #666;
+  --text-muted: #888;
   --accent: #00d4aa;
+  --accent-dim: #00a88a;
   --code-bg: #1a1a2e;
+  --border: #222;
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.6;
-  color: var(--text-light);
-  background: var(--bg-light);
-}
-
-/* Sections */
-section {
-  padding: 100px 20px;
-}
-
-.dark {
-  background: var(--bg-dark);
   color: var(--text-dark);
-}
-
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
+  background: var(--bg-dark);
 }
 
 /* Navigation */
@@ -45,14 +34,14 @@ nav {
   top: 0;
   left: 0;
   right: 0;
-  padding: 20px 40px;
+  padding: 16px 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: rgba(10, 10, 10, 0.95);
   backdrop-filter: blur(10px);
   z-index: 100;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border);
 }
 
 .logo {
@@ -67,8 +56,13 @@ nav {
 
 .logo span { color: var(--accent); }
 
+nav .links {
+  display: flex;
+  gap: 32px;
+}
+
 nav a {
-  color: #888;
+  color: var(--text-muted);
   text-decoration: none;
   font-size: 0.9rem;
   transition: color 0.2s;
@@ -76,19 +70,45 @@ nav a {
 
 nav a:hover { color: var(--text-dark); }
 
+.nav-cta {
+  background: var(--accent);
+  color: var(--bg-dark) !important;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.nav-cta:hover { background: var(--accent-dim); }
+
+/* Sections */
+section { padding: 120px 20px; }
+.container { max-width: 1200px; margin: 0 auto; }
+
 /* Hero */
 #hero {
   min-height: 100vh;
   display: flex;
   align-items: center;
   padding-top: 80px;
+  background: linear-gradient(180deg, var(--bg-dark) 0%, #0f1a1a 100%);
 }
 
 #hero .container {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: 60px;
   align-items: center;
+}
+
+.hero-badge {
+  display: inline-block;
+  background: rgba(0, 212, 170, 0.1);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  color: var(--accent);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
 }
 
 #hero h1 {
@@ -98,37 +118,310 @@ nav a:hover { color: var(--text-dark); }
   margin-bottom: 24px;
 }
 
-#hero .highlight { color: var(--accent); }
+.highlight { color: var(--accent); }
 
 #hero p {
   font-size: 1.25rem;
-  color: #888;
-  margin-bottom: 40px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
   max-width: 500px;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+.btn {
+  padding: 14px 28px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg-dark);
+}
+
+.btn-primary:hover { background: var(--accent-dim); transform: translateY(-2px); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-dark);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover { border-color: var(--text-muted); }
+
+.hero-screenshot {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 30px 100px rgba(0, 212, 170, 0.1), 0 10px 40px rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+}
+
+.hero-screenshot img {
+  width: 100%;
+  display: block;
+}
+
+/* Features Grid */
+.section-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-header h2 {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+}
+
+.section-header p {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  transition: all 0.3s;
+}
+
+.feature-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-4px);
+}
+
+.feature-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+}
+
+.feature-card h3 {
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+}
+
+.feature-card p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+/* Vision Section */
+#vision {
+  background: linear-gradient(180deg, #0f1a1a 0%, var(--bg-dark) 100%);
+}
+
+.vision-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 60px;
+  align-items: center;
+}
+
+.vision-content h2 {
+  font-size: 2.5rem;
+  margin-bottom: 24px;
+}
+
+.vision-content p {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  line-height: 1.8;
+}
+
+.vision-list {
+  list-style: none;
+  margin-top: 32px;
+}
+
+.vision-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--text-muted);
+}
+
+.vision-list .check {
+  color: var(--accent);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.vision-screenshot {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+}
+
+.vision-screenshot img {
+  width: 100%;
+  display: block;
+}
+
+/* Architecture Section */
+#architecture {
+  background: var(--bg-dark);
+}
+
+.arch-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+}
+
+.arch-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+}
+
+.arch-card h3 {
+  font-size: 1.5rem;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.arch-card p {
+  color: var(--text-muted);
+  line-height: 1.8;
+  margin-bottom: 20px;
+}
+
+.arch-card code {
+  display: block;
+  background: var(--code-bg);
+  padding: 16px;
+  border-radius: 8px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.85rem;
+  color: var(--accent);
+  overflow-x: auto;
+}
+
+/* Tiers Section */
+#tiers {
+  background: linear-gradient(180deg, var(--bg-dark) 0%, #0a1515 100%);
+}
+
+.tiers-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.tier-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.tier-card:hover {
+  transform: translateY(-4px);
+}
+
+.tier-card.featured {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(0, 212, 170, 0.05) 0%, var(--bg-card) 100%);
+}
+
+.tier-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.tier-card h3 {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.tier-card .price {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 24px;
+}
+
+.tier-card .price span {
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.tier-features {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 32px;
+}
+
+.tier-features li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  display: flex;
+  gap: 10px;
+}
+
+.tier-features li:last-child { border-bottom: none; }
+
+/* CTA Section */
+#cta {
+  text-align: center;
+  background: linear-gradient(180deg, #0a1515 0%, var(--bg-dark) 100%);
+}
+
+#cta h2 {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+}
+
+#cta p {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  margin-bottom: 32px;
 }
 
 .install-box {
   background: var(--code-bg);
   border-radius: 12px;
-  padding: 24px;
+  padding: 24px 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
   margin-bottom: 24px;
-  position: relative;
 }
 
 .install-box code {
-  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-  font-size: 0.95rem;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 1rem;
   color: var(--accent);
-  display: block;
-  white-space: nowrap;
-  overflow-x: auto;
 }
 
 .install-box .copy-btn {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
   background: #333;
   border: none;
   color: #888;
@@ -144,520 +437,314 @@ nav a:hover { color: var(--text-dark); }
   color: #fff;
 }
 
-/* Animated Terminal */
-.terminal-window {
-  background: #1e1e2e;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 25px 80px rgba(0, 212, 170, 0.15), 0 10px 30px rgba(0,0,0,0.4);
-  border: 1px solid #333;
-}
-
-.terminal-header {
-  background: linear-gradient(180deg, #3a3a4a 0%, #2a2a3a 100%);
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.terminal-btn {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.terminal-btn.red { background: #ff5f56; }
-.terminal-btn.yellow { background: #ffbd2e; }
-.terminal-btn.green { background: #27ca40; }
-
-.terminal-title {
-  flex: 1;
-  text-align: center;
-  color: #888;
-  font-size: 0.8rem;
-  font-family: 'SF Mono', Monaco, monospace;
-}
-
-.terminal-body {
-  padding: 20px;
-  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  min-height: 320px;
-  color: #cdd6f4;
-}
-
-.terminal-line {
-  margin-bottom: 4px;
-  opacity: 0;
-  transform: translateY(5px);
-  animation: fadeInLine 0.3s ease forwards;
-}
-
-.terminal-line.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@keyframes fadeInLine {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.prompt { color: var(--accent); }
-.command { color: #fff; }
-.output { color: #888; }
-.success { color: var(--accent); }
-.highlight-text { color: #f9e2af; }
-.dim { color: #585b70; }
-
-.cursor {
-  display: inline-block;
-  width: 8px;
-  height: 16px;
-  background: var(--accent);
-  margin-left: 2px;
-  animation: blink 1s step-end infinite;
-  vertical-align: middle;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-.progress-bar {
-  background: #313244;
-  border-radius: 4px;
-  height: 6px;
-  margin: 8px 0;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent), #00ff88);
-  width: 0%;
-  transition: width 0.5s ease;
-  border-radius: 4px;
-}
-
-.ascii-art {
-  color: var(--accent);
-  white-space: pre;
-  font-size: 10px;
-  line-height: 1.2;
-  margin: 8px 0;
-  display: inline-block;
-}
-
-/* Flow Section */
-#flow h2 {
-  font-size: 2.5rem;
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.flow-steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 40px;
-}
-
-.flow-step {
-  text-align: center;
-}
-
-.flow-step .number {
-  width: 48px;
-  height: 48px;
-  background: var(--accent);
-  color: var(--bg-dark);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 1.2rem;
-  margin: 0 auto 20px;
-}
-
-.flow-step h3 {
-  font-size: 1.25rem;
-  margin-bottom: 12px;
-}
-
-.flow-step p {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-}
-
-.flow-step .screenshot {
-  margin-top: 24px;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-  border: 1px solid #eee;
-}
-
-.flow-step .screenshot img {
-  width: 100%;
-  display: block;
-}
-
-/* Features */
-#features {
-  padding: 120px 20px;
-}
-
-#features h2 {
-  font-size: 2.5rem;
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 40px;
-}
-
-.feature {
-  padding: 32px;
-  background: var(--code-bg);
-  border-radius: 12px;
-  border: 1px solid #222;
-}
-
-.feature-icon {
-  font-size: 2rem;
-  margin-bottom: 16px;
-}
-
-.feature h3 {
-  font-size: 1.2rem;
-  margin-bottom: 12px;
-}
-
-.feature p {
-  color: #888;
-  font-size: 0.95rem;
-}
-
-/* Problem/Solution */
-#problem {
-  padding: 120px 20px;
-}
-
-.problem-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 80px;
-}
-
-.problem-side h3, .solution-side h3 {
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: var(--text-muted);
-  margin-bottom: 16px;
-}
-
-.problem-side h2, .solution-side h2 {
-  font-size: 2rem;
-  margin-bottom: 20px;
-}
-
-.solution-side h3 { color: var(--accent); }
-
-.problem-side p, .solution-side p {
-  color: var(--text-muted);
-  font-size: 1.1rem;
-}
-
 /* Footer */
 footer {
   padding: 60px 20px;
   text-align: center;
-  border-top: 1px solid #222;
+  border-top: 1px solid var(--border);
 }
 
-footer p {
-  color: #666;
-  font-size: 0.9rem;
+footer .links {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 24px;
 }
 
 footer a {
-  color: var(--accent);
+  color: var(--text-muted);
   text-decoration: none;
+  font-size: 0.9rem;
+}
+
+footer a:hover { color: var(--text-dark); }
+
+footer p {
+  color: #555;
+  font-size: 0.85rem;
 }
 
 /* Responsive */
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   #hero .container,
-  .problem-grid {
+  .vision-grid,
+  .arch-cards {
     grid-template-columns: 1fr;
     gap: 40px;
   }
 
-  #hero h1 { font-size: 2.5rem; }
-
-  .flow-steps,
-  .features-grid {
+  .features-grid,
+  .tiers-grid {
     grid-template-columns: 1fr;
   }
 
-  .terminal-body {
-    font-size: 12px;
-    min-height: 280px;
-  }
-
-  .ascii-art {
-    font-size: 8px;
-  }
+  #hero h1 { font-size: 2.5rem; }
+  nav .links { display: none; }
 }
 </style>
 </head>
 <body>
 
 <nav>
-  <a href="/" class="logo"><span>🖥️</span> Function Server</a>
-  <div>
+  <a href="/" class="logo"><span>&#x1F5A5;</span> Function Server</a>
+  <div class="links">
+    <a href="#features">Features</a>
+    <a href="#vision">Vision</a>
+    <a href="#architecture">Architecture</a>
     <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
   </div>
+  <a href="/app" class="nav-cta">Try It Free</a>
 </nav>
 
-<section id="hero" class="dark">
+<section id="hero">
   <div class="container">
     <div>
-      <h1>Deploy a web OS<br>with <span class="highlight">one command</span></h1>
-      <p>A multi-tenant operating system you can install on any server. Register users, run terminals, manage files. All from the browser.</p>
+      <div class="hero-badge">Now with AI Wizards & Visual App Builder</div>
+      <h1>A <span class="highlight">Cloud Operating System</span> for Everyone</h1>
+      <p>Build apps visually. Share publicly. Run AI assistants. All from your browser. Function Server is a multi-tenant web OS you can deploy anywhere.</p>
+
+      <div class="hero-buttons">
+        <a href="/app" class="btn btn-primary">Launch OS</a>
+        <a href="https://github.com/williamsharkey/functionserver" class="btn btn-secondary">View Source</a>
+      </div>
 
       <div class="install-box">
         <code>curl -fsSL https://functionserver.com/install | bash</code>
         <button class="copy-btn" onclick="copyInstall()">Copy</button>
       </div>
-
-      <p style="color: #666; font-size: 0.9rem;">Works on Ubuntu, Debian, CentOS, Fedora, Alpine, Arch, macOS</p>
     </div>
 
-    <div class="terminal-window">
-      <div class="terminal-header">
-        <div class="terminal-btn red"></div>
-        <div class="terminal-btn yellow"></div>
-        <div class="terminal-btn green"></div>
-        <div class="terminal-title">root@droplet ~ </div>
-      </div>
-      <div class="terminal-body" id="terminal">
-        <div class="terminal-line visible">
-          <span class="prompt">$ </span><span class="command" id="typed-cmd"></span><span class="cursor" id="cursor"></span>
-        </div>
-      </div>
+    <div class="hero-screenshot">
+      <img src="screenshots/hero-desktop.png" alt="Function Server desktop with programs menu">
     </div>
   </div>
 </section>
 
-<section id="flow">
+<section id="features">
   <div class="container">
-    <h2>From zero to running in 60 seconds</h2>
-
-    <div class="flow-steps">
-      <div class="flow-step">
-        <div class="number">1</div>
-        <h3>Run the installer</h3>
-        <p>Single command installs Go, downloads the server, creates a systemd service.</p>
-        <div class="screenshot">
-          <img src="screenshots/install-terminal.png" alt="Install command running">
-        </div>
-      </div>
-
-      <div class="flow-step">
-        <div class="number">2</div>
-        <h3>Register a user</h3>
-        <p>Visit your server's IP. Create an account through the browser-based interface.</p>
-        <div class="screenshot">
-          <img src="screenshots/register.png" alt="Registration screen">
-        </div>
-      </div>
-
-      <div class="flow-step">
-        <div class="number">3</div>
-        <h3>Start building</h3>
-        <p>Open the terminal. Clone repos, run code, install Claude Code. Your sandboxed environment.</p>
-        <div class="screenshot">
-          <img src="screenshots/terminal.png" alt="Terminal window">
-        </div>
-      </div>
+    <div class="section-header">
+      <h2>Built for Builders</h2>
+      <p>Everything you need to create, share, and collaborate on apps and content</p>
     </div>
-  </div>
-</section>
-
-<section id="problem" class="dark">
-  <div class="container">
-    <div class="problem-grid">
-      <div class="problem-side">
-        <h3>The problem</h3>
-        <h2>Setting up shared dev environments is tedious</h2>
-        <p>SSH keys, user management, permission issues, installing dependencies. Every new server means repeating the same setup ritual.</p>
-      </div>
-
-      <div class="solution-side">
-        <h3>The solution</h3>
-        <h2>One command gives everyone their own space</h2>
-        <p>Function Server handles user isolation, terminal access, and file management. Users register themselves and get a sandboxed home directory instantly.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="features" class="dark">
-  <div class="container">
-    <h2>Built for developers</h2>
 
     <div class="features-grid">
-      <div class="feature">
-        <div class="feature-icon">🔒</div>
-        <h3>Sandboxed users</h3>
-        <p>Each user gets their own home directory. Commands are restricted to prevent system damage.</p>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4BB;</div>
+        <h3>JavaScript.IDE</h3>
+        <p>Write apps using the ALGO API. Create windows, handle files, show notifications. Run instantly in the browser with live preview.</p>
       </div>
 
-      <div class="feature">
-        <div class="feature-icon">💻</div>
-        <h3>Web terminal</h3>
-        <p>Full terminal access from the browser. Run git, node, python, go, and more.</p>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F3A8;</div>
+        <h3>Designer & Craft</h3>
+        <p>Visual UI tools with constraints-based layout. Design screens and components, compile to runnable apps. Coming soon.</p>
       </div>
 
-      <div class="feature">
-        <div class="feature-icon">🤖</div>
-        <h3>Claude Code ready</h3>
-        <p>Install Claude Code in the terminal and start coding with AI assistance immediately.</p>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F916;</div>
+        <h3>AI Wizards</h3>
+        <p>Claude, GPT, and Gemini wizards built-in. Ask questions, generate code, get help. Plus full Claude Code support in terminal.</p>
       </div>
 
-      <div class="feature">
-        <div class="feature-icon">📁</div>
-        <h3>File manager</h3>
-        <p>Browse, create, and manage files through the graphical interface.</p>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4C1;</div>
+        <h3>Public Folders</h3>
+        <p>Share files and apps publicly at /username/. Build your portfolio, share resources, host static sites.</p>
       </div>
 
-      <div class="feature">
-        <div class="feature-icon">📦</div>
-        <h3>Single binary</h3>
-        <p>Written in Go. No runtime dependencies. Fast startup, low memory.</p>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F3AA;</div>
+        <h3>App Store Model</h3>
+        <p>System apps are admin-distributed and auto-updated. Users can fork, customize, or build from scratch.</p>
       </div>
 
-      <div class="feature">
-        <div class="feature-icon">🎨</div>
-        <h3>Customizable</h3>
-        <p>Change the name, icon, and branding. Make it your own OS.</p>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F3AB;</div>
+        <h3>Ticket System</h3>
+        <p>Built-in issue tracking. Create tickets, assign to AI agents, track progress. Perfect for managing projects inside the OS.</p>
       </div>
     </div>
   </div>
 </section>
 
-<footer class="dark">
+<section id="vision">
   <div class="container">
-    <p>Function Server is open source. <a href="https://github.com/williamsharkey/functionserver">View on GitHub</a></p>
+    <div class="vision-grid">
+      <div class="vision-content">
+        <h2>The Vision: <span class="highlight">Your Computer in the Cloud</span></h2>
+        <p>Function Server reimagines what a web application can be. Instead of isolated tools, you get a complete operating system with persistent storage, real file management, and a growing ecosystem of apps.</p>
+        <p>Every user gets their own sandboxed environment with local storage that persists like a real disk. Install apps, save files, customize your desktop. It's your machine, running in the browser.</p>
+
+        <ul class="vision-list">
+          <li><span class="check">&#x2713;</span> Persistent localStorage disk image per user</li>
+          <li><span class="check">&#x2713;</span> Real terminal with SSH and Claude Code support</li>
+          <li><span class="check">&#x2713;</span> Visual app development with .layout and .ui files</li>
+          <li><span class="check">&#x2713;</span> Public sharing at /username/ URLs</li>
+          <li><span class="check">&#x2713;</span> AI assistants accessible from anywhere in the OS</li>
+        </ul>
+      </div>
+
+      <div class="vision-screenshot">
+        <img src="screenshots/ide-app.png" alt="JavaScript.IDE with Calculator app">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="container">
+    <div class="section-header">
+      <h2>App Architecture</h2>
+      <p>A component-based system for building real applications</p>
+    </div>
+
+    <div class="arch-cards">
+      <div class="arch-card">
+        <h3>&#x1F4C4; Project Structure</h3>
+        <p>Apps live in folders with multiple files. Layouts define screens, UI components are reusable, and the main .js file ties it together.</p>
+        <code>my-app/
+  |- main.js          # App entry point
+  |- screens/
+  |   |- home.layout  # Screen layouts
+  |   |- settings.layout
+  |- components/
+  |   |- button.ui    # Reusable UI
+  |   |- card.ui
+  |- app.json         # Metadata</code>
+      </div>
+
+      <div class="arch-card">
+        <h3>&#x1F527; Designer Tool</h3>
+        <p>Visual constraints-based layout editor. Drag components, set constraints (pin to edges, center, stack), preview on multiple sizes.</p>
+        <code>// Constraints example
+{
+  "type": "button",
+  "text": "Submit",
+  "constraints": {
+    "bottom": 20,
+    "centerX": true,
+    "width": "80%"
+  }
+}</code>
+      </div>
+
+      <div class="arch-card">
+        <h3>&#x1F3AD; Craft Tool</h3>
+        <p>Build reusable UI components. Define props, styles, and behavior. Components compile to efficient JavaScript.</p>
+        <code>// Component definition
+ALGO.component('MyButton', {
+  props: ['text', 'onClick'],
+  render: (props) => `
+    &lt;button onclick="${props.onClick}"&gt;
+      ${props.text}
+    &lt;/button&gt;`
+});</code>
+      </div>
+
+      <div class="arch-card">
+        <h3>&#x1F4E6; System Apps</h3>
+        <p>Pre-installed apps managed by admins. Auto-update when the server updates. Users can fork to customize, or uninstall to hide.</p>
+        <code>// System apps loaded from /core/apps/
+systemApps = [
+  { id: 'shade-station', ... },
+  { id: 'ticket-manager', ... },
+  { id: 'photobooth', ... }
+];</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tiers">
+  <div class="container">
+    <div class="section-header">
+      <h2>User Tiers</h2>
+      <p>Different levels of access for different needs</p>
+    </div>
+
+    <div class="tiers-grid">
+      <div class="tier-card">
+        <div class="tier-icon">&#x1F464;</div>
+        <h3>Guest</h3>
+        <div class="price">Free</div>
+        <ul class="tier-features">
+          <li><span class="highlight">&#x2713;</span> Full desktop experience</li>
+          <li><span class="highlight">&#x2713;</span> All built-in apps</li>
+          <li><span class="highlight">&#x2713;</span> localStorage persistence</li>
+          <li><span class="highlight">&#x2713;</span> AI Wizards</li>
+          <li style="color:#555">&#x2717; No terminal access</li>
+          <li style="color:#555">&#x2717; No public folder</li>
+        </ul>
+      </div>
+
+      <div class="tier-card featured">
+        <div class="tier-icon">&#x1F468;&#x200D;&#x1F4BB;</div>
+        <h3>Registered User</h3>
+        <div class="price">Free <span>with account</span></div>
+        <ul class="tier-features">
+          <li><span class="highlight">&#x2713;</span> Everything in Guest</li>
+          <li><span class="highlight">&#x2713;</span> Sandboxed terminal</li>
+          <li><span class="highlight">&#x2713;</span> Public folder sharing</li>
+          <li><span class="highlight">&#x2713;</span> Install custom apps</li>
+          <li><span class="highlight">&#x2713;</span> Persistent home directory</li>
+          <li><span class="highlight">&#x2713;</span> Claude Code in terminal</li>
+        </ul>
+      </div>
+
+      <div class="tier-card">
+        <div class="tier-icon">&#x1F451;</div>
+        <h3>Admin</h3>
+        <div class="price">Self-hosted</div>
+        <ul class="tier-features">
+          <li><span class="highlight">&#x2713;</span> Everything in User</li>
+          <li><span class="highlight">&#x2713;</span> Manage system apps</li>
+          <li><span class="highlight">&#x2713;</span> User management</li>
+          <li><span class="highlight">&#x2713;</span> Full server access</li>
+          <li><span class="highlight">&#x2713;</span> Custom branding</li>
+          <li><span class="highlight">&#x2713;</span> SSH access</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cta">
+  <div class="container">
+    <h2>Ready to try it?</h2>
+    <p>Launch the OS instantly as a guest, or deploy your own server</p>
+
+    <div class="hero-buttons" style="justify-content: center; margin-bottom: 40px;">
+      <a href="/app" class="btn btn-primary">Launch OS</a>
+      <a href="https://github.com/williamsharkey/functionserver" class="btn btn-secondary">Self-Host</a>
+    </div>
+
+    <div class="install-box">
+      <code>curl -fsSL https://functionserver.com/install | bash</code>
+      <button class="copy-btn" onclick="copyInstall()">Copy</button>
+    </div>
+    <p style="color: #555; font-size: 0.9rem;">Works on Ubuntu, Debian, CentOS, Fedora, Alpine, Arch, macOS</p>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="links">
+      <a href="/app">Launch OS</a>
+      <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
+      <a href="https://github.com/williamsharkey/functionserver/issues">Issues</a>
+    </div>
+    <p>Function Server is open source under the MIT license</p>
   </div>
 </footer>
 
 <script>
 function copyInstall() {
-  const cmd = 'curl -fsSL https://functionserver.com/install | bash';
-  navigator.clipboard.writeText(cmd);
-  document.querySelector('.copy-btn').textContent = 'Copied!';
-  setTimeout(() => {
-    document.querySelector('.copy-btn').textContent = 'Copy';
-  }, 2000);
+  navigator.clipboard.writeText('curl -fsSL https://functionserver.com/install | bash');
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
 }
-
-// Terminal animation
-const terminal = document.getElementById('terminal');
-const typedCmd = document.getElementById('typed-cmd');
-const cursor = document.getElementById('cursor');
-const command = 'curl -fsSL https://functionserver.com/install | bash';
-
-const outputLines = [
-  { type: 'ascii', text: `
-  ___              _   _            ___
- | __|  _ _ _  __ | |_(_)___ _ _   / __| ___ _ ___ _____ _ _
- | _| || | ' \\/ _||  _| / _ \\ ' \\  \\__ \\/ -_) '_\\ V / -_) '_|
- |_| \\_,_|_||_\\__| \\__|_\\___/_||_| |___/\\___|_|  \\_/\\___|_|` },
-  { type: 'output', text: '' },
-  { type: 'success', text: 'Installing Function Server...' },
-  { type: 'output', text: '' },
-  { type: 'output', text: 'Detecting platform: <span class="highlight-text">linux</span> (ubuntu 24.04)' },
-  { type: 'output', text: 'Checking dependencies...' },
-  { type: 'success', text: '✓ Go 1.22.2 already installed' },
-  { type: 'output', text: '' },
-  { type: 'output', text: 'Downloading Function Server...' },
-  { type: 'progress', percent: 100 },
-  { type: 'output', text: 'Building server...' },
-  { type: 'success', text: '✓ Build complete' },
-  { type: 'output', text: '' },
-  { type: 'output', text: 'Creating systemd service...' },
-  { type: 'success', text: '✓ Service installed' },
-  { type: 'output', text: '' },
-  { type: 'success', text: '════════════════════════════════════════════════════' },
-  { type: 'success', text: '  ✓ Function Server installed successfully!' },
-  { type: 'success', text: '════════════════════════════════════════════════════' },
-  { type: 'output', text: '' },
-  { type: 'dim', text: '  Start:  sudo systemctl start functionserver' },
-  { type: 'dim', text: '  Access: <span class="highlight-text">http://YOUR_IP</span>' },
-];
-
-let charIndex = 0;
-let lineIndex = 0;
-
-function typeCommand() {
-  if (charIndex < command.length) {
-    typedCmd.textContent += command[charIndex];
-    charIndex++;
-    setTimeout(typeCommand, 30 + Math.random() * 40);
-  } else {
-    cursor.style.display = 'none';
-    setTimeout(showOutput, 400);
-  }
-}
-
-function showOutput() {
-  if (lineIndex < outputLines.length) {
-    const line = outputLines[lineIndex];
-    const div = document.createElement('div');
-    div.className = 'terminal-line';
-
-    if (line.type === 'ascii') {
-      div.innerHTML = `<span class="ascii-art">${line.text}</span>`;
-    } else if (line.type === 'progress') {
-      div.innerHTML = `<div class="progress-bar"><div class="progress-fill" id="progress-${lineIndex}"></div></div>`;
-      terminal.appendChild(div);
-      setTimeout(() => div.classList.add('visible'), 50);
-      setTimeout(() => {
-        document.getElementById(`progress-${lineIndex}`).style.width = line.percent + '%';
-      }, 100);
-      lineIndex++;
-      setTimeout(showOutput, 600);
-      return;
-    } else if (line.type === 'success') {
-      div.innerHTML = `<span class="success">${line.text}</span>`;
-    } else if (line.type === 'dim') {
-      div.innerHTML = `<span class="dim">${line.text}</span>`;
-    } else {
-      div.innerHTML = `<span class="output">${line.text}</span>`;
-    }
-
-    terminal.appendChild(div);
-    setTimeout(() => div.classList.add('visible'), 50);
-
-    lineIndex++;
-    const delay = line.type === 'ascii' ? 100 : (line.text === '' ? 50 : 120 + Math.random() * 80);
-    setTimeout(showOutput, delay);
-  }
-}
-
-// Start animation when page loads, with a slight delay
-setTimeout(typeCommand, 800);
 </script>
 
 </body>
