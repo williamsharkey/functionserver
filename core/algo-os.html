@@ -1005,6 +1005,17 @@ function openSubmenu(el) {
     if (item !== el) item.classList.remove('submenu-open');
   });
   el.classList.add('submenu-open');
+
+  // Fix submenu position to stay within viewport
+  const submenu = el.querySelector('.start-submenu');
+  if (submenu) {
+    // Reset any previous positioning
+    submenu.style.position = 'fixed';
+    submenu.style.top = 'auto';
+    submenu.style.bottom = '33px'; // Just above taskbar
+    submenu.style.left = '200px'; // To the right of start menu
+    submenu.style.maxHeight = (window.innerHeight - 60) + 'px';
+  }
 }
 
 function closeSubmenuDelay(el) {
