@@ -103,6 +103,81 @@ let contextTarget = null;
 let submenuCloseTimeout = null;
 let topZIndex = 100;  // Track highest z-index for window stacking
 
+// ==================== FILE API ====================
+// Desktop files now live on disk at ~/
+
+async function fetchDesktopFiles() {
+  if (!sessionToken) return [];
+  try {
+    const res = await fetch(API_BASE + '/files/list?path=~/', {
+      headers: { 'Authorization': 'Bearer ' + sessionToken }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.files || []).filter(f => f.type === 'file').map(f => ({
+      name: f.name,
+      path: '~/' + f.name,
+      size: f.size,
+      modified: f.modified,
+      type: 'disk'
+    }));
+  } catch (e) {
+    console.error('Failed to fetch files:', e);
+    return [];
+  }
+}
+
+async function saveFileToDisk(name, content) {
+  if (!sessionToken) { algoSpeak('Not logged in'); return false; }
+  try {
+    const res = await fetch(API_BASE + '/files/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + sessionToken
+      },
+      body: JSON.stringify({ path: '~/' + name, content: content })
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('Failed to save file:', e);
+    return false;
+  }
+}
+
+async function getFileFromDisk(path) {
+  if (!sessionToken) return null;
+  try {
+    const res = await fetch(API_BASE + '/files/get?path=' + encodeURIComponent(path), {
+      headers: { 'Authorization': 'Bearer ' + sessionToken }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.content;
+  } catch (e) {
+    console.error('Failed to get file:', e);
+    return null;
+  }
+}
+
+async function deleteFileFromDisk(path) {
+  if (!sessionToken) return false;
+  try {
+    const res = await fetch(API_BASE + '/files/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + sessionToken
+      },
+      body: JSON.stringify({ path: path })
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('Failed to delete file:', e);
+    return false;
+  }
+}
+
 // File type registry
 let fileTypeRegistry = {
   'txt': { icon: '📄', app: 'Notepad' },
@@ -543,8 +618,8 @@ function logout() {
 }
 
 // ==================== INIT ====================
-function init() {
-  createDesktopIcons();
+async function init() {
+  await createDesktopIcons();
   updateTaskbar();
   updateClock();
   setInterval(updateClock, 1000);
@@ -637,11 +712,15 @@ function handleContextMenu(e) {
 }
 
 // ==================== DESKTOP ICONS ====================
-function createDesktopIcons() {
+// Desktop now shows files from disk (~/), not localStorage
+
+let desktopFiles = []; // Cache of files from disk
+
+async function createDesktopIcons() {
   const desktop = document.getElementById('desktop');
   desktop.innerHTML = '';
 
-  // Default icons
+  // Default app icons
   const defaultIcons = [
     { id: 'notepad', name: 'Notepad', icon: '📝', x: 20, y: 20, action: 'openNotepad' },
     { id: 'jside', name: 'javascript.ide', icon: '💻', x: 20, y: 100, action: 'openJSIDE' },
@@ -651,16 +730,20 @@ function createDesktopIcons() {
 
   defaultIcons.forEach(ic => createDesktopIcon(ic));
 
-  // User saved files
-  savedFiles.forEach((file, idx) => {
+  // Fetch files from disk
+  desktopFiles = await fetchDesktopFiles();
+
+  // Create icons for disk files
+  desktopFiles.forEach((file, idx) => {
     createDesktopIcon({
       id: 'file-' + idx,
       name: file.name,
       icon: getFileIcon(file.name),
       x: 120 + (idx % 5) * 80,
       y: 20 + Math.floor(idx / 5) * 80,
-      action: 'openFile',
-      fileIdx: idx
+      action: 'openDiskFile',
+      filePath: file.path,
+      fileName: file.name
     });
   });
 }
@@ -675,26 +758,82 @@ function createDesktopIcon(ic) {
   icon.style.top = ic.y + 'px';
   icon.innerHTML = '<div class="icon-img">' + ic.icon + '</div><div class="icon-label">' + escapeHtml(ic.name) + '</div>';
 
-  icon.ondblclick = () => {
-    if (ic.action === 'openFile') {
-      openSavedFile(savedFiles[ic.fileIdx]);
+  icon.ondblclick = async () => {
+    if (ic.action === 'openDiskFile') {
+      const content = await getFileFromDisk(ic.filePath);
+      if (content !== null) {
+        openSavedFile({ name: ic.fileName, content: content });
+      } else {
+        algoSpeak('Failed to open file');
+      }
     } else if (typeof window[ic.action] === 'function') {
       window[ic.action]();
     }
   };
 
   // Right-click context menu for files
-  if (ic.action === 'openFile') {
+  if (ic.action === 'openDiskFile') {
     icon.oncontextmenu = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const file = savedFiles[ic.fileIdx];
-      if (!file) return;
-      showFileContextMenu(e, file, ic.fileIdx);
+      showFileContextMenu(e, ic.filePath, ic.fileName);
     };
   }
 
   desktop.appendChild(icon);
+}
+
+function showFileContextMenu(e, filePath, fileName) {
+  const menu = document.getElementById('context-menu');
+  menu.innerHTML =
+    '<div class="ctx-item" onclick="openDiskFileByPath(\'' + filePath + '\', \'' + fileName + '\')">📂 Open</div>' +
+    '<div class="ctx-item" onclick="renameDiskFile(\'' + filePath + '\', \'' + fileName + '\')">✏️ Rename</div>' +
+    '<div class="ctx-separator"></div>' +
+    '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + filePath + '\')">🗑️ Delete</div>';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('visible');
+}
+
+async function openDiskFileByPath(path, name) {
+  hideContextMenu();
+  const content = await getFileFromDisk(path);
+  if (content !== null) {
+    openSavedFile({ name: name, content: content });
+  } else {
+    algoSpeak('Failed to open file');
+  }
+}
+
+async function renameDiskFile(oldPath, oldName) {
+  hideContextMenu();
+  const newName = prompt('New name:', oldName);
+  if (!newName || newName === oldName) return;
+
+  const content = await getFileFromDisk(oldPath);
+  if (content === null) { algoSpeak('Failed to read file'); return; }
+
+  const saved = await saveFileToDisk(newName, content);
+  if (!saved) { algoSpeak('Failed to save new file'); return; }
+
+  const deleted = await deleteFileFromDisk(oldPath);
+  if (!deleted) { algoSpeak('Renamed but failed to delete old file'); }
+
+  await createDesktopIcons();
+  algoSpeak('Renamed to ' + newName);
+}
+
+async function deleteDiskFile(path) {
+  hideContextMenu();
+  if (!confirm('Delete this file?')) return;
+
+  const deleted = await deleteFileFromDisk(path);
+  if (deleted) {
+    await createDesktopIcons();
+    algoSpeak('File deleted');
+  } else {
+    algoSpeak('Failed to delete file');
+  }
 }
 
 function getFileIcon(filename) {
@@ -868,15 +1007,19 @@ function notepadNew(id) {
   if (textarea) textarea.value = '';
 }
 
-function notepadSave(id) {
+async function notepadSave(id) {
   const textarea = document.getElementById('notepad-text-' + id);
   if (!textarea) return;
   const name = prompt('Filename:', 'document.txt');
   if (!name) return;
-  savedFiles.push({ name, type: 'text', content: textarea.value });
-  saveState();
-  createDesktopIcons();
-  algoSpeak('Saved ' + name);
+
+  const saved = await saveFileToDisk(name, textarea.value);
+  if (saved) {
+    await createDesktopIcons();
+    algoSpeak('Saved ' + name + ' to ~/');
+  } else {
+    algoSpeak('Failed to save file');
+  }
 }
 
 // ==================== JAVASCRIPT IDE ====================
@@ -949,14 +1092,18 @@ function ideRun(id) {
   }
 }
 
-function ideSave(id) {
+async function ideSave(id) {
   const code = document.getElementById('ide-code-' + id).value;
   const name = prompt('Filename:', 'app.js');
   if (!name) return;
-  savedFiles.push({ name, type: 'text', content: code });
-  saveState();
-  createDesktopIcons();
-  algoSpeak('Saved ' + name);
+
+  const saved = await saveFileToDisk(name, code);
+  if (saved) {
+    await createDesktopIcons();
+    algoSpeak('Saved ' + name + ' to ~/');
+  } else {
+    algoSpeak('Failed to save file');
+  }
 }
 
 function ideLoadExample(id, key) {
@@ -1079,10 +1226,16 @@ function showDesktopContextMenu(e) {
     '<div class="ctx-item" onclick="openNotepad()">📝 New Text File</div>' +
     '<div class="ctx-item" onclick="openJSIDE()">📜 New App</div>' +
     '<div class="ctx-separator"></div>' +
-    '<div class="ctx-item" onclick="createDesktopIcons()">🔄 Refresh</div>';
+    '<div class="ctx-item" onclick="refreshDesktop()">🔄 Refresh</div>';
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   menu.classList.add('visible');
+}
+
+async function refreshDesktop() {
+  hideContextMenu();
+  await createDesktopIcons();
+  algoSpeak('Desktop refreshed');
 }
 
 function hideContextMenu() {

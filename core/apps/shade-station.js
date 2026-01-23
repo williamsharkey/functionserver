@@ -305,26 +305,30 @@ function _ss_preset(id, name) {
   _ss_compile(id);
 }
 
-// Save shader to desktop
-function _ss_saveToDesktop(id) {
+// Save shader to desktop (disk)
+async function _ss_saveToDesktop(id) {
   const code = document.getElementById('ss-code-' + id)?.value;
   const fname = document.getElementById('ss-filename-' + id)?.textContent || 'shader.glsl';
   if (!code) return;
 
   const name = fname.endsWith('.shader') ? fname : fname + '.shader';
 
-  // Check if file already exists
-  const existingIdx = savedFiles.findIndex(f => f.name === name);
-  if (existingIdx >= 0) {
-    if (!confirm('Overwrite existing ' + name + '?')) return;
-    savedFiles[existingIdx].content = code;
+  // Save to disk via API
+  if (typeof saveFileToDisk === 'function') {
+    const saved = await saveFileToDisk(name, code);
+    if (saved) {
+      await createDesktopIcons();
+      algoSpeak('Saved ' + name + ' to ~/');
+    } else {
+      algoSpeak('Failed to save shader');
+    }
   } else {
+    // Fallback to localStorage if API not available
     savedFiles.push({ name: name, type: 'text', content: code });
+    saveState();
+    createDesktopIcons();
+    algoSpeak('Saved ' + name + ' to desktop!');
   }
-
-  saveState();
-  createDesktopIcons();
-  algoSpeak('Saved ' + name + ' to desktop!');
 }
 
 // Open shader file in Shade Station
