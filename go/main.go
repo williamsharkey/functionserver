@@ -541,6 +541,9 @@ func handlePTY(w http.ResponseWriter, r *http.Request) {
 	// Session name based on username for persistence
 	sessionName := "fs-" + username
 
+	// Enable mouse mode in tmux for scrolling support
+	exec.Command("tmux", "set", "-g", "mouse", "on").Run()
+
 	// Check if tmux session exists, create or attach
 	// Using tmux new-session -A: attach if exists, create if not
 	cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName)

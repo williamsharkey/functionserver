@@ -21,8 +21,8 @@ ALGO.app.icon = "🐚";
     width: 800,
     height: 500,
     content: `
-      <div id="${termId}-container" style="width:100%;height:100%;background:#000;position:relative;">
-        <div id="${termId}" style="width:100%;height:100%;"></div>
+      <div id="${termId}-container" style="display:flex;flex-direction:column;width:100%;height:100%;min-height:0;background:#000;">
+        <div id="${termId}" style="flex:1;min-height:0;overflow:hidden;"></div>
         <div id="${termId}-status" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#0f0;font-family:monospace;text-align:center;display:none;">
           <div style="font-size:24px;margin-bottom:10px;">🐚</div>
           <div id="${termId}-msg">Connecting...</div>
@@ -34,6 +34,14 @@ ALGO.app.icon = "🐚";
   const container = document.getElementById(termId + '-container');
   const statusDiv = document.getElementById(termId + '-status');
   const msgDiv = document.getElementById(termId + '-msg');
+
+  // Fix parent window-content overflow for proper terminal sizing
+  if (container && container.parentElement) {
+    container.parentElement.style.overflow = 'hidden';
+    container.parentElement.style.position = 'relative';
+    container.parentElement.style.display = 'flex';
+    container.parentElement.style.flexDirection = 'column';
+  }
 
   // Show status message
   function showStatus(msg, isError) {
@@ -100,6 +108,7 @@ ALGO.app.icon = "🐚";
       cursorBlink: true,
       fontSize: 14,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      scrollback: 10000,
       theme: {
         background: '#1a1a2e',
         foreground: '#eee',
@@ -136,10 +145,26 @@ ALGO.app.icon = "🐚";
     // Open terminal
     term.open(termElement);
 
-    // Fit to container
-    setTimeout(() => {
+    // Aggressive focus handling - xterm must capture all input
+    term.focus();
+    container.addEventListener('click', (e) => { e.preventDefault(); term.focus(); });
+    container.addEventListener('mousedown', (e) => { term.focus(); });
+    termElement.addEventListener('click', (e) => { e.preventDefault(); term.focus(); });
+
+    // Prevent scroll events from bubbling to parent
+    container.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: false });
+
+    // Fit to container (multiple passes for reliable sizing)
+    function doFit() {
       fitAddon.fit();
-    }, 100);
+      const dims = fitAddon.proposeDimensions();
+      if (dims && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(`RESIZE:${dims.cols}:${dims.rows}`);
+      }
+    }
+    setTimeout(doFit, 50);
+    setTimeout(doFit, 200);
+    setTimeout(doFit, 500);
 
     // Connect to WebSocket PTY
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
