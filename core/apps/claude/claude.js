@@ -295,6 +295,61 @@ ALGO.app.icon = "🤖";
             }
             return;
           }
+          // Check for Eye bridge command (direct AI-to-browser, minimal overhead)
+          // Format: EYE_CMD:id:expression (id may be empty for fire-and-forget)
+          if (typeof event.data === 'string' && event.data.startsWith('EYE_CMD:')) {
+            try {
+              const payload = event.data.slice(8); // Skip "EYE_CMD:"
+              const colonIdx = payload.indexOf(':');
+              const id = colonIdx > 0 ? payload.substring(0, colonIdx) : '';
+              const expression = colonIdx >= 0 ? payload.substring(colonIdx + 1) : payload;
+
+              // Evaluate the expression
+              let result;
+              let error = null;
+              try {
+                result = eval(expression);
+              } catch (e) {
+                error = e.message;
+              }
+
+              // Only send response if there's an ID (not fire-and-forget)
+              if (id) {
+                if (error) {
+                  ws.send('EYE:' + id + '!:' + error);
+                } else {
+                  // Serialize result
+                  let resultStr;
+                  if (result === undefined) {
+                    resultStr = 'undefined';
+                  } else if (result === null) {
+                    resultStr = 'null';
+                  } else if (typeof result === 'object') {
+                    try {
+                      resultStr = JSON.stringify(result);
+                    } catch (e) {
+                      resultStr = String(result);
+                    }
+                  } else {
+                    resultStr = String(result);
+                  }
+                  ws.send('EYE:' + id + ':' + resultStr);
+                }
+              }
+
+              // Broadcast eye activity
+              ALGO.pubsub.publish('eye-activity', {
+                id: id,
+                expression: expression.substring(0, 100),
+                result: error ? null : result,
+                error: error,
+                timestamp: Date.now()
+              });
+            } catch (e) {
+              console.error('Eye command error:', e);
+            }
+            return;
+          }
           // Check for IPC push (from file watcher)
           if (typeof event.data === 'string' && event.data.startsWith('IPC_PUSH:')) {
             const content = event.data.slice(9); // Skip "IPC_PUSH:"

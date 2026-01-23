@@ -143,6 +143,50 @@ func (bc *BrowserConnection) SendCommand(cmd map[string]interface{}) (string, er
 	}
 }
 
+// Eye bridge connections (direct AI-to-browser communication)
+type EyeConnection struct {
+	Conn     *websocket.Conn
+	Username string
+}
+
+var (
+	eyeConnections = make(map[string][]*EyeConnection) // username -> connections
+	eyeConnMu      sync.RWMutex
+)
+
+func registerEyeConn(username string, conn *websocket.Conn) *EyeConnection {
+	eyeConnMu.Lock()
+	defer eyeConnMu.Unlock()
+
+	ec := &EyeConnection{Conn: conn, Username: username}
+	eyeConnections[username] = append(eyeConnections[username], ec)
+	return ec
+}
+
+func unregisterEyeConn(username string, ec *EyeConnection) {
+	eyeConnMu.Lock()
+	defer eyeConnMu.Unlock()
+
+	conns := eyeConnections[username]
+	for i, c := range conns {
+		if c == ec {
+			eyeConnections[username] = append(conns[:i], conns[i+1:]...)
+			break
+		}
+	}
+}
+
+// Send eye response back to all connected Claude instances for this user
+func sendEyeResponse(username string, msg string) {
+	eyeConnMu.RLock()
+	conns := eyeConnections[username]
+	eyeConnMu.RUnlock()
+
+	for _, ec := range conns {
+		ec.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+	}
+}
+
 // Handle MCP response from browser
 func (bc *BrowserConnection) HandleResponse(reqID string, result string) {
 	bc.mu.Lock()
@@ -743,6 +787,13 @@ func handlePTY(w http.ResponseWriter, r *http.Request) {
 					}
 					continue
 				}
+				// Eye response from browser (direct bridge)
+				if strings.HasPrefix(msgStr, "EYE:") {
+					// Format: EYE:id:result or EYE:id!:error
+					// Forward directly to connected Claude instances
+					sendEyeResponse(username, msgStr[4:])
+					continue
+				}
 			}
 			// Write to PTY
 			ptmx.Write(msg)
@@ -766,6 +817,95 @@ func handlePTY(w http.ResponseWriter, r *http.Request) {
 	if !userClosed {
 		// Detach from tmux (Ctrl+B, D) - session continues running
 		ptmx.Write([]byte{0x02, 0x64}) // tmux detach sequence
+	}
+}
+
+// Eye bridge: Direct WebSocket connection for AI-to-browser communication
+// Protocol:
+//   - "expression"     -> fire and forget (no response)
+//   - "id:expression"  -> request with ID, expects "id:result" or "id!:error"
+func handleEye(w http.ResponseWriter, r *http.Request) {
+	// Get token from query string
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Token required", 401)
+		return
+	}
+
+	// Verify token and get user
+	username := verifyToken(token)
+	if username == "" {
+		http.Error(w, "Invalid token", 401)
+		return
+	}
+
+	// Upgrade to WebSocket
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	// Register this eye connection
+	eyeConn := registerEyeConn(username, conn)
+	defer unregisterEyeConn(username, eyeConn)
+
+	// Get browser connection
+	bc := getBrowserConn(username)
+	if bc == nil {
+		conn.WriteMessage(websocket.TextMessage, []byte("!:No browser connected"))
+		return
+	}
+
+	// Send ready message
+	conn.WriteMessage(websocket.TextMessage, []byte(":ready"))
+
+	// Read messages from Claude and forward to browser
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		msgStr := string(msg)
+		if msgStr == "" {
+			continue
+		}
+
+		// Parse: "expression" (fire) or "id:expression" (request)
+		// If first char is letter/number and contains ':', it's id:expression
+		var id, expression string
+		if colonIdx := strings.Index(msgStr, ":"); colonIdx > 0 && colonIdx < 20 {
+			// Check if prefix looks like an ID (alphanumeric, short)
+			prefix := msgStr[:colonIdx]
+			isID := true
+			for _, c := range prefix {
+				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+					isID = false
+					break
+				}
+			}
+			if isID {
+				id = prefix
+				expression = msgStr[colonIdx+1:]
+			} else {
+				expression = msgStr
+			}
+		} else {
+			expression = msgStr
+		}
+
+		// Send to browser
+		// Format: EYE_CMD:id:expression (id may be empty for fire-and-forget)
+		cmdMsg := fmt.Sprintf("EYE_CMD:%s:%s", id, expression)
+		err = bc.Conn.WriteMessage(websocket.TextMessage, []byte(cmdMsg))
+		if err != nil {
+			conn.WriteMessage(websocket.TextMessage, []byte(id+"!:Browser disconnected"))
+			break
+		}
 	}
 }
 
@@ -1192,6 +1332,11 @@ func main() {
 
 	mux.HandleFunc("/api/pty", func(w http.ResponseWriter, r *http.Request) {
 		handlePTY(w, r)
+	})
+
+	// Eye bridge: Direct AI-to-browser WebSocket
+	mux.HandleFunc("/api/eye", func(w http.ResponseWriter, r *http.Request) {
+		handleEye(w, r)
 	})
 
 	mux.HandleFunc("/api/terminal/exec", func(w http.ResponseWriter, r *http.Request) {
