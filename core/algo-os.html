@@ -448,7 +448,7 @@ function copyAuthInfo(event) {
   const server = window.location.origin.replace('https://', 'wss://').replace('http://', 'ws://') + '/api/eye';
   const config = JSON.stringify({ token: sessionToken, server: server }, null, 2);
 
-  fetch('/core/eye-instructions.txt').then(r => r.text()).then(template => {
+  fetch('/core/apps/eye-instructions.txt').then(r => r.text()).then(template => {
     const instructions = template
       .replace('{{CONFIG}}', config)
       .replace('{{USER}}', currentUser)
