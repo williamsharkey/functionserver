@@ -154,10 +154,37 @@ ALGO.app.icon = "🤖";
 
     // Focus handling
     term.focus();
-    container.addEventListener('click', (e) => { e.preventDefault(); term.focus(); });
     container.addEventListener('mousedown', () => { term.focus(); });
-    termElement.addEventListener('click', (e) => { e.preventDefault(); term.focus(); });
     container.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: false });
+
+    // Copy on selection (auto-copy when text is selected)
+    term.onSelectionChange(() => {
+      const selection = term.getSelection();
+      if (selection) {
+        navigator.clipboard.writeText(selection).catch(() => {});
+      }
+    });
+
+    // Keyboard shortcuts for copy/paste
+    termElement.addEventListener('keydown', (e) => {
+      // Cmd+C (Mac) or Ctrl+Shift+C (others) to copy
+      if ((e.metaKey || (e.ctrlKey && e.shiftKey)) && e.key === 'c') {
+        const selection = term.getSelection();
+        if (selection) {
+          navigator.clipboard.writeText(selection);
+          e.preventDefault();
+        }
+      }
+      // Cmd+V (Mac) or Ctrl+Shift+V (others) to paste
+      if ((e.metaKey || (e.ctrlKey && e.shiftKey)) && e.key === 'v') {
+        navigator.clipboard.readText().then(text => {
+          if (text && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(text);
+          }
+        }).catch(() => {});
+        e.preventDefault();
+      }
+    });
 
     // Fit terminal
     function doFit() {
