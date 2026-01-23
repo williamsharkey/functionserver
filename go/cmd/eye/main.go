@@ -42,6 +42,18 @@ func main() {
 		return
 	}
 
+	// Status check
+	if len(os.Args) > 1 && os.Args[1] == "--status" {
+		printStatus()
+		return
+	}
+
+	// Kill daemon
+	if len(os.Args) > 1 && os.Args[1] == "--kill" {
+		killDaemon()
+		return
+	}
+
 	// Normal client mode - try daemon first, fallback to direct
 	if runViaSocket() {
 		return
@@ -55,6 +67,59 @@ func main() {
 
 func getSocketPath() string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("eye-%d.sock", os.Getuid()))
+}
+
+func printStatus() {
+	socketPath := getSocketPath()
+	conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+	if err != nil {
+		fmt.Println("Daemon: not running")
+		// Check for stale socket
+		if _, err := os.Stat(socketPath); err == nil {
+			fmt.Printf("Socket: %s (stale)\n", socketPath)
+		}
+		return
+	}
+	defer conn.Close()
+
+	fmt.Fprintf(conn, "VERSION:%s\n", buildVersion)
+	reader := bufio.NewReader(conn)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(response)
+
+	if response == "OK" {
+		fmt.Println("Daemon: running (version match)")
+	} else if response == "RESTART" {
+		fmt.Println("Daemon: running (version mismatch, will restart on next call)")
+	} else {
+		fmt.Println("Daemon: running (unknown state)")
+	}
+	fmt.Printf("Socket: %s\n", socketPath)
+}
+
+func killDaemon() {
+	socketPath := getSocketPath()
+	conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+	if err != nil {
+		fmt.Println("Daemon not running")
+		// Clean up stale socket if exists
+		if _, err := os.Stat(socketPath); err == nil {
+			os.Remove(socketPath)
+			fmt.Println("Removed stale socket")
+		}
+		return
+	}
+	conn.Close()
+
+	// Send version mismatch to trigger restart, then remove socket before it restarts
+	conn, _ = net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+	if conn != nil {
+		fmt.Fprintf(conn, "VERSION:__kill__\n")
+		conn.Close()
+	}
+	time.Sleep(150 * time.Millisecond)
+	os.Remove(socketPath)
+	fmt.Println("Daemon killed")
 }
 
 func runViaSocket() bool {
@@ -238,12 +303,13 @@ func runDaemon() {
 	var pendingMu sync.Mutex
 	pending := make(map[string]net.Conn)
 
-	// Read WebSocket responses
+	// Read WebSocket responses (exit if connection dies)
 	go func() {
 		for {
 			_, msg, err := wsConn.ReadMessage()
 			if err != nil {
-				return
+				// Browser disconnected - daemon is now useless, exit
+				os.Exit(0)
 			}
 			touch()
 			result := string(msg)
@@ -541,9 +607,11 @@ CONFIG (checked in order):
 DAEMON:
   A background daemon auto-starts to maintain persistent connection.
   - Auto-starts on first eye call
-  - Auto-exits after 5 minutes idle
+  - Auto-exits after 5 minutes idle or if browser disconnects
   - Auto-restarts when eye is recompiled
-  - Socket: /tmp/eye-$UID.sock`)
+
+  eye --status   Check if daemon is running
+  eye --kill     Stop the daemon`)
 }
 
 func printAPIHelp() {
