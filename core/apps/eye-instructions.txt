@@ -1,6 +1,6 @@
 # Eye Bridge - Direct Browser JS Access
 
-You have access to a live browser session via the `eye` CLI tool.
+You have access to a live browser session via the `eye` CLI tool or `eye-mcp` MCP server.
 
 ## Setup (one time)
 ```bash
@@ -20,12 +20,22 @@ eye 'console.log("hi")'             # Fire and forget (no id: prefix)
 eye                                 # Interactive REPL mode
 ```
 
+## Browser Shortcuts
+
+Terse helpers available in the browser:
+```javascript
+$(sel)     // document.querySelector(sel)
+$$(sel)    // [...document.querySelectorAll(sel)]
+apps()     // systemApps.map(a => a.name)
+wins()     // windows.map(w => ({id, title, app}))
+```
+
 ## Key APIs
 ```javascript
 // Desktop state
 ALGO.bridge.getState()              // {windows, apps, user, activeWindow}
-systemApps.map(a=>a.name)           // List all apps
-windows.length                      // Open window count
+apps()                              // List all app names (shortcut)
+wins()                              // List open windows (shortcut)
 
 // Window control
 ALGO.bridge.openApp("shell")        // Open app by name
@@ -33,8 +43,8 @@ ALGO.bridge.closeWindow(id)         // Close window
 ALGO.bridge.focusWindow(id)         // Bring to front
 
 // DOM access
-document.querySelector(sel)         // Query element
-[...document.querySelectorAll(sel)] // Query all elements
+$(sel)                              // Query single element
+$$(sel)                             // Query all elements
 
 // Storage
 localStorage.getItem(key)           // Read persistent data
@@ -44,20 +54,33 @@ localStorage.setItem(key, value)    // Write persistent data
 ## Examples
 ```bash
 # List all system apps
-eye 'a:systemApps.map(a=>a.name).join(", ")'
+eye 'a:apps()'
 
-# Get all window titles
-eye 'a:[...document.querySelectorAll(".window-title")].map(t=>t.textContent)'
+# Get all window info
+eye 'a:wins()'
 
 # Open an app
-eye 'a:ALGO.bridge.openApp("shell")'
+eye 'ALGO.bridge.openApp("shell")'
 
 # Inject CSS
-eye 'document.body.style.background="red"'
+eye '$("body").style.background="red"'
 
-# Read desktop file
-eye 'a:JSON.parse(localStorage.getItem("algo-state-{{USER}}")).savedFiles.map(f=>f.name)'
+# Query element position
+eye 'a:JSON.stringify($(".menu").getBoundingClientRect())'
 ```
+
+## MCP Server (for Claude Code)
+
+For faster access (3x speedup), use the MCP server:
+```bash
+# Build
+go build -o eye-mcp ./cmd/eye-mcp/
+
+# Register with Claude Code
+claude mcp add --transport stdio eye -- /path/to/eye-mcp
+```
+
+Then use the `eye` tool directly in Claude Code without Bash wrapper.
 
 ## Protocol
 - `expression` = fire and forget (no response)

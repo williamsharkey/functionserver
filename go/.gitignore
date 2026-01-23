@@ -1,0 +1,6 @@
+# Binaries (in root only)
+/eye
+/eye-mcp
+/eye-direct
+/fs-server
+*.exe

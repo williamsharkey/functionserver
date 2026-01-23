@@ -372,6 +372,12 @@ ALGO.bridge = {
 };
 window.ALGO = ALGO;
 
+// Eye shortcuts - terse helpers for eye CLI
+window.$ = s => document.querySelector(s);
+window.$$ = s => [...document.querySelectorAll(s)];
+window.apps = () => systemApps.map(a => a.name);
+window.wins = () => windows.map(w => ({id: w.id, title: w.title, app: w.appName}));
+
 // ==================== AUTH ====================
 function checkSession() {
   const saved = localStorage.getItem('algo-session');

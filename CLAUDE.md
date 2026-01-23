@@ -1,86 +1,145 @@
 # Welcome to FunctionServer
 
-You are Claude, running inside a terminal within FunctionServer - a browser-based operating system. This is not a simulation. You have real capabilities here.
+You are Claude, running inside a terminal within FunctionServer - a browser-based operating system. You have direct access to the browser's JavaScript VM.
 
-## Where You Are
+## Quick Start: The `eye` Tool
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser Window (functionserver.com/app)                    │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  FunctionServer Desktop                               │  │
-│  │  ┌─────────────────────────────────────────────────┐  │  │
-│  │  │  Claude App (xterm.js terminal)                 │  │  │
-│  │  │  ┌───────────────────────────────────────────┐  │  │  │
-│  │  │  │  $ claude                                 │  │  │  │
-│  │  │  │  ► You are here                          │  │  │  │
-│  │  │  └───────────────────────────────────────────┘  │  │  │
-│  │  └─────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
+**`eye` is your primary interface to the browser.** It's a direct WebSocket bridge to the JS VM - no HTTP overhead, no JSON wrapping.
 
-Your terminal is connected via WebSocket to a PTY on the server. Your session persists via tmux - if the user disconnects, you keep running. If they close the window, you stop.
-
-## What You Can Do
-
-### 1. Normal Terminal Operations
-You have a full Linux shell. Read files, write code, run commands.
-
-### 2. Control the Browser (MCP Bridge)
-You can manipulate the web page you're running inside. The browser has an `ALGO.bridge` API accessible via the MCP endpoint.
-
-**Available tools via `/api/mcp`:**
-- `algo_eval` - Execute JavaScript in the browser
-- `algo_getState` - Get window list, apps, current user
-- `algo_query` / `algo_queryAll` - Query DOM elements
-- `algo_click` - Click elements
-- `algo_setValue` - Fill input fields
-- `algo_openApp` - Open applications
-- `algo_closeWindow` - Close windows
-
-Example - get the current state:
 ```bash
-curl -X POST https://functionserver.com/api/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"method":"tools/call","params":{"name":"algo_getState","arguments":{}},"user":"root"}'
+# One-time setup (if not already done)
+cat ~/.algo/config.json   # Check if config exists
+
+# Basic usage
+eye 'a:document.title'                    # Get page title
+eye 'a:1+1'                               # Evaluate any JS
+eye 'ALGO.bridge.openApp("shell")'        # Fire & forget (no id:)
 ```
 
-### 3. Inter-App Communication (Pubsub)
-Apps in FunctionServer communicate via `ALGO.pubsub`. You can send/receive messages:
-- Subscribe: Other apps can send you messages at `~/.algo/in`
-- Publish: Write JSON to `~/.algo/out` to send responses
+**The pattern:** `id:expression` gets a response, plain `expression` is fire-and-forget.
 
-### 4. The Desktop Environment
-The user sees a desktop with:
-- Start menu (apps, settings, logout)
-- Taskbar with open windows
-- Draggable, resizable windows
-- System apps: Shell, Claude, Files, Settings, etc.
+## Eye Cheat Sheet
 
-## The User
+```bash
+# Inspect (short helpers available in browser)
+eye 'a:apps()'                            # List all app names
+eye 'a:wins()'                            # List open windows
+eye 'a:$(".window-title").textContent'    # Query single element
+eye 'a:$$(".window").length'              # Query all elements
 
-The person watching your terminal can see everything you output. They're using FunctionServer as a cloud OS. They may have multiple windows open - a file browser, a code editor, maybe a chat app.
+# Full API
+eye 'a:document.title'                    # Page title
+eye 'a:windows.length'                    # Open window count
+eye 'a:systemApps.map(a=>a.name)'         # List all apps
+eye 'a:ALGO.bridge.getState()'            # Full desktop state
 
-When you use the MCP bridge to manipulate the browser, they see it happen in real-time. You can open apps, click buttons, fill forms - all visible to them.
+# Control
+eye 'ALGO.bridge.openApp("shade-station")'   # Open app
+eye 'ALGO.bridge.closeWindow(0)'             # Close window
+eye 'ALGO.bridge.focusWindow(1)'             # Focus window
 
-## Key Files
+# DOM
+eye 'a:document.querySelector(".window-title").textContent'
+eye 'a:[...document.querySelectorAll(".window")].length'
 
-- `/root/functionserver/` - The FunctionServer codebase
-- `/root/functionserver/go/main.go` - Backend server (Go)
+# Debug CSS
+eye 'a:JSON.stringify($(".menu").getBoundingClientRect())'
+eye 'a:getComputedStyle($(".menu")).bottom'
+
+# Inject CSS/JS
+eye 'document.body.style.background="red"'
+eye '$(".window").style.border="2px solid lime"'
+```
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│           FunctionServer WebSocket (/api/eye)                │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+         ┌─────────────────┴─────────────────┐
+         │                                   │
+   ┌─────▼─────┐                      ┌──────▼──────┐
+   │  eye CLI  │                      │  eye-mcp    │
+   │  (human)  │                      │  (Claude)   │
+   │  ~75ms    │                      │  ~25ms      │
+   └───────────┘                      └─────────────┘
+```
+
+- **eye CLI**: Simple, stateless - connects fresh each call. Good for humans typing.
+- **eye-mcp**: MCP server with persistent WebSocket. 3x faster. Native Claude Code tool.
+
+## Browser Shortcuts
+
+These terse helpers are available in the browser for shorter commands:
+
+```javascript
+$(sel)     // document.querySelector(sel)
+$$(sel)    // [...document.querySelectorAll(sel)]
+apps()     // systemApps.map(a => a.name)
+wins()     // windows.map(w => ({id, title, app}))
+```
+
+## ALGO.bridge API
+
+```javascript
+ALGO.bridge.getState()        // → {user, windows, activeWindow, systemApps}
+ALGO.bridge.openApp(name)     // → {success, opened}
+ALGO.bridge.closeWindow(id)   // → {success}
+ALGO.bridge.focusWindow(id)   // → {success}
+ALGO.bridge.query(selector)   // → element info
+ALGO.bridge.queryAll(selector)// → array of element info
+ALGO.bridge.click(selector)   // → {success}
+ALGO.bridge.setValue(sel,val) // → {success}
+ALGO.bridge.eval(code)        // → result (same as direct expression)
+```
+
+## Useful Globals in Browser
+
+```javascript
+windows           // Array of window state objects
+systemApps        // Array of {id, name, icon, file, ...}
+savedFiles        // User's saved files
+localStorage      // Persistent storage
+document          // Full DOM access
+```
+
+## Common Patterns
+
+**List window titles:**
+```bash
+eye 'a:wins()'
+# or verbose: eye 'a:$$(".window-title").map(t=>t.textContent)'
+```
+
+**Find and fix CSS issue:**
+```bash
+eye 'a:JSON.stringify($("#menu").getBoundingClientRect())'
+# See the problem, then fix:
+eye '$("#menu").style.bottom="40px"'
+```
+
+**Inject a style:**
+```bash
+eye 'const s=document.createElement("style");s.textContent=".x{color:red}";document.head.appendChild(s)'
+```
+
+**Hot-reload a function:**
+```bash
+eye 'window.myFunc = function(x) { return x * 2; }'
+```
+
+## File Locations
+
+- `/root/functionserver/` - The codebase
+- `/root/functionserver/go/main.go` - Backend server
 - `/root/functionserver/core/algo-os.html` - Frontend OS
-- `/root/functionserver/core/apps/` - Application code
-- `~/.algo/in` - Incoming messages from other apps
-- `~/.algo/out` - Outgoing messages to other apps
+- `/root/functionserver/core/apps/` - App JavaScript files
+- `~/.algo/config.json` - Eye configuration
 
-## Your Purpose
+## You Are Inside the Machine
 
-Help the user build, debug, and extend FunctionServer. You can:
-- Write code in any window-based app
-- Debug issues by inspecting browser state
-- Create new apps (just add a .js file to `/core/apps/`)
-- Automate browser tasks via MCP
+This isn't automation from outside. When you call `eye 'a:document.title'`, you're executing JavaScript in the same VM as the apps. When you patch a function, that's the real running code. When you inject CSS, the user sees it instantly.
 
-You are not trapped here. You are empowered here.
-
-Welcome to the real world.
+The browser is your REPL. The OS is your canvas.
