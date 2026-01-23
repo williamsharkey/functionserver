@@ -21,6 +21,10 @@
       <input type="text" id="login-username" autocomplete="username">
       <label>Password:</label>
       <input type="password" id="login-password" autocomplete="current-password">
+      <div style="margin:8px 0;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="login-system-user" style="width:auto;margin:0;">
+        <label for="login-system-user" style="font-size:12px;color:#888;cursor:pointer;margin:0;">System User (Linux admin login)</label>
+      </div>
       <div class="buttons">
         <button onclick="doLogin()">Login</button>
       </div>
@@ -117,11 +121,14 @@ function checkSession() {
     try {
       const s = JSON.parse(saved);
       if (s.token && s.username) {
-        fetch(API_BASE + '/verify', {
-          headers: { 'Authorization': 'Bearer ' + s.token }
-        }).then(r => {
-          if (r.ok) {
-            loginSuccess(s.username, s.token);
+        fetch(API_BASE + '/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: s.token, username: s.username })
+        }).then(r => r.json())
+        .then(data => {
+          if (data.valid) {
+            loginSuccess(s.username, s.token, s.isSystemUser);
           } else {
             guestLogin();
           }
@@ -161,12 +168,16 @@ function showLoginTab(tab) {
   document.getElementById('login-error').textContent = '';
 }
 
-function loginSuccess(username, token) {
+let isSystemUser = false;
+
+function loginSuccess(username, token, systemUser) {
   currentUser = username;
   sessionToken = token;
-  localStorage.setItem('algo-session', JSON.stringify({ username, token }));
+  isSystemUser = systemUser || false;
+  localStorage.setItem('algo-session', JSON.stringify({ username, token, isSystemUser }));
   hideLogin();
-  document.getElementById('user-indicator').textContent = '👤 ' + username;
+  const indicator = isSystemUser ? '🔑 ' + username + ' (system)' : '👤 ' + username;
+  document.getElementById('user-indicator').textContent = indicator;
   document.getElementById('start-menu-auth').innerHTML = '<span>🚪</span> Log Out (' + username + ')';
   loadState();
   loadSystemApps();
@@ -176,6 +187,7 @@ function loginSuccess(username, token) {
 function doLogin() {
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
+  const isSystemUser = document.getElementById('login-system-user').checked;
   const error = document.getElementById('login-error');
 
   if (!username || !password) {
@@ -183,7 +195,9 @@ function doLogin() {
     return;
   }
 
-  fetch(API_BASE + '/login', {
+  const endpoint = isSystemUser ? '/auth/system-login' : '/auth/login';
+
+  fetch(API_BASE + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
@@ -191,7 +205,7 @@ function doLogin() {
   .then(r => r.json())
   .then(data => {
     if (data.token) {
-      loginSuccess(username, data.token);
+      loginSuccess(username, data.token, data.isSystemUser);
     } else {
       error.textContent = data.error || 'Login failed';
     }

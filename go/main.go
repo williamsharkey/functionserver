@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -18,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	osuser "os/user"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -25,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/creack/pty"
+	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -95,6 +99,8 @@ type User struct {
 	PasswordHash string `json:"password_hash"`
 	Created      int64  `json:"created"`
 	LastLogin    int64  `json:"last_login"`
+	IsSystemUser bool   `json:"is_system_user,omitempty"`
+	HomeDir      string `json:"home_dir,omitempty"`
 }
 
 // Token payload
@@ -229,6 +235,97 @@ func isCommandAllowed(cmd string) bool {
 	return false
 }
 
+// WebSocket upgrader for PTY connections
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for now
+	},
+}
+
+// isUserInAdminGroup checks if a system user is in sudo/admin/wheel group
+func isUserInAdminGroup(username string) bool {
+	// Get user info
+	u, err := osuser.Lookup(username)
+	if err != nil {
+		return false
+	}
+
+	// Get user's groups
+	groupIDs, err := u.GroupIds()
+	if err != nil {
+		return false
+	}
+
+	adminGroups := []string{"sudo", "admin", "wheel", "root"}
+	for _, gid := range groupIDs {
+		g, err := osuser.LookupGroupId(gid)
+		if err != nil {
+			continue
+		}
+		for _, admin := range adminGroups {
+			if g.Name == admin {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// authenticateSystemUser verifies system user credentials
+// On Linux, this uses PAM. On other systems, it returns an error.
+func authenticateSystemUser(username, password string) error {
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("system user authentication only available on Linux")
+	}
+	// PAM authentication is handled in auth_pam_linux.go
+	return pamAuthenticate(username, password)
+}
+
+// getSystemUserHomeDir returns the home directory for a system user
+func getSystemUserHomeDir(username string) string {
+	u, err := osuser.Lookup(username)
+	if err != nil {
+		return "/home/" + username
+	}
+	return u.HomeDir
+}
+
+// getUserShell returns the user's shell from /etc/passwd
+func getUserShell(username string) string {
+	file, err := os.Open("/etc/passwd")
+	if err != nil {
+		return "/bin/bash"
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		parts := strings.Split(scanner.Text(), ":")
+		if len(parts) >= 7 && parts[0] == username {
+			shell := parts[6]
+			if shell != "" {
+				return shell
+			}
+		}
+	}
+	return "/bin/bash"
+}
+
+// requireAuthUser returns the full user object for authenticated requests
+func requireAuthUser(r *http.Request) *User {
+	username := requireAuth(r)
+	if username == "" {
+		return nil
+	}
+	user, err := loadUser(username)
+	if err != nil {
+		return nil
+	}
+	return user
+}
+
 // HTTP Handlers
 func jsonResponse(w http.ResponseWriter, data interface{}, status int) {
 	w.Header().Set("Content-Type", "application/json")
@@ -340,6 +437,179 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		"username": req.Username,
 		"token":    token,
 	}, 200)
+}
+
+func handleSystemLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonResponse(w, map[string]string{"error": "Invalid request: " + err.Error()}, 400)
+		return
+	}
+
+	if req.Username == "" || req.Password == "" {
+		jsonResponse(w, map[string]string{"error": "Username and password required"}, 400)
+		return
+	}
+
+	// Verify user exists in system
+	_, err := osuser.Lookup(req.Username)
+	if err != nil {
+		jsonResponse(w, map[string]string{"error": "System user not found"}, 401)
+		return
+	}
+
+	// Check if user is in admin group
+	if !isUserInAdminGroup(req.Username) {
+		jsonResponse(w, map[string]string{"error": "User must be in sudo/admin/wheel group"}, 403)
+		return
+	}
+
+	// Authenticate via PAM
+	if err := authenticateSystemUser(req.Username, req.Password); err != nil {
+		jsonResponse(w, map[string]string{"error": "Invalid password"}, 401)
+		return
+	}
+
+	// Create or update FunctionServer user
+	homeDir := getSystemUserHomeDir(req.Username)
+	user, err := loadUser(req.Username)
+	if err != nil {
+		// New system user - create FunctionServer account
+		user = &User{
+			Username:     req.Username,
+			PasswordHash: "", // No password hash for system users
+			Created:      time.Now().Unix(),
+			IsSystemUser: true,
+			HomeDir:      homeDir,
+		}
+	}
+
+	user.LastLogin = time.Now().Unix()
+	user.IsSystemUser = true
+	user.HomeDir = homeDir
+	saveUser(user)
+
+	token, _ := generateToken(req.Username)
+	jsonResponse(w, map[string]interface{}{
+		"success":      true,
+		"username":     req.Username,
+		"token":        token,
+		"isSystemUser": true,
+		"homeDir":      homeDir,
+	}, 200)
+}
+
+func handlePTY(w http.ResponseWriter, r *http.Request) {
+	// Get token from query string
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Token required", 401)
+		return
+	}
+
+	// Verify token and get user
+	username := verifyToken(token)
+	if username == "" {
+		http.Error(w, "Invalid token", 401)
+		return
+	}
+
+	// Load user and verify system user status
+	user, err := loadUser(username)
+	if err != nil || !user.IsSystemUser {
+		http.Error(w, "PTY access requires system user login", 403)
+		return
+	}
+
+	// Upgrade to WebSocket
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	homeDir := user.HomeDir
+	if homeDir == "" {
+		homeDir = getSystemUserHomeDir(username)
+	}
+
+	// Use tmux for persistent sessions
+	// Session name based on username for persistence
+	sessionName := "fs-" + username
+
+	// Check if tmux session exists, create or attach
+	// Using tmux new-session -A: attach if exists, create if not
+	cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName)
+	cmd.Env = append(os.Environ(),
+		"HOME="+homeDir,
+		"USER="+username,
+		"TERM=xterm-256color",
+	)
+	cmd.Dir = homeDir
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		conn.WriteMessage(websocket.TextMessage, []byte("Error starting PTY: "+err.Error()))
+		return
+	}
+	defer ptmx.Close()
+
+	// Track if user explicitly closed the window
+	userClosed := false
+
+	// Handle PTY resize messages and input
+	go func() {
+		for {
+			msgType, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			if msgType == websocket.TextMessage {
+				msgStr := string(msg)
+				// Check for resize message
+				if strings.HasPrefix(msgStr, "RESIZE:") {
+					var cols, rows uint16
+					fmt.Sscanf(msgStr, "RESIZE:%d:%d", &cols, &rows)
+					if cols > 0 && rows > 0 {
+						pty.Setsize(ptmx, &pty.Winsize{Cols: cols, Rows: rows})
+					}
+					continue
+				}
+				// Check for explicit close message
+				if msgStr == "CLOSE_SESSION" {
+					userClosed = true
+					// Kill the tmux session
+					exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+					return
+				}
+			}
+			// Write to PTY
+			ptmx.Write(msg)
+		}
+	}()
+
+	// Read from PTY and send to WebSocket
+	buf := make([]byte, 4096)
+	for {
+		n, err := ptmx.Read(buf)
+		if err != nil {
+			break
+		}
+		if err := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+			break
+		}
+	}
+
+	// If user didn't explicitly close, detach cleanly (session persists)
+	// If user closed, session was already killed above
+	if !userClosed {
+		// Detach from tmux (Ctrl+B, D) - session continues running
+		ptmx.Write([]byte{0x02, 0x64}) // tmux detach sequence
+	}
 }
 
 func handleVerify(w http.ResponseWriter, r *http.Request) {
@@ -753,6 +1023,20 @@ func main() {
 		handleVerify(w, r)
 	})
 
+	mux.HandleFunc("/api/auth/system-login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			return
+		}
+		handleSystemLogin(w, r)
+	})
+
+	mux.HandleFunc("/api/pty", func(w http.ResponseWriter, r *http.Request) {
+		handlePTY(w, r)
+	})
+
 	mux.HandleFunc("/api/terminal/exec", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -876,18 +1160,15 @@ func main() {
 		}
 
 		var apps []map[string]interface{}
-		for _, f := range files {
-			if f.IsDir() || !strings.HasSuffix(f.Name(), ".js") {
-				continue
-			}
 
-			content, err := os.ReadFile(appsDir + "/" + f.Name())
+		// Helper function to process an app file
+		processApp := func(filePath, id string) {
+			content, err := os.ReadFile(filePath)
 			if err != nil {
-				continue
+				return
 			}
 
 			code := string(content)
-			id := strings.TrimSuffix(f.Name(), ".js")
 
 			// Extract metadata from code comments/ALGO.app assignments
 			name := id
@@ -906,6 +1187,24 @@ func main() {
 				"code":   code,
 				"system": true,
 			})
+		}
+
+		for _, f := range files {
+			if f.IsDir() {
+				// Check for subdirectory with matching .js file (e.g., shell/shell.js)
+				subAppPath := filepath.Join(appsDir, f.Name(), f.Name()+".js")
+				if _, err := os.Stat(subAppPath); err == nil {
+					processApp(subAppPath, f.Name())
+				}
+				continue
+			}
+
+			if !strings.HasSuffix(f.Name(), ".js") {
+				continue
+			}
+
+			id := strings.TrimSuffix(f.Name(), ".js")
+			processApp(filepath.Join(appsDir, f.Name()), id)
 		}
 
 		json.NewEncoder(w).Encode(map[string]interface{}{"apps": apps})
