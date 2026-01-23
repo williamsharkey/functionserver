@@ -445,14 +445,13 @@ function loginSuccess(username, token, systemUser) {
 
 function copyAuthInfo(event) {
   event.stopPropagation();
-  const authInfo = {
-    username: currentUser,
+  // Format for eye CLI: ~/.algo/config.json
+  const eyeConfig = {
     token: sessionToken,
-    isSystemUser: isSystemUser,
-    server: window.location.origin
+    server: window.location.origin.replace('https://', 'wss://').replace('http://', 'ws://') + '/api/eye'
   };
-  navigator.clipboard.writeText(JSON.stringify(authInfo, null, 2)).then(() => {
-    algoSpeak('Copied user authentication information to clipboard');
+  navigator.clipboard.writeText(JSON.stringify(eyeConfig, null, 2)).then(() => {
+    algoSpeak('Copied eye config. Save to ~/.algo/config.json');
   }).catch(err => {
     algoSpeak('Failed to copy: ' + err.message);
   });
