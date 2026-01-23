@@ -1132,12 +1132,13 @@ body {
 .start-submenu {
   position: absolute;
   left: 100%;
-  bottom: 0;
+  top: 0;
+  bottom: auto;
   background: #c0c0c0;
   border: 2px outset #fff;
   display: none;
   min-width: 180px;
-  max-height: calc(100vh - 60px);
+  max-height: calc(100vh - 80px);
   overflow-y: auto;
   overflow-x: hidden;
   z-index: 10001;
