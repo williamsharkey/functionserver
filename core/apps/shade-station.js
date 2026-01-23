@@ -110,6 +110,7 @@ function _ss_open() {
           ${presetOptions}
         </select>
         <button onclick="_ss_saveToDesktop(${id})">💾 Save</button>
+        <button onclick="_ss_setAsBackground(${id})">🖼️ Set Background</button>
         <span style="margin-left:auto;color:#888;" id="ss-filename-${id}">untitled.shader</span>
       </div>
       <div class="shade-station-main">
@@ -358,9 +359,128 @@ if (_ss_origOpenSavedFile) {
   };
 }
 
+// Set shader as desktop background
+function _ss_setAsBackground(id) {
+  const code = document.getElementById('ss-code-' + id)?.value;
+  if (!code) return;
+
+  // Remove existing shader background
+  const existing = document.getElementById('shader-background');
+  if (existing) existing.remove();
+  if (window._shaderBgAnimFrame) {
+    cancelAnimationFrame(window._shaderBgAnimFrame);
+    window._shaderBgAnimFrame = null;
+  }
+
+  // Create fullscreen canvas
+  const canvas = document.createElement('canvas');
+  canvas.id = 'shader-background';
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;';
+  document.body.appendChild(canvas);
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) {
+    algoSpeak('WebGL not supported');
+    return;
+  }
+
+  // Compile shader
+  const vertSource = 'attribute vec2 a_position;void main(){gl_Position=vec4(a_position,0,1);}';
+  const vertShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vertShader, vertSource);
+  gl.compileShader(vertShader);
+
+  const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fragShader, code);
+  gl.compileShader(fragShader);
+
+  if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
+    algoSpeak('Shader error: ' + gl.getShaderInfoLog(fragShader));
+    canvas.remove();
+    return;
+  }
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vertShader);
+  gl.attachShader(program, fragShader);
+  gl.linkProgram(program);
+  gl.useProgram(program);
+
+  const posBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const posLoc = gl.getAttribLocation(program, 'a_position');
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+  // Resize handler
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Animation loop
+  let time = 0;
+  let mouse = [0, 0];
+  document.addEventListener('mousemove', (e) => { mouse = [e.clientX, window.innerHeight - e.clientY]; });
+
+  function render() {
+    if (!document.getElementById('shader-background')) return;
+    time += 0.016;
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const timeLoc = gl.getUniformLocation(program, 'u_time');
+    const resLoc = gl.getUniformLocation(program, 'u_resolution');
+    const mouseLoc = gl.getUniformLocation(program, 'u_mouse');
+    if (timeLoc) gl.uniform1f(timeLoc, time);
+    if (resLoc) gl.uniform2f(resLoc, canvas.width, canvas.height);
+    if (mouseLoc) gl.uniform2f(mouseLoc, mouse[0], mouse[1]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    window._shaderBgAnimFrame = requestAnimationFrame(render);
+  }
+  render();
+
+  // Persist to localStorage
+  localStorage.setItem('algo-shader-bg', code);
+  algoSpeak('Shader set as background! Will persist across sessions.');
+}
+
+// Remove shader background
+function _ss_removeBackground() {
+  const existing = document.getElementById('shader-background');
+  if (existing) existing.remove();
+  if (window._shaderBgAnimFrame) {
+    cancelAnimationFrame(window._shaderBgAnimFrame);
+    window._shaderBgAnimFrame = null;
+  }
+  localStorage.removeItem('algo-shader-bg');
+  algoSpeak('Shader background removed');
+}
+
+// Restore shader background on load (called from algo-os.html)
+function _ss_restoreBackground() {
+  const code = localStorage.getItem('algo-shader-bg');
+  if (code) {
+    // Fake an id and set the background
+    const tempTextarea = document.createElement('textarea');
+    tempTextarea.id = 'ss-code-restore';
+    tempTextarea.value = code;
+    tempTextarea.style.display = 'none';
+    document.body.appendChild(tempTextarea);
+    _ss_setAsBackground('restore');
+    tempTextarea.remove();
+  }
+}
+
 // Export functions
 window._ss_saveToDesktop = _ss_saveToDesktop;
 window._ss_openFile = _ss_openFile;
+window._ss_setAsBackground = _ss_setAsBackground;
+window._ss_removeBackground = _ss_removeBackground;
+window._ss_restoreBackground = _ss_restoreBackground;
 
 // Run the app
 _ss_open();

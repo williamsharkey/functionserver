@@ -557,6 +557,68 @@ function init() {
   document.addEventListener('keydown', handleKeyDown);
 
   setTimeout(() => algoSpeak("Welcome to Function Server!"), 1500);
+
+  // Restore shader background if saved
+  restoreShaderBackground();
+}
+
+function restoreShaderBackground() {
+  const code = localStorage.getItem('algo-shader-bg');
+  if (!code) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'shader-background';
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;';
+  document.body.appendChild(canvas);
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+
+  const vertSource = 'attribute vec2 a_position;void main(){gl_Position=vec4(a_position,0,1);}';
+  const vertShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vertShader, vertSource);
+  gl.compileShader(vertShader);
+
+  const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fragShader, code);
+  gl.compileShader(fragShader);
+  if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) { canvas.remove(); return; }
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vertShader);
+  gl.attachShader(program, fragShader);
+  gl.linkProgram(program);
+  gl.useProgram(program);
+
+  const posBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const posLoc = gl.getAttribLocation(program, 'a_position');
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; gl.viewport(0, 0, canvas.width, canvas.height); }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let time = 0, mouse = [0, 0];
+  document.addEventListener('mousemove', (e) => { mouse = [e.clientX, window.innerHeight - e.clientY]; });
+
+  function render() {
+    if (!document.getElementById('shader-background')) return;
+    time += 0.016;
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const tLoc = gl.getUniformLocation(program, 'u_time');
+    const rLoc = gl.getUniformLocation(program, 'u_resolution');
+    const mLoc = gl.getUniformLocation(program, 'u_mouse');
+    if (tLoc) gl.uniform1f(tLoc, time);
+    if (rLoc) gl.uniform2f(rLoc, canvas.width, canvas.height);
+    if (mLoc) gl.uniform2f(mLoc, mouse[0], mouse[1]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    window._shaderBgAnimFrame = requestAnimationFrame(render);
+  }
+  render();
 }
 
 function handleKeyDown(e) {
