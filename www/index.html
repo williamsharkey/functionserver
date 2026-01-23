@@ -3,103 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FunctionServer - Where AI Inhabits the OS</title>
+<title>FunctionServer</title>
 <meta name="description" content="A cloud operating system where apps are artifacts in a shared VM. AI doesn't automate—it inhabits.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #0a0a0c;
-  --text: #e8e8ed;
-  --text-muted: #8b8b9a;
-  --text-dim: #5a5a6a;
-  --accent: #c4b5fd;
-  --accent-warm: #fda4af;
-  --card: rgba(255,255,255,0.03);
-  --border: rgba(255,255,255,0.08);
+  --bg: #09090b;
+  --surface: #18181b;
+  --text: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #52525b;
+  --border: #27272a;
+  --accent: #a78bfa;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  line-height: 1.7;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--text);
   background: var(--bg);
-  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Animated gradient background */
-.gradient-bg {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: -1;
-  overflow: hidden;
-}
-
-.gradient-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.4;
-  animation: float 20s ease-in-out infinite;
-}
-
-.blob-1 {
-  width: 600px;
-  height: 600px;
-  background: linear-gradient(135deg, #7c3aed 0%, #c026d3 50%, #f43f5e 100%);
-  top: -200px;
-  left: -100px;
-  animation-delay: 0s;
-}
-
-.blob-2 {
-  width: 500px;
-  height: 500px;
-  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
-  bottom: -150px;
-  right: -100px;
-  animation-delay: -7s;
-}
-
-.blob-3 {
-  width: 400px;
-  height: 400px;
-  background: linear-gradient(135deg, #f97316 0%, #ec4899 50%, #a855f7 100%);
-  top: 40%;
-  left: 60%;
-  animation-delay: -14s;
-}
-
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(50px, -30px) scale(1.05); }
-  50% { transform: translate(-20px, 40px) scale(0.95); }
-  75% { transform: translate(-40px, -20px) scale(1.02); }
-}
-
-/* Noise overlay */
-.noise {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: -1;
-  opacity: 0.03;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-}
-
-/* Typography */
 .serif {
-  font-family: 'Instrument Serif', Georgia, serif;
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+}
+
+/* Subtle grid background */
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%);
 }
 
 /* Navigation */
@@ -108,34 +52,34 @@ nav {
   top: 0;
   left: 0;
   right: 0;
-  padding: 20px 40px;
+  padding: 16px 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 100;
-  background: rgba(10, 10, 12, 0.8);
-  backdrop-filter: blur(20px);
+  background: rgba(9, 9, 11, 0.8);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
 }
 
 .logo {
-  font-size: 1rem;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text);
   text-decoration: none;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 nav .links {
   display: flex;
-  gap: 32px;
+  gap: 24px;
 }
 
 nav a {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-decoration: none;
-  font-size: 0.9rem;
-  transition: color 0.2s;
+  font-size: 13px;
+  transition: color 0.15s;
 }
 
 nav a:hover { color: var(--text); }
@@ -143,50 +87,42 @@ nav a:hover { color: var(--text); }
 .nav-cta {
   background: var(--text);
   color: var(--bg) !important;
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
   font-weight: 500;
-  font-size: 0.85rem;
+  font-size: 13px;
 }
-
-.nav-cta:hover { opacity: 0.9; }
 
 /* Sections */
 section { padding: 120px 24px; }
-.container { max-width: 1100px; margin: 0 auto; }
+.container { max-width: 960px; margin: 0 auto; }
 
 /* Hero */
 #hero {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  padding-top: 80px;
+  padding-top: 60px;
 }
 
 #hero .container {
   text-align: center;
-  max-width: 900px;
 }
 
-.hero-label {
-  display: inline-block;
-  font-size: 0.8rem;
+.hero-eyebrow {
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--accent);
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
   margin-bottom: 24px;
-  padding: 8px 16px;
-  background: rgba(196, 181, 253, 0.1);
-  border-radius: 20px;
-  border: 1px solid rgba(196, 181, 253, 0.2);
 }
 
 #hero h1 {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: clamp(3rem, 8vw, 5.5rem);
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: clamp(40px, 7vw, 72px);
   font-weight: 400;
   line-height: 1.1;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   letter-spacing: -0.02em;
 }
 
@@ -195,28 +131,27 @@ section { padding: 120px 24px; }
   color: var(--accent);
 }
 
-.hero-sub {
-  font-size: 1.25rem;
-  color: var(--text-muted);
-  max-width: 640px;
-  margin: 0 auto 48px;
-  line-height: 1.8;
+.hero-desc {
+  font-size: 17px;
+  color: var(--text-secondary);
+  max-width: 540px;
+  margin: 0 auto 40px;
+  line-height: 1.7;
 }
 
-.hero-buttons {
+.hero-actions {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   justify-content: center;
-  margin-bottom: 80px;
 }
 
 .btn {
-  padding: 16px 32px;
-  border-radius: 10px;
-  font-size: 0.95rem;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .btn-primary {
@@ -224,266 +159,148 @@ section { padding: 120px 24px; }
   color: var(--bg);
 }
 
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(255,255,255,0.1); }
+.btn-primary:hover { opacity: 0.9; }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--text);
+.btn-ghost {
+  color: var(--text-secondary);
   border: 1px solid var(--border);
 }
 
-.btn-secondary:hover { border-color: var(--text-muted); background: var(--card); }
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--text-tertiary);
+}
 
-/* Concept section */
-#concept {
+/* Main content */
+#main {
   border-top: 1px solid var(--border);
 }
 
-.concept-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 80px;
-  align-items: start;
+.prose {
+  max-width: 640px;
+  margin: 0 auto;
 }
 
-.concept-text h2 {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 2.5rem;
+.prose h2 {
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: 32px;
   font-weight: 400;
-  margin-bottom: 32px;
-  line-height: 1.2;
-}
-
-.concept-text p {
-  color: var(--text-muted);
-  font-size: 1.05rem;
   margin-bottom: 24px;
-  line-height: 1.9;
+  letter-spacing: -0.01em;
 }
 
-.concept-text em {
+.prose p {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.prose strong {
   color: var(--text);
-  font-style: normal;
-}
-
-.concept-text strong {
-  color: var(--accent);
   font-weight: 500;
 }
 
-.concept-visual {
-  background: var(--card);
+.prose em {
+  color: var(--text);
+}
+
+.prose code {
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 14px;
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.code-block {
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  font-family: 'SF Mono', Monaco, monospace;
-  font-size: 0.85rem;
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 32px 0;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 13px;
   line-height: 1.7;
+  overflow-x: auto;
 }
 
-.concept-visual .comment { color: var(--text-dim); }
-.concept-visual .highlight { color: var(--accent); }
-.concept-visual .warm { color: var(--accent-warm); }
+.code-block .cm { color: var(--text-tertiary); }
+.code-block .kw { color: var(--accent); }
+.code-block .str { color: #86efac; }
 
-/* Insight cards */
-#insights {
+/* Divider */
+.divider {
+  width: 48px;
+  height: 1px;
+  background: var(--border);
+  margin: 80px auto;
+}
+
+/* Cards grid */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.card h3 {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.card p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* CTA */
+#cta {
   border-top: 1px solid var(--border);
-}
-
-.insights-header {
   text-align: center;
-  margin-bottom: 64px;
 }
 
-.insights-header h2 {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 2.5rem;
+#cta h2 {
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: 36px;
   font-weight: 400;
   margin-bottom: 16px;
 }
 
-.insights-header p {
-  color: var(--text-muted);
-  font-size: 1.1rem;
+#cta p {
+  color: var(--text-secondary);
+  margin-bottom: 32px;
 }
 
-.insights-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-.insight-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  transition: all 0.3s;
-}
-
-.insight-card:hover {
-  border-color: rgba(196, 181, 253, 0.3);
-  transform: translateY(-4px);
-}
-
-.insight-icon {
-  font-size: 2rem;
-  margin-bottom: 20px;
-}
-
-.insight-card h3 {
-  font-size: 1.1rem;
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-.insight-card p {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  line-height: 1.7;
-}
-
-/* Protocol section */
-#protocol {
-  border-top: 1px solid var(--border);
-  text-align: center;
-}
-
-#protocol h2 {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 2.5rem;
-  font-weight: 400;
-  margin-bottom: 24px;
-}
-
-#protocol > .container > p {
-  color: var(--text-muted);
-  font-size: 1.1rem;
-  max-width: 600px;
-  margin: 0 auto 48px;
-  line-height: 1.8;
-}
-
-.protocol-cards {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  text-align: left;
-}
-
-.protocol-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-}
-
-.protocol-card h3 {
-  font-size: 1.1rem;
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-.protocol-card p {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  line-height: 1.7;
-  margin-bottom: 20px;
-}
-
-.protocol-card code {
-  display: block;
-  background: rgba(0,0,0,0.3);
-  padding: 16px;
-  border-radius: 8px;
-  font-family: 'SF Mono', Monaco, monospace;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  overflow-x: auto;
-}
-
-/* Try section */
-#try {
-  border-top: 1px solid var(--border);
-  text-align: center;
-}
-
-#try h2 {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 3rem;
-  font-weight: 400;
-  margin-bottom: 24px;
-}
-
-#try h2 em {
-  font-style: italic;
-  color: var(--accent-warm);
-}
-
-#try > .container > p {
-  color: var(--text-muted);
-  font-size: 1.1rem;
-  margin-bottom: 40px;
-}
-
-.try-options {
+.cta-actions {
   display: flex;
-  gap: 24px;
+  gap: 12px;
   justify-content: center;
   flex-wrap: wrap;
-  margin-bottom: 48px;
 }
 
-.try-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px 40px;
-  text-align: center;
-  min-width: 280px;
+.install-line {
+  margin-top: 48px;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 
-.try-card h3 {
-  font-size: 1.2rem;
-  margin-bottom: 8px;
-}
-
-.try-card p {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 20px;
-}
-
-.try-card a {
-  display: inline-block;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.try-card a.primary {
-  background: var(--text);
-  color: var(--bg);
-}
-
-.try-card a.secondary {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.install-note {
-  color: var(--text-dim);
-  font-size: 0.85rem;
-  font-family: 'SF Mono', Monaco, monospace;
-}
-
-.install-note code {
-  color: var(--text-muted);
-  background: var(--card);
+.install-line code {
+  color: var(--text-secondary);
+  background: var(--surface);
   padding: 8px 16px;
   border-radius: 6px;
   display: inline-block;
@@ -492,63 +309,48 @@ section { padding: 120px 24px; }
 
 /* Footer */
 footer {
-  padding: 60px 24px;
-  text-align: center;
+  padding: 48px 24px;
   border-top: 1px solid var(--border);
+  text-align: center;
 }
 
 footer .links {
   display: flex;
   justify-content: center;
-  gap: 32px;
-  margin-bottom: 24px;
+  gap: 24px;
+  margin-bottom: 16px;
 }
 
 footer a {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 13px;
 }
 
-footer a:hover { color: var(--text); }
+footer a:hover { color: var(--text-secondary); }
 
 footer p {
-  color: var(--text-dim);
-  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 /* Responsive */
-@media (max-width: 900px) {
-  .concept-grid,
-  .protocol-cards {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-
-  .insights-grid {
-    grid-template-columns: 1fr;
-  }
-
-  #hero h1 { font-size: 2.5rem; }
+@media (max-width: 768px) {
+  .cards { grid-template-columns: 1fr; }
   nav .links { display: none; }
   section { padding: 80px 20px; }
+  #hero h1 { font-size: 36px; }
 }
 </style>
 </head>
 <body>
 
-<div class="gradient-bg">
-  <div class="gradient-blob blob-1"></div>
-  <div class="gradient-blob blob-2"></div>
-  <div class="gradient-blob blob-3"></div>
-</div>
-<div class="noise"></div>
+<div class="grid-bg"></div>
 
 <nav>
   <a href="/" class="logo">FunctionServer</a>
   <div class="links">
-    <a href="#concept">Concept</a>
-    <a href="#insights">Why</a>
+    <a href="#main">About</a>
     <a href="/door.html">Article</a>
     <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
   </div>
@@ -557,151 +359,102 @@ footer p {
 
 <section id="hero">
   <div class="container">
-    <div class="hero-label">An experiment</div>
-    <h1>Where AI <em>inhabits</em> the operating system</h1>
-    <p class="hero-sub">A cloud OS where apps are JavaScript artifacts in a shared VM. The AI doesn't automate from outside—it lives in the same address space as the apps it manipulates.</p>
-
-    <div class="hero-buttons">
-      <a href="/app" class="btn btn-primary">Launch the OS</a>
-      <a href="/door.html" class="btn btn-secondary">Read the story</a>
+    <p class="hero-eyebrow">An experiment in browser architecture</p>
+    <h1>Where AI <em>inhabits</em><br>the operating system</h1>
+    <p class="hero-desc">A cloud OS where apps are JavaScript artifacts in a shared VM. The AI doesn't automate from outside—it lives in the same address space.</p>
+    <div class="hero-actions">
+      <a href="/app" class="btn btn-primary">Launch</a>
+      <a href="/door.html" class="btn btn-ghost">Read the story</a>
     </div>
   </div>
 </section>
 
-<section id="concept">
+<section id="main">
   <div class="container">
-    <div class="concept-grid">
-      <div class="concept-text">
-        <h2>Apps are artifacts in a shared VM</h2>
-        <p>In most systems, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. <em>The AI is a client. The app is a server.</em></p>
-        <p>In FunctionServer, apps <em>are</em> the JavaScript. They're functions and objects living in the same VM that an AI agent can access via MCP.</p>
-        <p>When Claude calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>.</p>
-        <p>The AI doesn't automate the OS. It <strong>inhabits</strong> it.</p>
-      </div>
-      <div class="concept-visual">
-        <span class="comment">// Claude debugging a menu via MCP</span><br><br>
-        <span class="highlight">const</span> menu = document.getElementById(<span class="warm">'programs-menu'</span>);<br>
-        <span class="highlight">const</span> rect = menu.getBoundingClientRect();<br><br>
-        <span class="comment">// Result: bottom is 40px too high</span><br>
-        <span class="comment">// Fix it live, no refresh:</span><br><br>
-        menu.style.setProperty(<span class="warm">'bottom'</span>, <span class="warm">'40px'</span>, <span class="warm">'important'</span>);<br><br>
-        <span class="comment">// User watches it snap into place</span><br>
-        <span class="comment">// Then hot-reload the function:</span><br><br>
-        <span class="highlight">window</span>.openSubmenu = <span class="highlight">function</span>(el) {<br>
-        &nbsp;&nbsp;<span class="comment">// patched code...</span><br>
-        };
+    <div class="prose">
+      <h2>Apps are artifacts in a shared VM</h2>
+      <p>In most systems, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client; the app is a server.</p>
+      <p>In FunctionServer, apps <em>are</em> the JavaScript. They're functions and objects living in the same VM that an AI agent can access via MCP.</p>
+      <p>When Claude calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>. The AI doesn't automate the OS—it <strong>inhabits</strong> it.</p>
+
+      <div class="code-block">
+<span class="cm">// Claude debugging a menu via MCP</span>
+<span class="kw">const</span> menu = document.getElementById(<span class="str">'programs-menu'</span>);
+<span class="kw">const</span> rect = menu.getBoundingClientRect();
+
+<span class="cm">// Result: bottom is 40px too high</span>
+<span class="cm">// Fix it live, no refresh:</span>
+menu.style.setProperty(<span class="str">'bottom'</span>, <span class="str">'40px'</span>, <span class="str">'important'</span>);
+
+<span class="cm">// User watches it snap into place</span>
       </div>
     </div>
-  </div>
-</section>
 
-<section id="insights">
-  <div class="container">
-    <div class="insights-header">
+    <div class="divider"></div>
+
+    <div class="prose">
       <h2>What this enables</h2>
-      <p>Some things that emerge from this architecture</p>
-    </div>
+      <p>Some things that emerge from apps and AI sharing the same address space:</p>
 
-    <div class="insights-grid">
-      <div class="insight-card">
-        <div class="insight-icon">&#x1F440;</div>
-        <h3>AI with eyes</h3>
-        <p>Most AI coding assistants are blind. They read your code and guess. Here, Claude can query element positions, check computed styles, inject test fixes, and verify they worked—before touching source files.</p>
-      </div>
-
-      <div class="insight-card">
-        <div class="insight-icon">&#x1F300;</div>
-        <h3>Morphing artifacts</h3>
-        <p>The OS becomes less like a fixed container and more like a collection of morphing artifacts—apps that can be inspected, modified, and extended by anything with access to the VM.</p>
-      </div>
-
-      <div class="insight-card">
-        <div class="insight-icon">&#x1F517;</div>
-        <h3>Collapsed debug loop</h3>
-        <p>Old way: write → deploy → refresh → inspect → guess → repeat. New way: inspect live → measure → test fix → verify → commit. The browser becomes a REPL you can poke from anywhere.</p>
-      </div>
-
-      <div class="insight-card">
-        <div class="insight-icon">&#x1F4DC;</div>
-        <h3>Version the protocol</h3>
-        <p>You can't version control a system that's constantly being reshaped. So you don't. Each app becomes its own repo. What you version is the protocol—the API, the conventions.</p>
-      </div>
-
-      <div class="insight-card">
-        <div class="insight-icon">&#x2728;</div>
-        <h3>Emergent features</h3>
-        <p>A WebGL shader editor. A thought: "what if the desktop could render this?" Twenty minutes later, a hypnotic tunnel animates behind the icons. All injected via MCP. That's the power of shared address space.</p>
-      </div>
-
-      <div class="insight-card">
-        <div class="insight-icon">&#x1F50D;</div>
-        <h3>Blurred boundaries</h3>
-        <p>The line between "user" and "developer" and "operating system" starts to blur. The system is open. The architecture is open. What emerges is up to whoever inhabits it.</p>
+      <div class="cards">
+        <div class="card">
+          <h3>AI with eyes</h3>
+          <p>Claude can query element positions, check computed styles, inject test fixes, and verify they worked—before touching source files.</p>
+        </div>
+        <div class="card">
+          <h3>Morphing artifacts</h3>
+          <p>The OS becomes a collection of artifacts that can be inspected, modified, and extended by anything with VM access.</p>
+        </div>
+        <div class="card">
+          <h3>Collapsed debug loop</h3>
+          <p>Inspect live → measure → test fix → verify → commit. The browser becomes a REPL you can poke from anywhere.</p>
+        </div>
+        <div class="card">
+          <h3>Version the protocol</h3>
+          <p>You can't version a morphing system. So each app becomes its own repo. What you version is the API and conventions.</p>
+        </div>
       </div>
     </div>
-  </div>
-</section>
 
-<section id="protocol">
-  <div class="container">
-    <h2>The protocol defines the system</h2>
-    <p>Apps declare inputs, outputs, and file types. The OS enforces conventions. Everything else is fluid.</p>
+    <div class="divider"></div>
 
-    <div class="protocol-cards">
-      <div class="protocol-card">
-        <h3>ALGO API</h3>
-        <p>The bridge between apps and the OS. Create windows, handle files, send notifications, communicate with other apps via pubsub.</p>
-        <code>ALGO.createWindow({ title, content, width, height })<br>ALGO.pubsub.publish('my-channel', data)<br>ALGO.bridge.eval('document.title')</code>
-      </div>
+    <div class="prose">
+      <h2>The protocol defines the system</h2>
+      <p>Apps declare inputs, outputs, and file types. The OS enforces conventions. Everything else is fluid.</p>
 
-      <div class="protocol-card">
-        <h3>MCP Endpoint</h3>
-        <p>Model Context Protocol. Any LLM with HTTP access can execute JavaScript in the browser, query the DOM, click buttons, open apps.</p>
-        <code>POST /api/mcp<br>{ "method": "tools/call",<br>&nbsp;&nbsp;"params": { "name": "algo_eval", "arguments": {...} } }</code>
-      </div>
-
-      <div class="protocol-card">
-        <h3>File Type Registry</h3>
-        <p>Apps declare what file types they handle. Double-click a .shader file, Shade Station opens. The OS routes, apps interpret.</p>
-        <code>fileTypeRegistry['shader'] = {<br>&nbsp;&nbsp;icon: '&#x1F3A8;',<br>&nbsp;&nbsp;app: 'Shade Station'<br>}</code>
-      </div>
-
-      <div class="protocol-card">
-        <h3>Pubsub Channels</h3>
-        <p>Apps communicate via named channels. Subscribe to receive, publish to send. Decoupled, asynchronous, observable.</p>
-        <code>ALGO.pubsub.subscribe('claude-eyes', handler)<br>ALGO.pubsub.publish('mcp-activity', { tool, result })</code>
+      <div class="cards">
+        <div class="card">
+          <h3>ALGO API</h3>
+          <p>Create windows, handle files, communicate via pubsub. The bridge between apps and OS.</p>
+        </div>
+        <div class="card">
+          <h3>MCP Endpoint</h3>
+          <p>Any LLM with HTTP access can execute JavaScript, query DOM, click buttons, open apps.</p>
+        </div>
+        <div class="card">
+          <h3>File Type Registry</h3>
+          <p>Apps declare what file types they handle. The OS routes, apps interpret.</p>
+        </div>
+        <div class="card">
+          <h3>Pubsub Channels</h3>
+          <p>Apps communicate via named channels. Decoupled, async, observable.</p>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section id="try">
+<section id="cta">
   <div class="container">
-    <h2>Come <em>walk through</em></h2>
-    <p>This is an experiment. It's early. But the door is open.</p>
-
-    <div class="try-options">
-      <div class="try-card">
-        <h3>Try it now</h3>
-        <p>Launch the OS in your browser. No install needed.</p>
-        <a href="/app" class="primary">Enter FunctionServer</a>
-      </div>
-
-      <div class="try-card">
-        <h3>Read the story</h3>
-        <p>How we debugged a browser from the command line.</p>
-        <a href="/door.html" class="secondary">Read article</a>
-      </div>
-
-      <div class="try-card">
-        <h3>Self-host</h3>
-        <p>Run your own instance. Full source on GitHub.</p>
-        <a href="https://github.com/williamsharkey/functionserver" class="secondary">View source</a>
-      </div>
+    <h2>The door is open</h2>
+    <p>This is early. We don't know what this enables yet.</p>
+    <div class="cta-actions">
+      <a href="/app" class="btn btn-primary">Enter FunctionServer</a>
+      <a href="/door.html" class="btn btn-ghost">Read the article</a>
+      <a href="https://github.com/williamsharkey/functionserver" class="btn btn-ghost">View source</a>
     </div>
-
-    <p class="install-note">
-      Or install in one line:<br>
+    <p class="install-line">
+      Or self-host:<br>
       <code>curl -fsSL https://functionserver.com/install | bash</code>
     </p>
   </div>
@@ -713,9 +466,8 @@ footer p {
       <a href="/app">Launch</a>
       <a href="/door.html">Article</a>
       <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
-      <a href="https://github.com/williamsharkey/functionserver/issues">Issues</a>
     </div>
-    <p>FunctionServer is open source under the MIT license</p>
+    <p>Open source under MIT</p>
   </div>
 </footer>
 

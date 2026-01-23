@@ -1722,6 +1722,34 @@ func main() {
 			return
 		}
 
+		// Check for static files in www directory (door.html, etc)
+		if strings.HasSuffix(path, ".html") || strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".png") || strings.HasSuffix(path, ".jpg") || strings.HasSuffix(path, ".svg") {
+			wwwPaths := []string{"../www" + path, "./www" + path}
+			for _, p := range wwwPaths {
+				if content, err := os.ReadFile(p); err == nil {
+					ext := strings.ToLower(filepath.Ext(path))
+					contentType := "text/plain"
+					switch ext {
+					case ".html":
+						contentType = "text/html; charset=utf-8"
+					case ".css":
+						contentType = "text/css; charset=utf-8"
+					case ".js":
+						contentType = "application/javascript; charset=utf-8"
+					case ".png":
+						contentType = "image/png"
+					case ".jpg", ".jpeg":
+						contentType = "image/jpeg"
+					case ".svg":
+						contentType = "image/svg+xml"
+					}
+					w.Header().Set("Content-Type", contentType)
+					w.Write(content)
+					return
+				}
+			}
+		}
+
 		// Check if path starts with a username (public folder)
 		parts := strings.Split(strings.Trim(path, "/"), "/")
 		if len(parts) > 0 && usernameRegex.MatchString(parts[0]) {
