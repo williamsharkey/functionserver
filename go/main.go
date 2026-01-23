@@ -1388,11 +1388,27 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 
+		// Authenticate via Bearer token
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Authorization required. Use: Authorization: Bearer <session_token>",
+			})
+			return
+		}
+		tokenUser := verifyToken(auth[7:])
+		if tokenUser == "" {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Invalid or expired token",
+			})
+			return
+		}
+
 		// Parse MCP request
 		var req struct {
 			Method string                 `json:"method"`
 			Params map[string]interface{} `json:"params"`
-			User   string                 `json:"user"` // Target user's browser session
+			User   string                 `json:"user"` // Target user's browser session (optional, defaults to token user)
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1402,9 +1418,10 @@ func main() {
 			return
 		}
 
-		// Default to root user if not specified
+		// Use token user if not specified, or allow targeting another user's session
+		// (In future, could add permission checks for cross-user access)
 		if req.User == "" {
-			req.User = "root"
+			req.User = tokenUser
 		}
 
 		// Handle MCP methods
