@@ -68,6 +68,95 @@ var (
 	usernameRegex  = regexp.MustCompile(`^[a-z][a-z0-9_]{2,31}$`)
 )
 
+// MCP Bridge - connects Claude Code to browser ALGO.bridge
+type BrowserConnection struct {
+	Conn      *websocket.Conn
+	Username  string
+	Responses map[string]chan string // request ID -> response channel
+	mu        sync.Mutex
+}
+
+var (
+	browserConnections = make(map[string]*BrowserConnection) // username -> connection
+	browserConnMu      sync.RWMutex
+)
+
+// Register a browser connection for MCP routing
+func registerBrowserConn(username string, conn *websocket.Conn) *BrowserConnection {
+	browserConnMu.Lock()
+	defer browserConnMu.Unlock()
+
+	bc := &BrowserConnection{
+		Conn:      conn,
+		Username:  username,
+		Responses: make(map[string]chan string),
+	}
+	browserConnections[username] = bc
+	return bc
+}
+
+// Unregister a browser connection
+func unregisterBrowserConn(username string) {
+	browserConnMu.Lock()
+	defer browserConnMu.Unlock()
+	delete(browserConnections, username)
+}
+
+// Get a browser connection
+func getBrowserConn(username string) *BrowserConnection {
+	browserConnMu.RLock()
+	defer browserConnMu.RUnlock()
+	return browserConnections[username]
+}
+
+// Send a bridge command to browser and wait for response
+func (bc *BrowserConnection) SendCommand(cmd map[string]interface{}) (string, error) {
+	// Generate unique request ID
+	reqID := fmt.Sprintf("%d", time.Now().UnixNano())
+	cmd["_mcpReqId"] = reqID
+
+	// Create response channel
+	respChan := make(chan string, 1)
+	bc.mu.Lock()
+	bc.Responses[reqID] = respChan
+	bc.mu.Unlock()
+
+	defer func() {
+		bc.mu.Lock()
+		delete(bc.Responses, reqID)
+		bc.mu.Unlock()
+	}()
+
+	// Send command to browser
+	cmdJSON, _ := json.Marshal(cmd)
+	err := bc.Conn.WriteMessage(websocket.TextMessage, []byte("MCP_CMD:"+string(cmdJSON)))
+	if err != nil {
+		return "", err
+	}
+
+	// Wait for response with timeout
+	select {
+	case resp := <-respChan:
+		return resp, nil
+	case <-time.After(30 * time.Second):
+		return "", fmt.Errorf("timeout waiting for browser response")
+	}
+}
+
+// Handle MCP response from browser
+func (bc *BrowserConnection) HandleResponse(reqID string, result string) {
+	bc.mu.Lock()
+	respChan, ok := bc.Responses[reqID]
+	bc.mu.Unlock()
+
+	if ok {
+		select {
+		case respChan <- result:
+		default:
+		}
+	}
+}
+
 func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -564,6 +653,24 @@ func handlePTY(w http.ResponseWriter, r *http.Request) {
 	// Track if user explicitly closed the window
 	userClosed := false
 
+	// IPC directory setup
+	ipcDir := homeDir + "/.algo"
+	ipcInFile := ipcDir + "/in"
+	ipcOutFile := ipcDir + "/out"
+	os.MkdirAll(ipcDir, 0755)
+
+	// Create empty IPC files if they don't exist
+	if _, err := os.Stat(ipcInFile); os.IsNotExist(err) {
+		os.WriteFile(ipcInFile, []byte{}, 0644)
+	}
+	if _, err := os.Stat(ipcOutFile); os.IsNotExist(err) {
+		os.WriteFile(ipcOutFile, []byte{}, 0644)
+	}
+
+	// Register browser connection for MCP routing
+	browserConn := registerBrowserConn(username, conn)
+	defer unregisterBrowserConn(username)
+
 	// Handle PTY resize messages and input
 	go func() {
 		for {
@@ -588,6 +695,53 @@ func handlePTY(w http.ResponseWriter, r *http.Request) {
 					// Kill the tmux session
 					exec.Command("tmux", "kill-session", "-t", sessionName).Run()
 					return
+				}
+				// IPC read: read ~/.algo/in, clear it, return content
+				if msgStr == "IPC_READ" {
+					ipcDir := homeDir + "/.algo"
+					inFile := ipcDir + "/in"
+
+					// Ensure directory exists
+					os.MkdirAll(ipcDir, 0755)
+
+					// Read and clear the input file atomically
+					content, err := os.ReadFile(inFile)
+					if err == nil && len(content) > 0 {
+						// Clear the file
+						os.WriteFile(inFile, []byte{}, 0644)
+						// Send response
+						conn.WriteMessage(websocket.TextMessage, []byte("IPC_RESPONSE:"+string(content)))
+					} else {
+						// Empty or no file
+						conn.WriteMessage(websocket.TextMessage, []byte("IPC_RESPONSE:"))
+					}
+					continue
+				}
+				// IPC write: append to ~/.algo/out
+				if strings.HasPrefix(msgStr, "IPC_WRITE:") {
+					ipcDir := homeDir + "/.algo"
+					outFile := ipcDir + "/out"
+
+					// Ensure directory exists
+					os.MkdirAll(ipcDir, 0755)
+
+					// Append content
+					content := msgStr[10:] // Skip "IPC_WRITE:"
+					f, err := os.OpenFile(outFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if err == nil {
+						f.WriteString(content + "\n")
+						f.Close()
+					}
+					continue
+				}
+				// MCP response from browser
+				if strings.HasPrefix(msgStr, "MCP_RESP:") {
+					// Format: MCP_RESP:reqId:jsonResult
+					parts := strings.SplitN(msgStr[9:], ":", 2)
+					if len(parts) == 2 {
+						browserConn.HandleResponse(parts[0], parts[1])
+					}
+					continue
 				}
 			}
 			// Write to PTY
@@ -1139,6 +1293,9 @@ func main() {
 	mux.HandleFunc("/api/system-apps", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
 
 		// Find apps directory
 		appsDirs := []string{"../core/apps", "./core/apps"}
@@ -1210,7 +1367,256 @@ func main() {
 			processApp(filepath.Join(appsDir, f.Name()), id)
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{"apps": apps})
+			json.NewEncoder(w).Encode(map[string]interface{}{"apps": apps})
+	})
+
+	// MCP (Model Context Protocol) endpoint for Claude Code integration
+	mux.HandleFunc("/api/mcp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		// Parse MCP request
+		var req struct {
+			Method string                 `json:"method"`
+			Params map[string]interface{} `json:"params"`
+			User   string                 `json:"user"` // Target user's browser session
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Invalid request body",
+			})
+			return
+		}
+
+		// Default to root user if not specified
+		if req.User == "" {
+			req.User = "root"
+		}
+
+		// Handle MCP methods
+		switch req.Method {
+		case "tools/list":
+			// Return available tools
+			tools := []map[string]interface{}{
+				{
+					"name":        "algo_eval",
+					"description": "Execute JavaScript code in the browser and return the result",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"code": map[string]interface{}{
+								"type":        "string",
+								"description": "JavaScript code to execute",
+							},
+						},
+						"required": []string{"code"},
+					},
+				},
+				{
+					"name":        "algo_getState",
+					"description": "Get the current ALGO OS state including windows, apps, and user info",
+					"inputSchema": map[string]interface{}{
+						"type":       "object",
+						"properties": map[string]interface{}{},
+					},
+				},
+				{
+					"name":        "algo_query",
+					"description": "Query a DOM element using CSS selector",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"selector": map[string]interface{}{
+								"type":        "string",
+								"description": "CSS selector",
+							},
+						},
+						"required": []string{"selector"},
+					},
+				},
+				{
+					"name":        "algo_queryAll",
+					"description": "Query all matching DOM elements using CSS selector",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"selector": map[string]interface{}{
+								"type":        "string",
+								"description": "CSS selector",
+							},
+						},
+						"required": []string{"selector"},
+					},
+				},
+				{
+					"name":        "algo_click",
+					"description": "Click a DOM element by CSS selector",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"selector": map[string]interface{}{
+								"type":        "string",
+								"description": "CSS selector of element to click",
+							},
+						},
+						"required": []string{"selector"},
+					},
+				},
+				{
+					"name":        "algo_setValue",
+					"description": "Set the value of an input element",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"selector": map[string]interface{}{
+								"type":        "string",
+								"description": "CSS selector of input element",
+							},
+							"value": map[string]interface{}{
+								"type":        "string",
+								"description": "Value to set",
+							},
+						},
+						"required": []string{"selector", "value"},
+					},
+				},
+				{
+					"name":        "algo_openApp",
+					"description": "Open an application by ID",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"appId": map[string]interface{}{
+								"type":        "string",
+								"description": "Application ID to open",
+							},
+						},
+						"required": []string{"appId"},
+					},
+				},
+				{
+					"name":        "algo_closeWindow",
+					"description": "Close a window by ID",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"windowId": map[string]interface{}{
+								"type":        "integer",
+								"description": "Window ID to close",
+							},
+						},
+						"required": []string{"windowId"},
+					},
+				},
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"tools": tools,
+			})
+
+		case "tools/call":
+			// Execute a tool
+			toolName, _ := req.Params["name"].(string)
+			toolArgs, _ := req.Params["arguments"].(map[string]interface{})
+
+			// Get browser connection
+			bc := getBrowserConn(req.User)
+			if bc == nil {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": fmt.Sprintf("No browser session for user %s. Open the Claude app in the browser first.", req.User),
+				})
+				return
+			}
+
+			// Map tool to bridge command
+			var bridgeCmd map[string]interface{}
+			switch toolName {
+			case "algo_eval":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "eval",
+					"_args":   []interface{}{toolArgs["code"]},
+				}
+			case "algo_getState":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "getState",
+					"_args":   []interface{}{},
+				}
+			case "algo_query":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "query",
+					"_args":   []interface{}{toolArgs["selector"]},
+				}
+			case "algo_queryAll":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "queryAll",
+					"_args":   []interface{}{toolArgs["selector"]},
+				}
+			case "algo_click":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "click",
+					"_args":   []interface{}{toolArgs["selector"]},
+				}
+			case "algo_setValue":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "setValue",
+					"_args":   []interface{}{toolArgs["selector"], toolArgs["value"]},
+				}
+			case "algo_openApp":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "openApp",
+					"_args":   []interface{}{toolArgs["appId"]},
+				}
+			case "algo_closeWindow":
+				bridgeCmd = map[string]interface{}{
+					"_bridge": "closeWindow",
+					"_args":   []interface{}{toolArgs["windowId"]},
+				}
+			default:
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": fmt.Sprintf("Unknown tool: %s", toolName),
+				})
+				return
+			}
+
+			// Send to browser and wait for response
+			result, err := bc.SendCommand(bridgeCmd)
+			if err != nil {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+
+			// Parse and return result
+			var resultObj interface{}
+			json.Unmarshal([]byte(result), &resultObj)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": result,
+					},
+				},
+			})
+
+		default:
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Unknown method: %s", req.Method),
+			})
+		}
 	})
 
 	// Serve install script from www folder

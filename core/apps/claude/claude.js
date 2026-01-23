@@ -195,30 +195,76 @@ ALGO.app.icon = "🤖";
           ws.send(`RESIZE:${dims.cols}:${dims.rows}`);
         }
 
-        // Initialize IPC directory (don't auto-start claude - let user run with preferred flags)
-        setTimeout(() => {
-          // Create IPC directory and files
-          ws.send('mkdir -p ~/.algo && touch ~/.algo/out ~/.algo/in\n');
-
-          setTimeout(() => {
-            ipcInitialized = true;
-            updatePubsubStatus('ready', false);
-            setupPubsubBridge();
-
-            // Show helpful message
-            term.write('\r\n\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n');
-            term.write('\x1b[36m  Claude Terminal - Enhanced shell with JS bridge\x1b[0m\r\n');
-            term.write('\x1b[36m  Run: claude, claude --continue, or any command\x1b[0m\r\n');
-            term.write('\x1b[36m  IPC: ~/.algo/in (receive) ~/.algo/out (send)\x1b[0m\r\n');
-            term.write('\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n\r\n');
-          }, 300);
-        }, 200);
+        // Setup pubsub bridge
+        ipcInitialized = true;
+        updatePubsubStatus('ready', false);
+        setupPubsubBridge();
+        // IPC is now push-based via file watcher - no polling needed
       };
+
+      // Process IPC bridge commands (pushed from server via file watcher)
+      function processIpcCommand(content) {
+        if (!content || !content.trim()) return;
+
+        // Parse lines - each line is a separate command
+        const lines = content.trim().split('\n');
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const cmdObj = JSON.parse(line);
+            if (cmdObj._bridge && ALGO.bridge[cmdObj._bridge]) {
+              const result = ALGO.bridge[cmdObj._bridge](...(cmdObj._args || []));
+              if (cmdObj._id) result._id = cmdObj._id;
+
+              // Write result to output file
+              ws.send('IPC_WRITE:' + JSON.stringify(result));
+            }
+          } catch (e) {
+            console.warn('IPC command parse error:', e.message, line.substring(0, 100));
+          }
+        }
+      }
 
       ws.onmessage = (event) => {
         if (event.data instanceof ArrayBuffer) {
           term.write(new Uint8Array(event.data));
         } else {
+          // Check for MCP command from server
+          if (typeof event.data === 'string' && event.data.startsWith('MCP_CMD:')) {
+            try {
+              const cmdObj = JSON.parse(event.data.slice(8)); // Skip "MCP_CMD:"
+              const reqId = cmdObj._mcpReqId;
+              delete cmdObj._mcpReqId;
+
+              if (cmdObj._bridge && ALGO.bridge[cmdObj._bridge]) {
+                const result = ALGO.bridge[cmdObj._bridge](...(cmdObj._args || []));
+                // Send response back to server
+                ws.send('MCP_RESP:' + reqId + ':' + JSON.stringify(result));
+              } else {
+                ws.send('MCP_RESP:' + reqId + ':' + JSON.stringify({error: 'Unknown bridge command'}));
+              }
+            } catch (e) {
+              console.error('MCP command error:', e);
+            }
+            return;
+          }
+          // Check for IPC push (from file watcher)
+          if (typeof event.data === 'string' && event.data.startsWith('IPC_PUSH:')) {
+            const content = event.data.slice(9); // Skip "IPC_PUSH:"
+            if (content) {
+              processIpcCommand(content);
+            }
+            return; // Don't write IPC messages to terminal
+          }
+          // Also handle legacy IPC_RESPONSE for backwards compatibility
+          if (typeof event.data === 'string' && event.data.startsWith('IPC_RESPONSE:')) {
+            const content = event.data.slice(13);
+            if (content) {
+              processIpcCommand(content);
+            }
+            return;
+          }
           term.write(event.data);
         }
       };
@@ -343,58 +389,8 @@ ALGO.app.icon = "🤖";
         }
       });
 
-      // Expose a simple way for Claude to execute bridge commands via the terminal
-      // When Claude writes a special pattern to stdout, we intercept and execute
-      // Pattern: <<<ALGO_BRIDGE:{"_bridge":"eval","_args":["code"]}>>>
-      let outputBuffer = '';
-      const bridgePattern = /<<<ALGO_BRIDGE:(.*?)>>>/g;
-
-      // Intercept terminal output to look for bridge commands
-      const originalWrite = term.write.bind(term);
-      term.write = function(data) {
-        // Convert to string if needed
-        let str = data;
-        if (data instanceof Uint8Array) {
-          str = new TextDecoder().decode(data);
-        }
-
-        // Check for bridge pattern
-        outputBuffer += str;
-
-        // Look for complete bridge commands
-        let match;
-        while ((match = bridgePattern.exec(outputBuffer)) !== null) {
-          try {
-            const cmdObj = JSON.parse(match[1]);
-            if (cmdObj._bridge && ALGO.bridge[cmdObj._bridge]) {
-              const result = ALGO.bridge[cmdObj._bridge](...(cmdObj._args || []));
-              if (cmdObj._id) result._id = cmdObj._id;
-
-              // Write result to file
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                const escapedResult = JSON.stringify(result).replace(/'/g, "'\\''").replace(/\\/g, '\\\\');
-                ws.send(`echo '${escapedResult}' >> ~/.algo/out\n`);
-              }
-            }
-          } catch (e) {
-            console.error('Bridge command parse error:', e);
-          }
-
-          // Remove the matched pattern from buffer
-          outputBuffer = outputBuffer.replace(match[0], '');
-        }
-
-        // Keep buffer from growing too large
-        if (outputBuffer.length > 10000) {
-          outputBuffer = outputBuffer.slice(-5000);
-        }
-
-        // Pass through to actual terminal (hide bridge commands from display)
-        const cleanedData = (typeof data === 'string' ? data : str).replace(bridgePattern, '');
-        if (cleanedData) {
-          originalWrite(data instanceof Uint8Array ? data : cleanedData);
-        }
-      };
+      // Terminal output bridge disabled for now - use pubsub instead
+      // To execute bridge commands, use: ALGO.pubsub.publish('bridge', {_bridge: 'eval', _args: ['code']})
 
       // Cleanup on close
       container._claudeCleanup = () => {
