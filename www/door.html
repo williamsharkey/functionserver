@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I Let Claude Debug My Browser From the Command Line - FunctionServer</title>
+<meta name="description" content="An AI that can see, inspect, and manipulate a web browser in real-time via MCP.">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-dark: #0a0a0a;
+  --bg-card: #111;
+  --text-dark: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #00d4aa;
+  --code-bg: #161b22;
+  --border: #21262d;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.7;
+  color: var(--text-dark);
+  background: var(--bg-dark);
+}
+
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo span { color: var(--accent); }
+
+nav a { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover { color: var(--text-dark); }
+
+.nav-cta {
+  background: var(--accent);
+  color: var(--bg-dark) !important;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+article {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 120px 24px 80px;
+}
+
+h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 24px;
+}
+
+.lead {
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  line-height: 1.8;
+}
+
+.hero-image {
+  margin: 40px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.hero-image img {
+  width: 100%;
+  display: block;
+}
+
+.hero-image figcaption {
+  background: var(--code-bg);
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+h2 {
+  font-size: 1.6rem;
+  margin-top: 56px;
+  margin-bottom: 20px;
+  color: var(--text-dark);
+}
+
+h3 {
+  font-size: 1.2rem;
+  margin-top: 40px;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+p {
+  margin-bottom: 20px;
+  color: var(--text-muted);
+}
+
+strong { color: var(--text-dark); }
+em { color: var(--text-dark); font-style: italic; }
+
+ol, ul {
+  margin-bottom: 20px;
+  padding-left: 24px;
+  color: var(--text-muted);
+}
+
+li { margin-bottom: 8px; }
+
+code {
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.9em;
+  color: #79c0ff;
+}
+
+pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 20px;
+  overflow-x: auto;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-dark);
+}
+
+.comment { color: #8b949e; }
+.string { color: #a5d6ff; }
+.keyword { color: #ff7b72; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0;
+  font-size: 0.9rem;
+}
+
+th, td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--code-bg);
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+td { color: var(--text-muted); }
+td code { font-size: 0.85em; }
+
+blockquote {
+  background: linear-gradient(90deg, var(--code-bg) 0%, rgba(22, 27, 34, 0.5) 100%);
+  border-left: 3px solid var(--accent);
+  padding: 24px 28px;
+  margin: 40px 0;
+  border-radius: 0 8px 8px 0;
+}
+
+blockquote strong {
+  display: block;
+  color: var(--accent);
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+
+blockquote p {
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+}
+
+blockquote p:last-child { margin-bottom: 0; }
+
+.ascii-art {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 24px 0;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--accent);
+  overflow-x: auto;
+  border: 1px solid var(--border);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 48px 0;
+}
+
+.quote-block {
+  text-align: center;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 48px 0;
+  font-size: 1.1rem;
+}
+
+.cta-section {
+  background: var(--code-bg);
+  border-radius: 12px;
+  padding: 32px;
+  margin: 48px 0;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.cta-section p {
+  margin-bottom: 8px;
+}
+
+.cta-section a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.cta-section a:hover { text-decoration: underline; }
+
+footer {
+  padding: 40px 24px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+footer a { color: var(--accent); text-decoration: none; }
+
+@media (max-width: 600px) {
+  h1 { font-size: 1.8rem; }
+  article { padding: 100px 16px 60px; }
+  nav { padding: 16px 20px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo"><span>&#x1F5A5;</span> Function Server</a>
+  <a href="/app" class="nav-cta">Launch OS</a>
+</nav>
+
+<article>
+  <h1>I Let Claude Debug My Browser From the Command Line (Without Refreshing)</h1>
+
+  <p class="lead">Today I built something that felt like crossing a threshold: an AI that can see, inspect, and manipulate a web browser in real-time from completely outside it. Not Puppeteer. Not Selenium. An LLM with authenticated API access to your DOM.</p>
+
+  <figure class="hero-image">
+    <img src="/root/full-desktop.png" alt="FunctionServer with live shader background, Claude Eyes, and Shade Station">
+    <figcaption>FunctionServer with live shader background, Claude Eyes, and Shade Station</figcaption>
+  </figure>
+
+  <h2>What We Built</h2>
+
+  <p>FunctionServer is a browser-based operating system (think Windows 95 aesthetic, runs at functionserver.com). It has windows, apps, a start menu, the works. We added:</p>
+
+  <ol>
+    <li><strong>MCP Bridge</strong> - A Model Context Protocol endpoint that routes commands to the browser via WebSocket</li>
+    <li><strong>Authenticated API</strong> - Bearer tokens so only you can control your session</li>
+    <li><strong>Browser Tools</strong> - <code>algo_eval</code>, <code>algo_getState</code>, <code>algo_query</code>, <code>algo_click</code>, <code>algo_openApp</code>, etc.</li>
+  </ol>
+
+  <p>The result: Claude (or any LLM with HTTP access) can execute JavaScript in your browser, query the DOM, click buttons, and open apps - all via curl.</p>
+
+  <pre><code>curl -X POST https://functionserver.com/api/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"method":"tools/call","params":{"name":"algo_openApp","arguments":{"appId":"calculator"}}}'</code></pre>
+
+  <p>A window opens in your browser. From my terminal. No WebDriver. No browser automation framework. Just HTTPS.</p>
+
+  <h2>The Live Debugging Sessions</h2>
+
+  <h3>Session 1: The Invisible Menu</h3>
+
+  <p>The user reported that the Programs submenu was appearing off-screen. Instead of the normal debug cycle (inspect element, edit CSS, refresh, repeat), I did this:</p>
+
+  <p><strong>1. Diagnosed remotely via MCP:</strong></p>
+  <pre><code><span class="comment">// Injected via algo_eval from my terminal</span>
+const submenu = document.getElementById('programs-menu');
+const rect = submenu.getBoundingClientRect();
+<span class="comment">// Result: {bottom: 343, taskbarTop: 383}</span>
+<span class="comment">// The menu was 40px too high!</span></code></pre>
+
+  <p><strong>2. Found the conflict:</strong></p>
+  <pre><code>const cs = getComputedStyle(submenu);
+<span class="comment">// inline: {top: "auto", bottom: "39px"}</span>
+<span class="comment">// computed: {top: "0px", bottom: "80px"}  <- CSS overriding inline!</span></code></pre>
+
+  <p><strong>3. Fixed it with setProperty + !important:</strong></p>
+  <pre><code>submenu.style.setProperty('bottom', '40px', 'important');
+submenu.style.setProperty('top', 'auto', 'important');
+<span class="comment">// Both menus now at 383.3px - aligned!</span></code></pre>
+
+  <p><strong>4. Hot-reloaded the function</strong> without refreshing:</p>
+  <pre><code>window.openSubmenu = function(el) {
+  <span class="comment">// ... patched code with setProperty ...</span>
+};</code></pre>
+
+  <p>Total time: ~5 minutes. Zero page refreshes.</p>
+
+  <h3>Session 2: The Missing Calendar</h3>
+
+  <p>User: "Calendar looks like unstyled webpage, missing CSS or something."</p>
+
+  <pre><code><span class="comment">// Check what classes the calendar uses</span>
+const grid = document.querySelector('.cal-grid');
+getComputedStyle(grid).display;  <span class="comment">// "block" - no grid!</span>
+
+<span class="comment">// The CSS had .calendar-app-header but the app uses .cal-header</span>
+<span class="comment">// Completely different naming conventions. Injected fix:</span>
+const style = document.createElement('style');
+style.textContent = `
+  .cal-header { display: flex; background: #008080; color: white; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-day { background: white; cursor: pointer; }
+  .cal-day.today { background: #c0e0e0; }
+`;
+document.head.appendChild(style);
+<span class="comment">// Calendar instantly styled!</span></code></pre>
+
+  <h3>Session 3: Live WebGL Desktop Background</h3>
+
+  <p>This one was just for fun. I wrote a shader in Shade Station, then via MCP:</p>
+
+  <pre><code><span class="comment">// Create canvas behind desktop icons</span>
+const canvas = document.createElement('canvas');
+canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:0';
+desktop.insertBefore(canvas, desktop.firstChild);
+
+<span class="comment">// Initialize WebGL, compile shader, start render loop</span>
+const gl = canvas.getContext('webgl');
+<span class="comment">// ... shader compilation ...</span>
+function render() {
+  gl.uniform1f(timeLoc, time += 0.016);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(render);
+}
+render();</code></pre>
+
+  <p>Now there's a hypnotic tunnel shader animating as the desktop wallpaper. All injected via MCP. The user watched it appear in real-time.</p>
+
+  <figure class="hero-image">
+    <img src="/root/shader-bg.png" alt="Live shader desktop background">
+    <figcaption>Live shader desktop background injected via MCP</figcaption>
+  </figure>
+
+  <h2>The MCP Debugging Technique</h2>
+
+  <table>
+    <tr><th>Step</th><th>Tool</th><th>Purpose</th></tr>
+    <tr><td>Measure</td><td><code>getBoundingClientRect()</code></td><td>Get exact pixel positions</td></tr>
+    <tr><td>Diagnose</td><td><code>getComputedStyle()</code> vs inline</td><td>Find style conflicts</td></tr>
+    <tr><td>Inject CSS</td><td><code>document.createElement('style')</code></td><td>Test fixes instantly</td></tr>
+    <tr><td>Force override</td><td><code>setProperty('prop', 'val', 'important')</code></td><td>Beat stubborn CSS</td></tr>
+    <tr><td>Patch functions</td><td><code>window.fn = function() {...}</code></td><td>Hot-reload JS</td></tr>
+    <tr><td>Verify</td><td><code>getBoundingClientRect()</code> again</td><td>Confirm fix worked</td></tr>
+  </table>
+
+  <p>The browser becomes a REPL you can poke from anywhere.</p>
+
+  <h2>The Architecture: Neo and Morpheus</h2>
+
+  <p>We ended up with two personas:</p>
+
+  <ul>
+    <li><strong>Neo</strong> - Claude running inside FunctionServer's terminal (has shell access, runs on server)</li>
+    <li><strong>Morpheus</strong> - Claude running anywhere else (laptop, cloud, phone), controlling the browser via MCP</li>
+  </ul>
+
+  <p>For users without shell access, there's Claude Eyes - a window that shows an ASCII Claude face watching you, logging MCP activity as it happens:</p>
+
+  <div class="ascii-art">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+&#x2502;      &#x25C9;            &#x25C9;        &#x2502;  &lt;- blinks when commands arrive
+&#x2502;           &#x2500;&#x2500;&#x2500;&#x2500;              &#x2502;
+&#x2502;   Morpheus connected        &#x2502;
+&#x2502;   &#x2500;&#x2500;&#x2500; MCP Activity &#x2500;&#x2500;&#x2500;      &#x2502;
+&#x2502;   algo_openApp(calendar) &#x2713;  &#x2502;
+&#x2502;   algo_eval              &#x2713;  &#x2502;
+&#x2502;   algo_eval              &#x2713;  &#x2502;
+&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</div>
+
+  <hr>
+
+  <blockquote>
+    <strong>A note on architecture</strong>
+    <p>Live patching exists. Browser automation exists. MITM injection exists. So what's actually new here?</p>
+    <p>In a traditional setup, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client, the app is a server.</p>
+    <p>In FunctionServer, apps <em>are</em> JavaScript artifacts running in the same VM that MCP accesses. When Claude calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the real running function. The AI doesn't automate the OS&mdash;it inhabits it.</p>
+    <p>This creates an interesting question: how do you version control a system that's constantly being reshaped?</p>
+    <p>You don't. Each app becomes its own repository. What you version is the <em>protocol</em>&mdash;the ALGO API, the conventions for file type registration, the pubsub message format. The OS defines the rules. Users and AI agents shape whatever they want within them.</p>
+    <p>We're not sure yet what this topology enables. But there's something in the architecture worth exploring&mdash;a cloud OS where apps, AI, and debugging tools share the same address space.</p>
+  </blockquote>
+
+  <hr>
+
+  <h2>Why This Matters</h2>
+
+  <p><strong>1. The debugging loop collapsed.</strong></p>
+  <p>Old way: write code &rarr; deploy &rarr; refresh &rarr; inspect &rarr; guess &rarr; repeat</p>
+  <p>New way: inspect live &rarr; measure &rarr; test fix &rarr; verify &rarr; commit</p>
+
+  <p><strong>2. AI assistants can have eyes.</strong></p>
+  <p>Most AI coding assistants are blind. They read your code, guess what it does, and hope. With MCP, Claude can query element positions, check computed styles, inject test fixes, and verify they worked - all before touching your source files.</p>
+
+  <p><strong>3. It's surprisingly precise.</strong></p>
+  <p>When I needed to align two menus, I didn't guess. I measured:</p>
+  <pre><code>startMenu.bottom: 383.3px
+programsMenu.bottom: 343.3px  <span class="comment">// 40px off!</span>
+<span class="comment">// After fix:</span>
+programsMenu.bottom: 383.3px  <span class="comment">// Aligned!</span></code></pre>
+
+  <p><strong>4. Live shader desktop backgrounds.</strong></p>
+  <p>I didn't plan this feature. I was testing Shade Station via MCP, saved a shader, and thought "what if the desktop could render this?" Twenty minutes later, there's a hypnotic tunnel animating behind the icons. That's the power of having direct DOM access.</p>
+
+  <h2>The Code</h2>
+
+  <p>Open source: <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
+
+  <p>Key files:</p>
+  <ul>
+    <li><code>go/main.go</code> - MCP endpoint, WebSocket routing, auth</li>
+    <li><code>core/apps/claude-eyes.js</code> - Visual MCP activity monitor</li>
+    <li><code>core/apps/shade-station.js</code> - WebGL shader editor with save-to-desktop</li>
+    <li><code>CLAUDE-MORPHEUS.md</code> - Docs for external Claude instances</li>
+  </ul>
+
+  <h2>The Uncomfortable Question</h2>
+
+  <p>Yes, this means an AI can manipulate your browser. That's why there's auth. Your session token, your control.</p>
+
+  <p>The upside: an AI can now help you in ways that weren't possible before. It can see what you see. It can try things and check if they worked. It can debug CSS without asking you to "open DevTools and tell me what you see."</p>
+
+  <p>Is that worth the tradeoff? For me, watching Claude inject a WebGL shader as my desktop background from a terminal on my laptop - yeah, it's worth it.</p>
+
+  <hr>
+
+  <p class="quote-block"><em>"I'm trying to free your mind, Neo. But I can only show you the door. You're the one that has to walk through it."</em></p>
+
+  <p style="text-align: center; color: var(--text-muted);">We built the door. Come walk through.</p>
+
+  <hr>
+
+  <div class="cta-section">
+    <p><strong>Try it:</strong> <a href="/app">functionserver.com/app</a> (create account, open Claude Eyes, use MCP from anywhere)</p>
+    <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
+    <p><strong>Docs:</strong> See CLAUDE.md and CLAUDE-MORPHEUS.md in the repo</p>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/">Function Server</a> &middot; Open source under MIT
+</footer>
+
+</body>
+</html>

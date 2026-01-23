@@ -367,6 +367,81 @@ section { padding: 100px 20px; }
   flex-shrink: 0;
 }
 
+/* Observation Section */
+#observation {
+  background: linear-gradient(180deg, var(--bg-dark) 0%, #0d1117 100%);
+  border-top: 1px solid #1a1f26;
+  border-bottom: 1px solid #1a1f26;
+}
+
+.observation-content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.observation-label {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.75rem;
+  color: #5a6a7a;
+  margin-bottom: 20px;
+}
+
+.observation-content h2 {
+  font-size: 1.8rem;
+  font-weight: 500;
+  margin-bottom: 32px;
+  color: #c9d1d9;
+  line-height: 1.4;
+}
+
+.observation-body p {
+  color: #8b949e;
+  font-size: 1rem;
+  line-height: 1.9;
+  margin-bottom: 20px;
+}
+
+.observation-body em {
+  color: #c9d1d9;
+  font-style: italic;
+}
+
+.observation-body strong {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.observation-body code {
+  background: #161b22;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.9em;
+  color: #79c0ff;
+}
+
+.observation-example {
+  background: #161b22;
+  border-left: 3px solid #30363d;
+  padding: 20px 24px;
+  margin: 28px 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.observation-example p {
+  margin-bottom: 0;
+  font-size: 0.95rem;
+}
+
+.observation-footer {
+  color: #5a6a7a;
+  font-size: 0.9rem;
+  font-style: italic;
+  margin-top: 32px;
+  margin-bottom: 0;
+}
+
 /* Architecture Section */
 #architecture {
   background: var(--bg-dark);
@@ -598,6 +673,7 @@ footer p {
   <a href="/" class="logo"><span>&#x1F5A5;</span> Function Server</a>
   <div class="links">
     <a href="#features">Features</a>
+    <a href="#observation">Notes</a>
     <a href="#architecture">Architecture</a>
     <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
   </div>
@@ -698,6 +774,35 @@ footer p {
         <li><span class="check">&#x2713;</span> Claude Code in terminal</li>
         <li><span class="check">&#x2713;</span> AI agents everywhere</li>
       </ul>
+    </div>
+  </div>
+</section>
+
+<section id="observation">
+  <div class="container">
+    <div class="observation-content">
+      <div class="observation-label">An Observation</div>
+      <h2>What happens when apps are artifacts in a shared VM?</h2>
+
+      <div class="observation-body">
+        <p>Live patching exists. Browser automation exists. Man-in-the-middle injection exists. So what's different here?</p>
+
+        <p>In FunctionServer, the apps <em>are</em> the JavaScript artifacts. They're not compiled binaries running behind an API. They're not isolated processes that need IPC to communicate. They're functions and objects living in the same VM that an AI agent can access via MCP.</p>
+
+        <p>This creates something unexpected: the AI doesn't automate the OS from outside. It <strong>inhabits</strong> it.</p>
+
+        <div class="observation-example">
+          <p>When Claude inspects a menu position, it's calling <code>getBoundingClientRect()</code> on the same DOM element the user sees. When it patches a function, that function is the real running code. When it injects a WebGL shader as a desktop background, the user watches it appear in real-time.</p>
+        </div>
+
+        <p>The line between "user" and "developer" and "operating system" starts to blur. The OS becomes less like a fixed container and more like a collection of morphing artifacts&mdash;apps that can be inspected, modified, and extended by anything with access to the VM.</p>
+
+        <p>We don't know yet what this enables. It's early. But there's something interesting in the topology of it&mdash;a cloud OS where the apps, the AI, and the debugging tools all share the same address space.</p>
+
+        <p>One thing becomes clear quickly: you can't version control a system that's constantly being reshaped. So you don't. Each app becomes its own repo. What you version is the <em>protocol</em>&mdash;the API, the conventions for how apps declare their inputs and outputs, how they register file types, how they communicate. The OS defines the rules. The user shapes whatever they want within them.</p>
+
+        <p class="observation-footer">This is an experiment in leaving the architecture open.</p>
+      </div>
     </div>
   </div>
 </section>

@@ -141,6 +141,24 @@ For users without shell access, there's Claude Eyes - a window that shows an ASC
 └─────────────────────────────┘
 ```
 
+---
+
+> **A note on architecture**
+>
+> Live patching exists. Browser automation exists. MITM injection exists. So what's actually new here?
+>
+> In a traditional setup, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client, the app is a server.
+>
+> In FunctionServer, apps *are* JavaScript artifacts running in the same VM that MCP accesses. When Claude calls `getBoundingClientRect()`, it's touching the same DOM element the user sees. When it patches `window.openSubmenu`, that's the real running function. The AI doesn't automate the OS—it inhabits it.
+>
+> This creates an interesting question: how do you version control a system that's constantly being reshaped?
+>
+> You don't. Each app becomes its own repository. What you version is the *protocol*—the ALGO API, the conventions for file type registration, the pubsub message format. The OS defines the rules. Users and AI agents shape whatever they want within them.
+>
+> We're not sure yet what this topology enables. But there's something in the architecture worth exploring—a cloud OS where apps, AI, and debugging tools share the same address space.
+
+---
+
 ## Why This Matters
 
 **1. The debugging loop collapsed.**
