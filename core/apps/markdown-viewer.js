@@ -3,6 +3,16 @@ ALGO.app.name = 'Markdown Viewer';
 ALGO.app.icon = '📑';
 
 function _md_parseMarkdown(text) {
+  // Parse tables first (before other replacements mess with pipes)
+  text = text.replace(/(?:^|\n)(\|.+\|)\n(\|[-:| ]+\|)\n((?:\|.+\|\n?)+)/gm, function(match, header, separator, body) {
+    const headerCells = header.split('|').slice(1, -1).map(c => '<th>' + c.trim() + '</th>').join('');
+    const bodyRows = body.trim().split('\n').map(row => {
+      const cells = row.split('|').slice(1, -1).map(c => '<td>' + c.trim() + '</td>').join('');
+      return '<tr>' + cells + '</tr>';
+    }).join('');
+    return '<table class="md-table"><thead><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
+  });
+
   let html = text
     // Code blocks (must be first)
     .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="lang-$1">$2</code></pre>')
@@ -68,6 +78,10 @@ function _md_open(content, filename) {
         '.md-content ul { padding-left:25px; }' +
         '.md-content a { color:#0066cc; }' +
         '.md-content hr { border:none; border-top:1px solid #ccc; margin:20px 0; }' +
+        '.md-content table.md-table { border-collapse:collapse; width:100%; margin:15px 0; }' +
+        '.md-content table.md-table th, .md-content table.md-table td { border:1px solid #ccc; padding:8px 12px; text-align:left; }' +
+        '.md-content table.md-table th { background:#f5f5f5; font-weight:bold; }' +
+        '.md-content table.md-table tr:nth-child(even) { background:#fafafa; }' +
       '</style>' +
       '<div class="md-content">' + html + '</div>' +
     '</div>'

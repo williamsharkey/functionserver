@@ -101,6 +101,7 @@ let dragWin = null;
 let dragOffset = { x: 0, y: 0 };
 let contextTarget = null;
 let submenuCloseTimeout = null;
+let topZIndex = 100;  // Track highest z-index for window stacking
 
 // File type registry
 let fileTypeRegistry = {
@@ -665,7 +666,7 @@ function focusWindow(id) {
   const el = document.getElementById('win-' + id);
   if (el) {
     el.classList.add('active');
-    el.style.zIndex = winId + 100;
+    el.style.zIndex = ++topZIndex;  // Increment z-index so focused window is always on top
   }
   activeWin = id;
 }
