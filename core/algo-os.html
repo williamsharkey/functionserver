@@ -779,16 +779,15 @@ function notepadSave(id) {
 
 // ==================== JAVASCRIPT IDE ====================
 const ALGO_API_CODE = `
-const ALGO = {
-  app: { name: 'App', icon: '📱' },
-  title: (t) => { document.title = t; },
-  html: (h) => { document.body.innerHTML = h; },
-  createWindow: (opts) => createWindow(opts),
-  notify: (msg) => algoSpeak(msg),
-  state: {},
-  ui: {
-    button: (text, onclick) => '<button onclick="(' + onclick + ')()">' + text + '</button>'
-  }
+// Extend global ALGO (don't shadow it - we need pubsub and bridge!)
+ALGO.app = { name: 'App', icon: '📱' };
+ALGO.title = (t) => { document.title = t; };
+ALGO.html = (h) => { document.body.innerHTML = h; };
+ALGO.createWindow = (opts) => createWindow(opts);
+ALGO.notify = (msg) => algoSpeak(msg);
+ALGO.state = ALGO.state || {};
+ALGO.ui = ALGO.ui || {
+  button: (text, onclick) => '<button onclick="(' + onclick + ')()">' + text + '</button>'
 };
 `;
 
