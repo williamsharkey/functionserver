@@ -107,10 +107,20 @@ document          // Full DOM access
 
 ## Common Patterns
 
+**Batch multiple queries (3x faster):**
+```bash
+# Instead of 3 calls (~225ms):
+eye 'a:document.title'
+eye 'a:wins()'
+eye 'a:apps()'
+
+# One call (~75ms):
+eye 'a:[document.title, wins(), apps()]'
+```
+
 **List window titles:**
 ```bash
 eye 'a:wins()'
-# or verbose: eye 'a:$$(".window-title").map(t=>t.textContent)'
 ```
 
 **Find and fix CSS issue:**
