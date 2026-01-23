@@ -195,19 +195,24 @@ ALGO.app.icon = "🤖";
           ws.send(`RESIZE:${dims.cols}:${dims.rows}`);
         }
 
-        // Initialize IPC directory and start Claude after a moment
+        // Initialize IPC directory (don't auto-start claude - let user run with preferred flags)
         setTimeout(() => {
-          // Create IPC directory
+          // Create IPC directory and files
           ws.send('mkdir -p ~/.algo && touch ~/.algo/out ~/.algo/in\n');
 
-          // Start Claude Code after directory setup
           setTimeout(() => {
-            ws.send('claude\n');
             ipcInitialized = true;
-            updatePubsubStatus('connected', false);
+            updatePubsubStatus('ready', false);
             setupPubsubBridge();
-          }, 500);
-        }, 300);
+
+            // Show helpful message
+            term.write('\r\n\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n');
+            term.write('\x1b[36m  Claude Terminal - Enhanced shell with JS bridge\x1b[0m\r\n');
+            term.write('\x1b[36m  Run: claude, claude --continue, or any command\x1b[0m\r\n');
+            term.write('\x1b[36m  IPC: ~/.algo/in (receive) ~/.algo/out (send)\x1b[0m\r\n');
+            term.write('\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n\r\n');
+          }, 300);
+        }, 200);
       };
 
       ws.onmessage = (event) => {
@@ -273,29 +278,126 @@ ALGO.app.icon = "🤖";
     });
     resizeObserver.observe(container);
 
-    // Pubsub bridge - receive messages from other apps
+    // Pubsub bridge - receive messages from other apps AND handle bridge commands
     function setupPubsubBridge() {
       // Subscribe to messages for claude
       ALGO.pubsub.subscribe('claude', (msg, from) => {
-        if (ws && ws.readyState === WebSocket.OPEN && ipcInitialized) {
-          // Write message to IPC file for Claude to read
-          const escapedMsg = JSON.stringify(msg).replace(/'/g, "'\\''");
+        if (!ipcInitialized) return;
+
+        // Check if this is a bridge command
+        if (msg && msg._bridge) {
+          const cmd = msg._bridge;
+          const args = msg._args || [];
+          let result;
+
+          // Execute bridge command
+          if (ALGO.bridge[cmd] && typeof ALGO.bridge[cmd] === 'function') {
+            result = ALGO.bridge[cmd](...args);
+          } else {
+            result = { success: false, error: 'Unknown bridge command: ' + cmd };
+          }
+
+          // Add request ID for correlation
+          if (msg._id) {
+            result._id = msg._id;
+          }
+
+          // Write result to ~/.algo/out for Claude to read
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            const escapedResult = JSON.stringify(result).replace(/'/g, "'\\''").replace(/\\/g, '\\\\');
+            ws.send(`echo '${escapedResult}' >> ~/.algo/out\n`);
+          }
+          return;
+        }
+
+        // Regular message - write to ~/.algo/in for Claude to read
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const payload = { from, msg, timestamp: Date.now() };
+          const escapedMsg = JSON.stringify(payload).replace(/'/g, "'\\''").replace(/\\/g, '\\\\');
           ws.send(`echo '${escapedMsg}' >> ~/.algo/in\n`);
         }
       });
 
-      // Poll for outgoing messages from Claude (file-based IPC)
-      let lastRead = '';
-      const pollInterval = setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN && ipcInitialized) {
-          // This is a simple polling approach - could be improved with inotify
-          // For now, we check ~/.algo/out for new content
+      // Also subscribe to 'bridge' topic for direct bridge access
+      ALGO.pubsub.subscribe('bridge', (msg, from) => {
+        if (!msg || !msg._bridge) return;
+
+        const cmd = msg._bridge;
+        const args = msg._args || [];
+        let result;
+
+        if (ALGO.bridge[cmd] && typeof ALGO.bridge[cmd] === 'function') {
+          result = ALGO.bridge[cmd](...args);
+        } else {
+          result = { success: false, error: 'Unknown bridge command: ' + cmd };
         }
-      }, 1000);
+
+        if (msg._id) {
+          result._id = msg._id;
+        }
+
+        // Write result for Claude
+        if (ws && ws.readyState === WebSocket.OPEN && ipcInitialized) {
+          const escapedResult = JSON.stringify(result).replace(/'/g, "'\\''").replace(/\\/g, '\\\\');
+          ws.send(`echo '${escapedResult}' >> ~/.algo/out\n`);
+        }
+      });
+
+      // Expose a simple way for Claude to execute bridge commands via the terminal
+      // When Claude writes a special pattern to stdout, we intercept and execute
+      // Pattern: <<<ALGO_BRIDGE:{"_bridge":"eval","_args":["code"]}>>>
+      let outputBuffer = '';
+      const bridgePattern = /<<<ALGO_BRIDGE:(.*?)>>>/g;
+
+      // Intercept terminal output to look for bridge commands
+      const originalWrite = term.write.bind(term);
+      term.write = function(data) {
+        // Convert to string if needed
+        let str = data;
+        if (data instanceof Uint8Array) {
+          str = new TextDecoder().decode(data);
+        }
+
+        // Check for bridge pattern
+        outputBuffer += str;
+
+        // Look for complete bridge commands
+        let match;
+        while ((match = bridgePattern.exec(outputBuffer)) !== null) {
+          try {
+            const cmdObj = JSON.parse(match[1]);
+            if (cmdObj._bridge && ALGO.bridge[cmdObj._bridge]) {
+              const result = ALGO.bridge[cmdObj._bridge](...(cmdObj._args || []));
+              if (cmdObj._id) result._id = cmdObj._id;
+
+              // Write result to file
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                const escapedResult = JSON.stringify(result).replace(/'/g, "'\\''").replace(/\\/g, '\\\\');
+                ws.send(`echo '${escapedResult}' >> ~/.algo/out\n`);
+              }
+            }
+          } catch (e) {
+            console.error('Bridge command parse error:', e);
+          }
+
+          // Remove the matched pattern from buffer
+          outputBuffer = outputBuffer.replace(match[0], '');
+        }
+
+        // Keep buffer from growing too large
+        if (outputBuffer.length > 10000) {
+          outputBuffer = outputBuffer.slice(-5000);
+        }
+
+        // Pass through to actual terminal (hide bridge commands from display)
+        const cleanedData = (typeof data === 'string' ? data : str).replace(bridgePattern, '');
+        if (cleanedData) {
+          originalWrite(data instanceof Uint8Array ? data : cleanedData);
+        }
+      };
 
       // Cleanup on close
       container._claudeCleanup = () => {
-        clearInterval(pollInterval);
         ALGO.pubsub.unregister('claude');
         resizeObserver.disconnect();
         if (ws && ws.readyState === WebSocket.OPEN) {

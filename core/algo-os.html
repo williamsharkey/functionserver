@@ -228,6 +228,147 @@ ALGO.pubsub = {
     }
   }
 };
+
+// ==================== BRIDGE ====================
+// Direct JS VM access for terminal-based agents (Claude Code)
+ALGO.bridge = {
+  // Execute JavaScript code and return result
+  eval: function(code) {
+    try {
+      const result = eval(code);
+      // Handle non-serializable results
+      if (result === undefined) {
+        return { success: true, result: null, type: 'undefined' };
+      }
+      if (typeof result === 'function') {
+        return { success: true, result: result.toString(), type: 'function' };
+      }
+      if (result instanceof Element) {
+        return { success: true, result: result.outerHTML.substring(0, 1000), type: 'element' };
+      }
+      if (result instanceof NodeList || result instanceof HTMLCollection) {
+        return { success: true, result: Array.from(result).map(e => e.outerHTML?.substring(0, 200) || String(e)), type: 'nodelist' };
+      }
+      return { success: true, result: result, type: typeof result };
+    } catch(e) {
+      return { success: false, error: e.message, stack: e.stack };
+    }
+  },
+
+  // Query the DOM
+  query: function(selector) {
+    try {
+      const el = document.querySelector(selector);
+      if (!el) return { success: true, result: null };
+      return {
+        success: true,
+        result: {
+          tag: el.tagName,
+          id: el.id,
+          className: el.className,
+          text: el.textContent?.substring(0, 500),
+          html: el.outerHTML?.substring(0, 1000),
+          rect: el.getBoundingClientRect()
+        }
+      };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Query multiple elements
+  queryAll: function(selector) {
+    try {
+      const els = document.querySelectorAll(selector);
+      return {
+        success: true,
+        count: els.length,
+        result: Array.from(els).slice(0, 50).map(el => ({
+          tag: el.tagName,
+          id: el.id,
+          className: el.className,
+          text: el.textContent?.substring(0, 100)
+        }))
+      };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Get current state of the OS
+  getState: function() {
+    return {
+      success: true,
+      result: {
+        user: currentUser,
+        windows: windows.map(w => ({ id: w.id, title: w.title, minimized: w.minimized })),
+        activeWindow: activeWin,
+        systemApps: systemApps.map(a => ({ id: a.id, name: a.name, icon: a.icon })),
+        pubsubApps: Object.keys(ALGO.pubsub.appRegistry).filter(k => ALGO.pubsub.appRegistry[k].running)
+      }
+    };
+  },
+
+  // Click an element
+  click: function(selector) {
+    try {
+      const el = document.querySelector(selector);
+      if (!el) return { success: false, error: 'Element not found: ' + selector };
+      el.click();
+      return { success: true, clicked: selector };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Set value of an input
+  setValue: function(selector, value) {
+    try {
+      const el = document.querySelector(selector);
+      if (!el) return { success: false, error: 'Element not found: ' + selector };
+      el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { success: true, selector, value };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Open an app by ID
+  openApp: function(appId) {
+    try {
+      const app = systemApps.find(a => a.id === appId);
+      if (app) {
+        runSystemApp(appId);
+        return { success: true, opened: appId };
+      }
+      return { success: false, error: 'App not found: ' + appId };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Focus a window by ID
+  focusWindow: function(winId) {
+    try {
+      focusWindow(winId);
+      return { success: true, focused: winId };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Close a window by ID
+  closeWindow: function(winId) {
+    try {
+      closeWindow(winId);
+      return { success: true, closed: winId };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  }
+};
 window.ALGO = ALGO;
 
 // ==================== AUTH ====================
