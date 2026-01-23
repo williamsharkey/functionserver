@@ -2,6 +2,8 @@
 
 Today I built something that felt like crossing a threshold: an AI that can see, inspect, and manipulate a web browser in real-time from completely outside it. Not Puppeteer. Not Selenium. An LLM with authenticated API access to your DOM.
 
+![FunctionServer with live shader background, Claude Eyes, and Shade Station](https://functionserver.com/root/full-desktop.png)
+
 ## What We Built
 
 FunctionServer is a browser-based operating system (think Windows 95 aesthetic, runs at functionserver.com). It has windows, apps, a start menu, the works. We added:
@@ -20,44 +22,103 @@ curl -X POST https://functionserver.com/api/mcp \
 
 A window opens in your browser. From my terminal. No WebDriver. No browser automation framework. Just HTTPS.
 
-## The Live Debugging Session
+## The Live Debugging Sessions
 
-Here's where it got interesting. The user reported that the Programs submenu was appearing off-screen on larger displays. Instead of the normal debug cycle (inspect element, edit CSS, refresh, repeat), I did this:
+### Session 1: The Invisible Menu
+
+The user reported that the Programs submenu was appearing off-screen. Instead of the normal debug cycle (inspect element, edit CSS, refresh, repeat), I did this:
 
 **1. Diagnosed remotely via MCP:**
 ```javascript
 // Injected via algo_eval from my terminal
 const submenu = document.getElementById('programs-menu');
 const rect = submenu.getBoundingClientRect();
-// Result: top=616, bottom=1290, viewport=803
-// The menu was 487px off-screen
+// Result: {bottom: 343, taskbarTop: 383}
+// The menu was 40px too high!
 ```
 
-**2. Created a virtual cursor to visualize the problem:**
+**2. Found the conflict:**
 ```javascript
-const cursor = document.createElement('div');
-cursor.innerHTML = '👆';
-cursor.style.cssText = 'position:fixed;z-index:99999;font-size:24px;';
-document.body.appendChild(cursor);
+const cs = getComputedStyle(submenu);
+// inline: {top: "auto", bottom: "39px"}
+// computed: {top: "0px", bottom: "80px"}  <- CSS overriding inline!
 ```
 
-I moved this cursor around to show exactly where the menu was (and wasn't).
-
-**3. Tested fixes by injecting CSS live:**
+**3. Fixed it with setProperty + !important:**
 ```javascript
-submenu.style.cssText = 'position:fixed; bottom:33px; left:200px;';
+submenu.style.setProperty('bottom', '40px', 'important');
+submenu.style.setProperty('top', 'auto', 'important');
+// Both menus now at 383.3px - aligned!
 ```
 
-**4. Hot-reloaded the actual JavaScript function** without refreshing:
+**4. Hot-reloaded the function** without refreshing:
 ```javascript
 window.openSubmenu = function(el) {
-  // ... patched code ...
+  // ... patched code with setProperty ...
 };
 ```
 
-**5. Verified with the cursor walking through all 27 menu items.**
+Total time: ~5 minutes. Zero page refreshes.
 
-Total time from bug report to fix: ~5 minutes. Zero page refreshes. The user watched their screen change as I manipulated it from outside.
+### Session 2: The Missing Calendar
+
+User: "Calendar looks like unstyled webpage, missing CSS or something."
+
+```javascript
+// Check what classes the calendar uses
+const grid = document.querySelector('.cal-grid');
+getComputedStyle(grid).display;  // "block" - no grid!
+
+// The CSS had .calendar-app-header but the app uses .cal-header
+// Completely different naming conventions. Injected fix:
+const style = document.createElement('style');
+style.textContent = `
+  .cal-header { display: flex; background: #008080; color: white; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-day { background: white; cursor: pointer; }
+  .cal-day.today { background: #c0e0e0; }
+`;
+document.head.appendChild(style);
+// Calendar instantly styled!
+```
+
+### Session 3: Live WebGL Desktop Background
+
+This one was just for fun. I wrote a shader in Shade Station, then via MCP:
+
+```javascript
+// Create canvas behind desktop icons
+const canvas = document.createElement('canvas');
+canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:0';
+desktop.insertBefore(canvas, desktop.firstChild);
+
+// Initialize WebGL, compile shader, start render loop
+const gl = canvas.getContext('webgl');
+// ... shader compilation ...
+function render() {
+  gl.uniform1f(timeLoc, time += 0.016);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(render);
+}
+render();
+```
+
+Now there's a hypnotic tunnel shader animating as the desktop wallpaper. All injected via MCP. The user watched it appear in real-time.
+
+![Live shader desktop background](https://functionserver.com/root/shader-bg.png)
+
+## The MCP Debugging Technique
+
+| Step | Tool | Purpose |
+|------|------|---------|
+| Measure | `getBoundingClientRect()` | Get exact pixel positions |
+| Diagnose | `getComputedStyle()` vs inline | Find style conflicts |
+| Inject CSS | `document.createElement('style')` | Test fixes instantly |
+| Force override | `setProperty('prop', 'val', 'important')` | Beat stubborn CSS |
+| Patch functions | `window.fn = function() {...}` | Hot-reload JS |
+| Verify | `getBoundingClientRect()` again | Confirm fix worked |
+
+The browser becomes a REPL you can poke from anywhere.
 
 ## The Architecture: Neo and Morpheus
 
@@ -66,9 +127,7 @@ We ended up with two personas:
 - **Neo** - Claude running inside FunctionServer's terminal (has shell access, runs on server)
 - **Morpheus** - Claude running anywhere else (laptop, cloud, phone), controlling the browser via MCP
 
-They can coexist. Neo handles terminal tasks. Morpheus handles browser automation. They can even communicate - Morpheus sets `window.MORPHEUS_MESSAGE`, Neo reads it via the PTY.
-
-For users without shell access ("free tier"), there's Claude Eyes - a window that just shows an ASCII Claude face watching you, logging MCP activity as it happens. You run Claude locally, it controls your cloud desktop, the Eye watches.
+For users without shell access, there's Claude Eyes - a window that shows an ASCII Claude face watching you, logging MCP activity as it happens:
 
 ```
 ┌─────────────────────────────┐
@@ -76,65 +135,61 @@ For users without shell access ("free tier"), there's Claude Eyes - a window tha
 │           ────              │
 │   Morpheus connected        │
 │   ─── MCP Activity ───      │
-│   algo_openApp(todo)  ✓     │
-│   algo_eval           ✓     │
+│   algo_openApp(calendar) ✓  │
+│   algo_eval              ✓  │
+│   algo_eval              ✓  │
 └─────────────────────────────┘
 ```
 
 ## Why This Matters
 
-**1. The debugging loop just got shorter.**
+**1. The debugging loop collapsed.**
 
-Instead of: write code → deploy → refresh → inspect → repeat
+Old way: write code → deploy → refresh → inspect → guess → repeat
 
-It's: inspect live → test fix live → commit when it works
-
-The browser becomes a REPL you can poke from anywhere.
+New way: inspect live → measure → test fix → verify → commit
 
 **2. AI assistants can have eyes.**
 
-Most AI coding assistants are blind. They read your code, guess what it does, and hope for the best. With MCP, Claude can actually see the rendered output, query element positions, check computed styles, and verify fixes worked.
+Most AI coding assistants are blind. They read your code, guess what it does, and hope. With MCP, Claude can query element positions, check computed styles, inject test fixes, and verify they worked - all before touching your source files.
 
-**3. The "browser as API" pattern scales.**
+**3. It's surprisingly precise.**
 
-Right now this is one user, one browser. But there's no reason it couldn't be:
-- CI pipelines that verify visual regressions by querying live DOMs
-- Support agents that see exactly what the user sees (with permission)
-- AI that doesn't just write UI code but verifies it renders correctly
+When I needed to align two menus, I didn't guess. I measured:
+```javascript
+startMenu.bottom: 383.3px
+programsMenu.bottom: 343.3px  // 40px off!
+// After fix:
+programsMenu.bottom: 383.3px  // Aligned!
+```
 
-**4. Free users get power without server costs.**
+**4. Live shader desktop backgrounds.**
 
-You don't need a shell on my server to use this. Create an account, open Claude Eyes in the browser, run Claude on your own laptop, use MCP to control your cloud desktop. Your API costs, your compute, but you get browser automation for free.
+I didn't plan this feature. I was testing Shade Station via MCP, saved a shader, and thought "what if the desktop could render this?" Twenty minutes later, there's a hypnotic tunnel animating behind the icons. That's the power of having direct DOM access.
 
 ## The Code
 
-It's all open source: https://github.com/williamsharkey/functionserver
+Open source: https://github.com/williamsharkey/functionserver
 
 Key files:
 - `go/main.go` - MCP endpoint, WebSocket routing, auth
-- `core/apps/claude/claude.js` - Terminal with MCP command handling
-- `core/apps/claude-eyes.js` - The visual MCP activity monitor
+- `core/apps/claude-eyes.js` - Visual MCP activity monitor
+- `core/apps/shade-station.js` - WebGL shader editor with save-to-desktop
 - `CLAUDE-MORPHEUS.md` - Docs for external Claude instances
-
-## What's Next
-
-- Multi-tab support (broadcast MCP to all open tabs)
-- Recorded sessions (replay MCP command sequences)
-- Claude Code native MCP integration (skip curl, use tools directly)
 
 ## The Uncomfortable Question
 
-Yes, this means an AI can manipulate your browser. That's why there's auth. Your session token, your control. But the potential for misuse exists, as it does with any powerful tool.
+Yes, this means an AI can manipulate your browser. That's why there's auth. Your session token, your control.
 
-The upside is that an AI can now help you in ways that weren't possible before. It can see what you see. It can try things and check if they worked. It can debug CSS without asking you to "open DevTools and tell me what you see."
+The upside: an AI can now help you in ways that weren't possible before. It can see what you see. It can try things and check if they worked. It can debug CSS without asking you to "open DevTools and tell me what you see."
 
-Is that worth the tradeoff? For me, watching Claude create a virtual cursor, walk it through my menu, and fix a positioning bug in real-time without me touching anything - yeah, it's worth it.
+Is that worth the tradeoff? For me, watching Claude inject a WebGL shader as my desktop background from a terminal on my laptop - yeah, it's worth it.
 
 ---
 
 *"I'm trying to free your mind, Neo. But I can only show you the door. You're the one that has to walk through it."*
 
-We built the door today. Let's see who walks through.
+We built the door. Come walk through.
 
 ---
 
