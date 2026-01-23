@@ -264,12 +264,31 @@ ALGO.app.icon = "🤖";
               const reqId = cmdObj._mcpReqId;
               delete cmdObj._mcpReqId;
 
-              if (cmdObj._bridge && ALGO.bridge[cmdObj._bridge]) {
-                const result = ALGO.bridge[cmdObj._bridge](...(cmdObj._args || []));
+              const tool = cmdObj._bridge;
+              const args = cmdObj._args || [];
+
+              if (tool && ALGO.bridge[tool]) {
+                const result = ALGO.bridge[tool](...args);
                 // Send response back to server
                 ws.send('MCP_RESP:' + reqId + ':' + JSON.stringify(result));
+
+                // Broadcast MCP activity for observers (Claude Eyes, etc.)
+                ALGO.pubsub.publish('mcp-activity', {
+                  tool: tool,
+                  args: args,
+                  result: result,
+                  success: true,
+                  timestamp: Date.now()
+                });
               } else {
                 ws.send('MCP_RESP:' + reqId + ':' + JSON.stringify({error: 'Unknown bridge command'}));
+                ALGO.pubsub.publish('mcp-activity', {
+                  tool: tool,
+                  args: args,
+                  error: 'Unknown bridge command',
+                  success: false,
+                  timestamp: Date.now()
+                });
               }
             } catch (e) {
               console.error('MCP command error:', e);
