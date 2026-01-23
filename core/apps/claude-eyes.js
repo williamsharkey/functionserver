@@ -217,12 +217,8 @@ ALGO.app.icon = "👁️";
     }
   }
 
-  // Subscribe to MCP activity
-  ALGO.pubsub.subscribe('mcp-activity', (activity, from) => {
-    addLogEntry(activity);
-  });
-
-  // Register this app with pubsub
+  // Register this app with pubsub (but don't subscribe to mcp-activity
+  // since we handle MCP commands directly via WebSocket)
   ALGO.pubsub.register('claude-eyes', {
     autoOpen: false
   });
@@ -264,15 +260,6 @@ ALGO.app.icon = "👁️";
 
             // Log it
             addLogEntry({
-              tool: tool,
-              args: args,
-              result: result,
-              success: true,
-              timestamp: Date.now()
-            });
-
-            // Also publish for other observers
-            ALGO.pubsub.publish('mcp-activity', {
               tool: tool,
               args: args,
               result: result,
