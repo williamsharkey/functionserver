@@ -114,6 +114,122 @@ let fileTypeRegistry = {
   'gif': { icon: '🖼️', app: 'Image Viewer' }
 };
 
+// ==================== PUBSUB ====================
+// Inter-app communication system
+const ALGO = window.ALGO || {};
+ALGO.pubsub = {
+  subscribers: {},      // topic -> [callback, ...]
+  queues: {},          // topic -> [messages waiting for subscriber]
+  appRegistry: {},     // appName -> { autoOpen: bool, openFn: fn }
+
+  // Register an app with the pubsub system
+  register: function(appName, options = {}) {
+    this.appRegistry[appName] = {
+      autoOpen: options.autoOpen || false,
+      openFn: options.openFn || null,
+      running: true
+    };
+    // Deliver any queued messages
+    if (this.queues[appName] && this.queues[appName].length > 0) {
+      const queue = this.queues[appName];
+      this.queues[appName] = [];
+      queue.forEach(item => this.publish(appName, item.msg, item.options, item.from));
+    }
+  },
+
+  // Unregister when app closes
+  unregister: function(appName) {
+    if (this.appRegistry[appName]) {
+      this.appRegistry[appName].running = false;
+    }
+  },
+
+  // Subscribe to messages for a topic
+  subscribe: function(topic, callback) {
+    if (!this.subscribers[topic]) {
+      this.subscribers[topic] = [];
+    }
+    this.subscribers[topic].push(callback);
+    return () => {
+      this.subscribers[topic] = this.subscribers[topic].filter(cb => cb !== callback);
+    };
+  },
+
+  // Publish a message to a topic
+  publish: function(topic, msg, options = {}, from = null) {
+    const { autoOpen = false, queue = true, timeout = 5000 } = options;
+
+    const callbacks = this.subscribers[topic] || [];
+    const app = this.appRegistry[topic];
+
+    // If no subscribers and app not running
+    if (callbacks.length === 0 && (!app || !app.running)) {
+      // Try to auto-open the app
+      if (autoOpen && app && app.openFn) {
+        app.openFn();
+        // Queue message to be delivered after app opens
+        if (!this.queues[topic]) this.queues[topic] = [];
+        this.queues[topic].push({ msg, options, from, timestamp: Date.now() });
+        return { status: 'queued', reason: 'app opening' };
+      }
+      // Queue for later if requested
+      if (queue) {
+        if (!this.queues[topic]) this.queues[topic] = [];
+        this.queues[topic].push({ msg, options, from, timestamp: Date.now() });
+        // Clean old messages after timeout
+        setTimeout(() => {
+          if (this.queues[topic]) {
+            this.queues[topic] = this.queues[topic].filter(m => Date.now() - m.timestamp < timeout);
+          }
+        }, timeout);
+        return { status: 'queued', reason: 'no subscribers' };
+      }
+      return { status: 'dropped', reason: 'no subscribers' };
+    }
+
+    // Deliver to all subscribers
+    callbacks.forEach(cb => {
+      try {
+        cb(msg, from);
+      } catch (e) {
+        console.error('Pubsub callback error:', e);
+      }
+    });
+
+    return { status: 'delivered', count: callbacks.length };
+  },
+
+  // Request-response pattern
+  request: function(topic, msg, options = {}) {
+    return new Promise((resolve, reject) => {
+      const timeout = options.timeout || 5000;
+      const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      const responseTopic = '_response_' + requestId;
+
+      const timer = setTimeout(() => {
+        unsubscribe();
+        reject(new Error('Request timeout'));
+      }, timeout);
+
+      const unsubscribe = this.subscribe(responseTopic, (response) => {
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(response);
+      });
+
+      this.publish(topic, { ...msg, _requestId: requestId, _responseTopic: responseTopic }, options);
+    });
+  },
+
+  // Respond to a request
+  respond: function(originalMsg, response) {
+    if (originalMsg._responseTopic) {
+      this.publish(originalMsg._responseTopic, response);
+    }
+  }
+};
+window.ALGO = ALGO;
+
 // ==================== AUTH ====================
 function checkSession() {
   const saved = localStorage.getItem('algo-session');
