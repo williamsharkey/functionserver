@@ -592,6 +592,17 @@ function createDesktopIcon(ic) {
     }
   };
 
+  // Right-click context menu for files
+  if (ic.action === 'openFile') {
+    icon.oncontextmenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = savedFiles[ic.fileIdx];
+      if (!file) return;
+      showFileContextMenu(e, file, ic.fileIdx);
+    };
+  }
+
   desktop.appendChild(icon);
 }
 
@@ -1006,15 +1017,19 @@ function openSubmenu(el) {
   });
   el.classList.add('submenu-open');
 
-  // Fix submenu position to stay within viewport
+  // Fix submenu position to align with start menu bottom
   const submenu = el.querySelector('.start-submenu');
   if (submenu) {
-    // Reset any previous positioning
-    submenu.style.position = 'fixed';
-    submenu.style.top = 'auto';
-    submenu.style.bottom = '33px'; // Just above taskbar
-    submenu.style.left = '200px'; // To the right of start menu
-    submenu.style.maxHeight = (window.innerHeight - 60) + 'px';
+    const startMenu = document.getElementById('start-menu');
+    const startRect = startMenu.getBoundingClientRect();
+    const taskbarHeight = window.innerHeight - document.getElementById('taskbar').getBoundingClientRect().top;
+
+    // Use setProperty with !important to override CSS
+    submenu.style.setProperty('position', 'fixed', 'important');
+    submenu.style.setProperty('left', (startRect.right - 2) + 'px', 'important');
+    submenu.style.setProperty('bottom', taskbarHeight + 'px', 'important');
+    submenu.style.setProperty('top', 'auto', 'important');
+    submenu.style.setProperty('max-height', (window.innerHeight - taskbarHeight - 20) + 'px', 'important');
   }
 }
 

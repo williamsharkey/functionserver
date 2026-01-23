@@ -54,6 +54,27 @@ void main() {
   float glow = 0.02 / d;
   vec3 col = vec3(glow * 0.5, glow * 0.8, glow);
   gl_FragColor = vec4(col, 1.0);
+}`,
+  'Tunnel': `precision mediump float;
+uniform float u_time;
+uniform vec2 u_resolution;
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / min(u_resolution.x, u_resolution.y);
+  float angle = atan(uv.y, uv.x);
+  float radius = length(uv);
+  float tunnel = 1.0 / radius;
+  float twist = angle + u_time * 0.5 + tunnel * 0.5;
+  float pattern = sin(tunnel * 8.0 - u_time * 3.0) * sin(twist * 6.0);
+  vec3 col1 = vec3(0.1, 0.4, 0.8);
+  vec3 col2 = vec3(0.9, 0.2, 0.5);
+  vec3 col3 = vec3(0.0, 0.8, 0.6);
+  vec3 color = mix(col1, col2, sin(pattern + u_time) * 0.5 + 0.5);
+  color = mix(color, col3, sin(tunnel * 2.0 - u_time * 2.0) * 0.5 + 0.5);
+  color *= smoothstep(0.0, 0.3, radius);
+  color *= 1.0 - smoothstep(1.5, 2.5, radius);
+  color += vec3(0.3, 0.5, 1.0) * (0.05 / radius);
+  gl_FragColor = vec4(color, 1.0);
 }`
 };
 
@@ -88,6 +109,7 @@ function _ss_open() {
           <option value="">-- Presets --</option>
           ${presetOptions}
         </select>
+        <button onclick="_ss_saveToDesktop(${id})">💾 Save</button>
         <span style="margin-left:auto;color:#888;" id="ss-filename-${id}">untitled.shader</span>
       </div>
       <div class="shade-station-main">
@@ -281,6 +303,64 @@ function _ss_preset(id, name) {
   if (fname) fname.textContent = name.toLowerCase() + '.shader';
   _ss_compile(id);
 }
+
+// Save shader to desktop
+function _ss_saveToDesktop(id) {
+  const code = document.getElementById('ss-code-' + id)?.value;
+  const fname = document.getElementById('ss-filename-' + id)?.textContent || 'shader.glsl';
+  if (!code) return;
+
+  const name = fname.endsWith('.shader') ? fname : fname + '.shader';
+
+  // Check if file already exists
+  const existingIdx = savedFiles.findIndex(f => f.name === name);
+  if (existingIdx >= 0) {
+    if (!confirm('Overwrite existing ' + name + '?')) return;
+    savedFiles[existingIdx].content = code;
+  } else {
+    savedFiles.push({ name: name, type: 'text', content: code });
+  }
+
+  saveState();
+  createDesktopIcons();
+  algoSpeak('Saved ' + name + ' to desktop!');
+}
+
+// Open shader file in Shade Station
+function _ss_openFile(file) {
+  _ss_open();
+  setTimeout(() => {
+    const ta = document.querySelector('textarea[id^="ss-code-"]');
+    const fname = document.querySelector('span[id^="ss-filename-"]');
+    if (ta) {
+      ta.value = file.content;
+      ta.dispatchEvent(new Event('input'));
+    }
+    if (fname) fname.textContent = file.name;
+  }, 300);
+}
+
+// Register shader file type
+if (typeof fileTypeRegistry !== 'undefined') {
+  fileTypeRegistry['shader'] = { icon: '🎨', app: 'Shade Station' };
+  fileTypeRegistry['glsl'] = { icon: '🎨', app: 'Shade Station' };
+}
+
+// Hook into openSavedFile
+const _ss_origOpenSavedFile = typeof openSavedFile !== 'undefined' ? openSavedFile : null;
+if (_ss_origOpenSavedFile) {
+  window.openSavedFile = function(file) {
+    if (file.name.endsWith('.shader') || file.name.endsWith('.glsl')) {
+      _ss_openFile(file);
+    } else {
+      _ss_origOpenSavedFile(file);
+    }
+  };
+}
+
+// Export functions
+window._ss_saveToDesktop = _ss_saveToDesktop;
+window._ss_openFile = _ss_openFile;
 
 // Run the app
 _ss_open();
