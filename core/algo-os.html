@@ -435,11 +435,27 @@ function loginSuccess(username, token, systemUser) {
   localStorage.setItem('algo-session', JSON.stringify({ username, token, isSystemUser }));
   hideLogin();
   const indicator = isSystemUser ? '🔑 ' + username + ' (system)' : '👤 ' + username;
-  document.getElementById('user-indicator').textContent = indicator;
+  document.getElementById('user-indicator').innerHTML = indicator +
+    ' <span class="copy-auth-btn" onclick="copyAuthInfo(event)" title="Copy auth token">📋</span>';
   document.getElementById('start-menu-auth').innerHTML = '<span>🚪</span> Log Out (' + username + ')';
   loadState();
   loadSystemApps();
   init();
+}
+
+function copyAuthInfo(event) {
+  event.stopPropagation();
+  const authInfo = {
+    username: currentUser,
+    token: sessionToken,
+    isSystemUser: isSystemUser,
+    server: window.location.origin
+  };
+  navigator.clipboard.writeText(JSON.stringify(authInfo, null, 2)).then(() => {
+    algoSpeak('Copied user authentication information to clipboard');
+  }).catch(err => {
+    algoSpeak('Failed to copy: ' + err.message);
+  });
 }
 
 function doLogin() {
