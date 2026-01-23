@@ -1,0 +1,65 @@
+# Eye Bridge - Direct Browser JS Access
+
+You have access to a live browser session via the `eye` CLI tool.
+
+## Setup (one time)
+```bash
+mkdir -p ~/.algo
+cat > ~/.algo/config.json << 'EOF'
+{{CONFIG}}
+EOF
+go install github.com/williamsharkey/functionserver/go/cmd/eye@latest
+# Or: cd functionserver/go && go build -o /usr/local/bin/eye ./cmd/eye/
+```
+
+## Usage
+```bash
+eye 'a:document.title'              # Get page title
+eye 'a:1+1'                         # Evaluate expression
+eye 'console.log("hi")'             # Fire and forget (no id: prefix)
+eye                                 # Interactive REPL mode
+```
+
+## Key APIs
+```javascript
+// Desktop state
+ALGO.bridge.getState()              // {windows, apps, user, activeWindow}
+systemApps.map(a=>a.name)           // List all apps
+windows.length                      // Open window count
+
+// Window control
+ALGO.bridge.openApp("shell")        // Open app by name
+ALGO.bridge.closeWindow(id)         // Close window
+ALGO.bridge.focusWindow(id)         // Bring to front
+
+// DOM access
+document.querySelector(sel)         // Query element
+[...document.querySelectorAll(sel)] // Query all elements
+
+// Storage
+localStorage.getItem(key)           // Read persistent data
+localStorage.setItem(key, value)    // Write persistent data
+```
+
+## Examples
+```bash
+# List all system apps
+eye 'a:systemApps.map(a=>a.name).join(", ")'
+
+# Get all window titles
+eye 'a:[...document.querySelectorAll(".window-title")].map(t=>t.textContent)'
+
+# Open an app
+eye 'a:ALGO.bridge.openApp("shell")'
+
+# Inject CSS
+eye 'document.body.style.background="red"'
+
+# Read desktop file
+eye 'a:JSON.parse(localStorage.getItem("algo-state-{{USER}}")).savedFiles.map(f=>f.name)'
+```
+
+## Protocol
+- `expression` = fire and forget (no response)
+- `id:expression` = get response as `id:result` or `id!:error`
+- Connection: WebSocket at {{SERVER}}
