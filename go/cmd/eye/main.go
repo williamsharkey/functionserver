@@ -5,56 +5,353 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+// Build version - changes when binary is recompiled
+// Use: go build -ldflags "-X main.buildVersion=$(date +%s)" ./cmd/eye/
+var buildVersion = "dev"
+
+const (
+	idleTimeout    = 5 * time.Minute
+	socketName     = "eye.sock"
+	connectTimeout = 2 * time.Second
+)
+
 func main() {
-	// Check for help flag
+	// Daemon mode (internal - started automatically)
+	if len(os.Args) > 1 && os.Args[1] == "--daemon" {
+		runDaemon()
+		return
+	}
+
+	// Help
 	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help") {
 		printHelp()
 		return
 	}
 
-	// Get token from env or file
-	token := os.Getenv("EYE_TOKEN")
-	server := os.Getenv("EYE_SERVER")
-
-	// Try reading config file (~/.algo/config.json)
-	if token == "" || server == "" {
-		if data, err := os.ReadFile(os.ExpandEnv("$HOME/.algo/config.json")); err == nil {
-			var config struct {
-				Token  string `json:"token"`
-				Server string `json:"server"`
-			}
-			if json.Unmarshal(data, &config) == nil {
-				if token == "" && config.Token != "" {
-					token = config.Token
-				}
-				if server == "" && config.Server != "" {
-					server = config.Server
-				}
-			}
-		}
+	// Normal client mode - try daemon first, fallback to direct
+	if runViaSocket() {
+		return
 	}
 
-	// Fallback: try plain token file
+	// Fallback: direct connection (daemon unavailable)
+	runDirect()
+}
+
+// ==================== CLIENT MODE ====================
+
+func getSocketPath() string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("eye-%d.sock", os.Getuid()))
+}
+
+func runViaSocket() bool {
+	socketPath := getSocketPath()
+
+	// Try to connect to existing daemon
+	conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+	if err != nil {
+		// Daemon not running - try to start it
+		if !startDaemon() {
+			return false
+		}
+		// Wait for daemon to be ready
+		for i := 0; i < 20; i++ {
+			time.Sleep(100 * time.Millisecond)
+			conn, err = net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return false
+		}
+	}
+	defer conn.Close()
+
+	// Send version check
+	fmt.Fprintf(conn, "VERSION:%s\n", buildVersion)
+	reader := bufio.NewReader(conn)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	response = strings.TrimSpace(response)
+
+	if response == "RESTART" {
+		// Version mismatch - daemon is restarting, retry
+		conn.Close()
+		time.Sleep(200 * time.Millisecond)
+		return runViaSocket()
+	}
+	if response != "OK" {
+		return false
+	}
+
+	// Send expression(s)
+	if len(os.Args) > 1 {
+		// Single command mode
+		expr := strings.Join(os.Args[1:], " ")
+		fmt.Fprintf(conn, "EVAL:%s\n", expr)
+
+		// Check if expecting response
+		hasID := hasIDPrefix(expr)
+		if hasID {
+			result, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Read failed: %v\n", err)
+				os.Exit(1)
+			}
+			result = strings.TrimSpace(result)
+			if strings.HasPrefix(result, "ERR:") {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", strings.TrimPrefix(result, "ERR:"))
+				os.Exit(1)
+			}
+			fmt.Println(strings.TrimPrefix(result, "OK:"))
+		}
+	} else {
+		// REPL mode through daemon
+		fmt.Println("eye bridge connected via daemon (Ctrl+D to exit)")
+		fmt.Println("  expression      -> fire & forget")
+		fmt.Println("  id:expression   -> get response")
+		fmt.Println()
+
+		// Read responses in background
+		go func() {
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					return
+				}
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "RESP:") {
+					fmt.Printf("< %s\n", strings.TrimPrefix(line, "RESP:"))
+				}
+			}
+		}()
+
+		// Read from stdin
+		scanner := bufio.NewScanner(os.Stdin)
+		fmt.Print("> ")
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				fmt.Print("> ")
+				continue
+			}
+			if line == "help" || line == "?" {
+				printAPIHelp()
+				fmt.Print("> ")
+				continue
+			}
+			fmt.Fprintf(conn, "EVAL:%s\n", line)
+			fmt.Print("> ")
+		}
+		fmt.Println()
+	}
+	return true
+}
+
+func startDaemon() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+
+	cmd := exec.Command(exe, "--daemon")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+	// Detach from parent
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+	if err := cmd.Start(); err != nil {
+		return false
+	}
+	// Don't wait - let it run in background
+	go cmd.Wait()
+	return true
+}
+
+// ==================== DAEMON MODE ====================
+
+func runDaemon() {
+	socketPath := getSocketPath()
+
+	// Clean up old socket
+	os.Remove(socketPath)
+
+	// Create socket
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		os.Exit(1)
+	}
+	defer listener.Close()
+	defer os.Remove(socketPath)
+
+	// Handle signals for clean shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Load config and connect to browser
+	token, server := loadConfig()
 	if token == "" {
-		if data, err := os.ReadFile(os.ExpandEnv("$HOME/.algo/token")); err == nil {
-			token = strings.TrimSpace(string(data))
-		}
+		os.Exit(1)
 	}
 
-	// Fallback: try server file
-	if server == "" {
-		if data, err := os.ReadFile(os.ExpandEnv("$HOME/.algo/server")); err == nil {
-			server = strings.TrimSpace(string(data))
-		}
+	wsConn, err := connectWebSocket(token, server)
+	if err != nil {
+		os.Exit(1)
+	}
+	defer wsConn.Close()
+
+	// Wait for ready
+	_, msg, err := wsConn.ReadMessage()
+	if err != nil || string(msg) != ":ready" {
+		os.Exit(1)
 	}
 
+	// Track last activity for idle timeout
+	var lastActivity time.Time
+	var activityMu sync.Mutex
+	touch := func() {
+		activityMu.Lock()
+		lastActivity = time.Now()
+		activityMu.Unlock()
+	}
+	touch()
+
+	// Pending requests waiting for responses
+	var pendingMu sync.Mutex
+	pending := make(map[string]net.Conn)
+
+	// Read WebSocket responses
+	go func() {
+		for {
+			_, msg, err := wsConn.ReadMessage()
+			if err != nil {
+				return
+			}
+			touch()
+			result := string(msg)
+
+			// Extract ID from response
+			if colonIdx := strings.Index(result, ":"); colonIdx > 0 {
+				id := result[:colonIdx]
+				id = strings.TrimSuffix(id, "!")
+
+				pendingMu.Lock()
+				if conn, ok := pending[id]; ok {
+					// Send response to waiting client
+					isError := strings.HasSuffix(result[:colonIdx], "!")
+					value := result[colonIdx+1:]
+					if isError {
+						fmt.Fprintf(conn, "ERR:%s\n", value)
+					} else {
+						fmt.Fprintf(conn, "OK:%s\n", value)
+					}
+					delete(pending, id)
+				}
+				pendingMu.Unlock()
+			}
+
+			// Also broadcast to REPL clients
+			pendingMu.Lock()
+			for _, conn := range pending {
+				fmt.Fprintf(conn, "RESP:%s\n", result)
+			}
+			pendingMu.Unlock()
+		}
+	}()
+
+	// Idle timeout checker
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			activityMu.Lock()
+			idle := time.Since(lastActivity)
+			activityMu.Unlock()
+			if idle > idleTimeout {
+				os.Exit(0)
+			}
+		}
+	}()
+
+	// Accept client connections
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				continue
+			}
+			go handleClient(conn, wsConn, &pendingMu, pending, touch)
+		}
+	}()
+
+	// Wait for signal
+	<-sigChan
+}
+
+func handleClient(conn net.Conn, wsConn *websocket.Conn, pendingMu *sync.Mutex, pending map[string]net.Conn, touch func()) {
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		touch()
+		line = strings.TrimSpace(line)
+
+		if strings.HasPrefix(line, "VERSION:") {
+			clientVersion := strings.TrimPrefix(line, "VERSION:")
+			if clientVersion != buildVersion {
+				// Version mismatch - tell client to retry, then exit
+				fmt.Fprintf(conn, "RESTART\n")
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					os.Exit(0)
+				}()
+				return
+			}
+			fmt.Fprintf(conn, "OK\n")
+		} else if strings.HasPrefix(line, "EVAL:") {
+			expr := strings.TrimPrefix(line, "EVAL:")
+
+			// Check if has ID prefix
+			if hasIDPrefix(expr) {
+				// Register pending request
+				id := expr[:strings.Index(expr, ":")]
+				pendingMu.Lock()
+				pending[id] = conn
+				pendingMu.Unlock()
+			}
+
+			// Send to browser
+			wsConn.WriteMessage(websocket.TextMessage, []byte(expr))
+		}
+	}
+}
+
+// ==================== DIRECT MODE (fallback) ====================
+
+func runDirect() {
+	token, server := loadConfig()
 	if token == "" {
 		fmt.Fprintln(os.Stderr, "No token found.")
 		fmt.Fprintln(os.Stderr, "  Set EYE_TOKEN env var, or")
@@ -63,31 +360,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Default server
-	if server == "" {
-		server = "wss://localhost/api/eye"
-	}
-
-	// Normalize server URL
-	if !strings.HasPrefix(server, "ws://") && !strings.HasPrefix(server, "wss://") {
-		// Assume https URL, convert to wss
-		server = strings.Replace(server, "https://", "wss://", 1)
-		server = strings.Replace(server, "http://", "ws://", 1)
-		if !strings.HasPrefix(server, "ws") {
-			server = "wss://" + server
-		}
-		if !strings.Contains(server, "/api/eye") {
-			server = strings.TrimSuffix(server, "/") + "/api/eye"
-		}
-	}
-
-	url := server + "?token=" + token
-
-	// Connect
-	dialer := websocket.Dialer{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	conn, _, err := dialer.Dial(url, http.Header{})
+	conn, err := connectWebSocket(token, server)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Connect failed: %v\n", err)
 		os.Exit(1)
@@ -105,38 +378,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// If args provided, send them and exit
+	// Single command mode
 	if len(os.Args) > 1 {
 		expr := strings.Join(os.Args[1:], " ")
-
-		// Check if it has an ID prefix (e.g., "a:document.title")
-		hasID := false
-		if colonIdx := strings.Index(expr, ":"); colonIdx > 0 && colonIdx < 20 {
-			prefix := expr[:colonIdx]
-			hasID = true
-			for _, c := range prefix {
-				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
-					hasID = false
-					break
-				}
-			}
-		}
-
 		conn.WriteMessage(websocket.TextMessage, []byte(expr))
 
-		// If has ID, wait for response
-		if hasID {
+		if hasIDPrefix(expr) {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Read failed: %v\n", err)
 				os.Exit(1)
 			}
 			result := string(msg)
-			// Strip the id: prefix from response for cleaner output
-			// Response format: "id:result" or "id!:error"
+			// Strip ID prefix
 			if colonIdx := strings.Index(result, ":"); colonIdx > 0 {
 				prefix := result[:colonIdx]
-				// Check if it's our ID (possibly with ! for error)
 				checkID := strings.TrimSuffix(prefix, "!")
 				if checkID == expr[:strings.Index(expr, ":")] {
 					result = result[colonIdx+1:]
@@ -151,14 +407,13 @@ func main() {
 		return
 	}
 
-	// Interactive REPL mode
+	// REPL mode
 	fmt.Println("eye bridge connected (Ctrl+D to exit)")
 	fmt.Println("  expression      -> fire & forget")
 	fmt.Println("  id:expression   -> get response")
 	fmt.Println("  help            -> show API reference")
 	fmt.Println()
 
-	// Read responses in background
 	go func() {
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -169,7 +424,6 @@ func main() {
 		}
 	}()
 
-	// Read commands from stdin
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("> ")
 	for scanner.Scan() {
@@ -187,6 +441,83 @@ func main() {
 		fmt.Print("> ")
 	}
 	fmt.Println()
+}
+
+// ==================== SHARED UTILITIES ====================
+
+func loadConfig() (token, server string) {
+	token = os.Getenv("EYE_TOKEN")
+	server = os.Getenv("EYE_SERVER")
+
+	// Try config.json
+	if token == "" || server == "" {
+		if data, err := os.ReadFile(os.ExpandEnv("$HOME/.algo/config.json")); err == nil {
+			var config struct {
+				Token  string `json:"token"`
+				Server string `json:"server"`
+			}
+			if json.Unmarshal(data, &config) == nil {
+				if token == "" {
+					token = config.Token
+				}
+				if server == "" {
+					server = config.Server
+				}
+			}
+		}
+	}
+
+	// Fallback files
+	if token == "" {
+		if data, err := os.ReadFile(os.ExpandEnv("$HOME/.algo/token")); err == nil {
+			token = strings.TrimSpace(string(data))
+		}
+	}
+	if server == "" {
+		if data, err := os.ReadFile(os.ExpandEnv("$HOME/.algo/server")); err == nil {
+			server = strings.TrimSpace(string(data))
+		}
+	}
+
+	// Default and normalize server
+	if server == "" {
+		server = "wss://localhost/api/eye"
+	}
+	if !strings.HasPrefix(server, "ws://") && !strings.HasPrefix(server, "wss://") {
+		server = strings.Replace(server, "https://", "wss://", 1)
+		server = strings.Replace(server, "http://", "ws://", 1)
+		if !strings.HasPrefix(server, "ws") {
+			server = "wss://" + server
+		}
+		if !strings.Contains(server, "/api/eye") {
+			server = strings.TrimSuffix(server, "/") + "/api/eye"
+		}
+	}
+
+	return token, server
+}
+
+func connectWebSocket(token, server string) (*websocket.Conn, error) {
+	url := server + "?token=" + token
+	dialer := websocket.Dialer{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	conn, _, err := dialer.Dial(url, http.Header{})
+	return conn, err
+}
+
+func hasIDPrefix(expr string) bool {
+	colonIdx := strings.Index(expr, ":")
+	if colonIdx <= 0 || colonIdx >= 20 {
+		return false
+	}
+	prefix := expr[:colonIdx]
+	for _, c := range prefix {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func printHelp() {
@@ -207,7 +538,12 @@ CONFIG (checked in order):
   ~/.algo/token          Plain token file
   ~/.algo/server         Plain server URL
 
-The server URL auto-converts: "functionserver.com" → "wss://functionserver.com/api/eye"`)
+DAEMON:
+  A background daemon auto-starts to maintain persistent connection.
+  - Auto-starts on first eye call
+  - Auto-exits after 5 minutes idle
+  - Auto-restarts when eye is recompiled
+  - Socket: /tmp/eye-$UID.sock`)
 }
 
 func printAPIHelp() {
