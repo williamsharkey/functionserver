@@ -1,9 +1,13 @@
 // System App: Clean View
 // Web page transformer and API wrapper creator
+// Supports proxy mode (public pages) and shadow mode (authenticated via extension)
 ALGO.app.name = 'Clean View';
 ALGO.app.icon = '🧹';
 
 const _cv_instances = {};
+let _cv_bridge = null;
+let _cv_bridgeReady = false;
+let _cv_bridgeTabs = [];
 
 const _cv_PRESETS = {
   'Twitter/X - Clean Feed': {
@@ -15,7 +19,6 @@ $$('[data-testid="trend"]').forEach(el => el.parentElement?.remove());
 
 // Clean up tweets
 $$('article').forEach(article => {
-  // Remove reply/retweet/like counts clutter
   const actions = article.querySelector('[role="group"]');
   if (actions) actions.style.opacity = '0.5';
 });
@@ -97,6 +100,97 @@ API.register('getImages', () => {
   }
 };
 
+// Content bridge connection
+function _cv_connectBridge() {
+  if (_cv_bridge && _cv_bridge.readyState === WebSocket.OPEN) return;
+
+  const wsUrl = `ws://localhost:8080/api/content-bridge`;
+
+  try {
+    _cv_bridge = new WebSocket(wsUrl);
+
+    _cv_bridge.onopen = () => {
+      console.log('[CleanView] Bridge connected');
+      _cv_bridgeReady = true;
+      _cv_updateBridgeStatus();
+      _cv_bridgeSend({ action: 'listTabs' });
+    };
+
+    _cv_bridge.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        _cv_handleBridgeMessage(msg);
+      } catch (e) {}
+    };
+
+    _cv_bridge.onclose = () => {
+      _cv_bridgeReady = false;
+      _cv_updateBridgeStatus();
+      // Reconnect after delay
+      setTimeout(_cv_connectBridge, 5000);
+    };
+
+    _cv_bridge.onerror = () => {
+      console.log('[CleanView] Bridge error - extension may not be running');
+    };
+  } catch (e) {
+    console.error('[CleanView] Bridge connect failed:', e);
+  }
+}
+
+let _cv_pendingRequests = {};
+
+function _cv_bridgeSend(msg) {
+  if (!_cv_bridge || _cv_bridge.readyState !== WebSocket.OPEN) {
+    return Promise.reject(new Error('Bridge not connected'));
+  }
+
+  return new Promise((resolve, reject) => {
+    const id = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    msg.id = id;
+
+    _cv_pendingRequests[id] = { resolve, reject };
+
+    // Timeout after 30s
+    setTimeout(() => {
+      if (_cv_pendingRequests[id]) {
+        delete _cv_pendingRequests[id];
+        reject(new Error('Request timeout'));
+      }
+    }, 30000);
+
+    _cv_bridge.send(JSON.stringify(msg));
+  });
+}
+
+function _cv_handleBridgeMessage(msg) {
+  // Handle responses
+  if (msg.id && _cv_pendingRequests[msg.id]) {
+    const { resolve, reject } = _cv_pendingRequests[msg.id];
+    delete _cv_pendingRequests[msg.id];
+
+    if (msg.error) {
+      reject(new Error(msg.error));
+    } else {
+      resolve(msg.result);
+    }
+    return;
+  }
+
+  // Handle tab list updates
+  if (msg.action === 'tabList') {
+    _cv_bridgeTabs = msg.tabs || [];
+    _cv_updateBridgeStatus();
+  }
+}
+
+function _cv_updateBridgeStatus() {
+  document.querySelectorAll('.cv-bridge-status').forEach(el => {
+    el.textContent = _cv_bridgeReady ? '🔗 Extension' : '⚠️ No Extension';
+    el.style.color = _cv_bridgeReady ? '#4a4' : '#a44';
+  });
+}
+
 function _cv_open() {
   if (typeof hideStartMenu === 'function') hideStartMenu();
   const id = Date.now();
@@ -112,18 +206,23 @@ function _cv_open() {
       <div class="cv-container" style="display:flex;flex-direction:column;height:100%;background:#1a1a2e;color:#ccc;font-family:system-ui;">
         <div class="cv-toolbar" style="display:flex;gap:8px;padding:8px;background:#12121a;align-items:center;flex-wrap:wrap;">
           <input type="text" id="cv-url-${id}" placeholder="Enter URL..." style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #333;background:#222;color:#fff;border-radius:4px;">
-          <button onclick="_cv_load(${id})" style="padding:6px 12px;cursor:pointer;">Load</button>
+          <button onclick="_cv_load(${id}, 'proxy')" style="padding:6px 12px;cursor:pointer;" title="Load via server proxy (public pages only)">📥 Proxy</button>
+          <button onclick="_cv_load(${id}, 'shadow')" style="padding:6px 12px;cursor:pointer;background:#446;color:#fff;border:none;" title="Load via shadow tab (requires extension, supports auth)">👻 Shadow</button>
           <select id="cv-preset-${id}" style="padding:6px;" onchange="_cv_loadPreset(${id}, this.value)">
             <option value="">-- Presets --</option>
             ${presetOpts}
           </select>
           <button onclick="_cv_runTransform(${id})" style="padding:6px 12px;background:#4a4;color:#fff;border:none;cursor:pointer;">▶ Run</button>
-          <button onclick="_cv_registerAPI(${id})" style="padding:6px 12px;background:#44a;color:#fff;border:none;cursor:pointer;">📡 Register API</button>
-          <button onclick="_cv_savePreset(${id})" style="padding:6px 12px;cursor:pointer;">💾 Save</button>
+          <button onclick="_cv_registerAPI(${id})" style="padding:6px 12px;background:#44a;color:#fff;border:none;cursor:pointer;">📡 API</button>
+          <button onclick="_cv_savePreset(${id})" style="padding:6px 12px;cursor:pointer;">💾</button>
+          <span class="cv-bridge-status" style="font-size:11px;padding:4px 8px;">...</span>
         </div>
         <div class="cv-panels" style="display:flex;flex:1;min-height:0;overflow:hidden;">
           <div class="cv-panel" style="flex:1;display:flex;flex-direction:column;border-right:1px solid #333;">
-            <div style="padding:4px 8px;background:#222;font-size:11px;color:#888;">Original</div>
+            <div style="padding:4px 8px;background:#222;font-size:11px;color:#888;display:flex;justify-content:space-between;">
+              <span>Original</span>
+              <span id="cv-shadow-info-${id}" style="color:#668;"></span>
+            </div>
             <iframe id="cv-original-${id}" style="flex:1;border:none;background:#fff;" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
           </div>
           <div class="cv-panel" style="flex:1;display:flex;flex-direction:column;border-right:1px solid #333;">
@@ -158,7 +257,9 @@ function _cv_open() {
     html: '',
     transform: '',
     api: '',
-    endpoints: {}
+    endpoints: {},
+    mode: 'proxy',
+    shadowTabId: null
   };
 
   // Initialize global CleanView API
@@ -166,7 +267,6 @@ function _cv_open() {
     window.CleanView = {
       instances: _cv_instances,
       call: async (endpoint, ...args) => {
-        // Find instance with this endpoint
         for (const id in _cv_instances) {
           const inst = _cv_instances[id];
           if (inst.endpoints[endpoint]) {
@@ -184,6 +284,10 @@ function _cv_open() {
       }
     };
   }
+
+  // Connect to bridge
+  _cv_connectBridge();
+  _cv_updateBridgeStatus();
 }
 
 function _cv_showTab(id, tab) {
@@ -213,49 +317,104 @@ function _cv_status(id, msg) {
   if (el) el.textContent = msg;
 }
 
-async function _cv_load(id) {
+async function _cv_load(id, mode = 'proxy') {
   const inst = _cv_instances[id];
   if (!inst) return;
 
   const url = document.getElementById('cv-url-' + id).value.trim();
   if (!url) return;
 
-  _cv_status(id, 'Loading...');
-  _cv_log(id, `Loading: ${url}`);
+  inst.mode = mode;
+  _cv_status(id, `Loading via ${mode}...`);
+  _cv_log(id, `Loading (${mode}): ${url}`);
 
   try {
-    // Fetch via proxy to avoid CORS
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl);
-
-    if (!res.ok) {
-      // Try direct fetch as fallback (might fail due to CORS)
-      _cv_log(id, 'Proxy failed, trying direct fetch...', 'warn');
-      const directRes = await fetch(url);
-      inst.html = await directRes.text();
+    if (mode === 'shadow') {
+      await _cv_loadShadow(id, url);
     } else {
-      inst.html = await res.text();
+      await _cv_loadProxy(id, url);
     }
-
-    inst.url = url;
-
-    // Load into both iframes
-    _cv_setIframeContent(id, 'original', inst.html, url);
-    _cv_setIframeContent(id, 'transformed', inst.html, url);
-
-    _cv_status(id, `Loaded: ${url}`);
-    _cv_log(id, `Loaded ${inst.html.length} bytes`);
   } catch (e) {
     _cv_status(id, 'Error: ' + e.message);
     _cv_log(id, `Error: ${e.message}`, 'error');
   }
 }
 
+async function _cv_loadProxy(id, url) {
+  const inst = _cv_instances[id];
+
+  const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl);
+
+  if (!res.ok) {
+    _cv_log(id, 'Proxy failed, trying direct fetch...', 'warn');
+    const directRes = await fetch(url);
+    inst.html = await directRes.text();
+  } else {
+    inst.html = await res.text();
+  }
+
+  inst.url = url;
+  document.getElementById('cv-shadow-info-' + id).textContent = '';
+
+  _cv_setIframeContent(id, 'original', inst.html, url);
+  _cv_setIframeContent(id, 'transformed', inst.html, url);
+
+  _cv_status(id, `Loaded: ${url}`);
+  _cv_log(id, `Loaded ${inst.html.length} bytes via proxy`);
+}
+
+async function _cv_loadShadow(id, url) {
+  const inst = _cv_instances[id];
+
+  if (!_cv_bridgeReady) {
+    throw new Error('Extension not connected. Install FS Bridge extension and run FunctionServer locally.');
+  }
+
+  // Close existing shadow tab if any
+  if (inst.shadowTabId) {
+    try {
+      await _cv_bridgeSend({ action: 'closeShadow', data: { tabId: inst.shadowTabId } });
+    } catch (e) {}
+  }
+
+  _cv_log(id, 'Opening shadow tab...');
+
+  // Open shadow tab
+  const shadowResult = await _cv_bridgeSend({
+    action: 'openShadow',
+    data: { url, shadowId: `cv_${id}` }
+  });
+
+  inst.shadowTabId = shadowResult.tabId;
+  document.getElementById('cv-shadow-info-' + id).textContent = `👻 Tab #${inst.shadowTabId}`;
+
+  _cv_log(id, `Shadow tab opened: #${inst.shadowTabId}`);
+
+  // Wait for page to load
+  _cv_log(id, 'Waiting for page to load...');
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  // Get content from shadow tab
+  const content = await _cv_bridgeSend({
+    action: 'getContent',
+    tabId: inst.shadowTabId
+  });
+
+  inst.html = content.html;
+  inst.url = content.url || url;
+
+  _cv_setIframeContent(id, 'original', inst.html, inst.url);
+  _cv_setIframeContent(id, 'transformed', inst.html, inst.url);
+
+  _cv_status(id, `Loaded via shadow: ${inst.url}`);
+  _cv_log(id, `Loaded ${inst.html.length} bytes from shadow tab`);
+}
+
 function _cv_setIframeContent(id, which, html, baseUrl) {
   const iframe = document.getElementById(`cv-${which}-${id}`);
   if (!iframe) return;
 
-  // Inject base tag for relative URLs and helper functions
   const helpers = `
     <script>
       window.$ = s => document.querySelector(s);
@@ -269,13 +428,38 @@ function _cv_setIframeContent(id, which, html, baseUrl) {
   iframe.srcdoc = modifiedHtml;
 }
 
-function _cv_runTransform(id) {
+async function _cv_runTransform(id) {
   const inst = _cv_instances[id];
   if (!inst) return;
 
   const transform = document.getElementById('cv-transform-' + id).value;
   inst.transform = transform;
 
+  // If using shadow mode, run transform on the actual shadow tab too
+  if (inst.mode === 'shadow' && inst.shadowTabId && _cv_bridgeReady) {
+    try {
+      await _cv_bridgeSend({
+        action: 'eval',
+        tabId: inst.shadowTabId,
+        data: { expression: transform }
+      });
+      _cv_log(id, 'Transform applied to shadow tab');
+
+      // Refresh content from shadow
+      const content = await _cv_bridgeSend({
+        action: 'getContent',
+        tabId: inst.shadowTabId
+      });
+      inst.html = content.html;
+      _cv_setIframeContent(id, 'transformed', inst.html, inst.url);
+      _cv_status(id, 'Transform applied (shadow)');
+      return;
+    } catch (e) {
+      _cv_log(id, `Shadow transform error: ${e.message}`, 'warn');
+    }
+  }
+
+  // Fallback: run on iframe
   const iframe = document.getElementById('cv-transformed-' + id);
   if (!iframe || !iframe.contentWindow) {
     _cv_log(id, 'No iframe loaded', 'error');
@@ -283,7 +467,6 @@ function _cv_runTransform(id) {
   }
 
   try {
-    // Run transform in iframe context
     iframe.contentWindow.eval(transform);
     _cv_log(id, 'Transform applied');
     _cv_status(id, 'Transform applied');
@@ -307,18 +490,27 @@ function _cv_registerAPI(id) {
   }
 
   try {
-    // Create API registration context
     const API = {
       register: (name, fn) => {
-        inst.endpoints[name] = async (...args) => {
-          // Execute in iframe context
-          return iframe.contentWindow.eval(`(${fn.toString()})(...${JSON.stringify(args)})`);
-        };
+        // For shadow mode, execute in shadow tab
+        if (inst.mode === 'shadow' && inst.shadowTabId && _cv_bridgeReady) {
+          inst.endpoints[name] = async (...args) => {
+            const result = await _cv_bridgeSend({
+              action: 'eval',
+              tabId: inst.shadowTabId,
+              data: { expression: `(${fn.toString()})(...${JSON.stringify(args)})` }
+            });
+            return result;
+          };
+        } else {
+          inst.endpoints[name] = async (...args) => {
+            return iframe.contentWindow.eval(`(${fn.toString()})(...${JSON.stringify(args)})`);
+          };
+        }
         _cv_log(id, `Registered API: ${name}`);
       }
     };
 
-    // Run API registration
     const fn = new Function('API', apiCode);
     fn(API);
 
@@ -339,10 +531,6 @@ function _cv_loadPreset(id, name) {
   document.getElementById('cv-api-' + id).value = preset.api || '';
 
   _cv_log(id, `Loaded preset: ${name}`);
-
-  if (preset.url) {
-    _cv_load(id);
-  }
 }
 
 async function _cv_savePreset(id) {
@@ -358,7 +546,6 @@ async function _cv_savePreset(id) {
     api: document.getElementById('cv-api-' + id).value
   };
 
-  // Save to localStorage
   const saved = JSON.parse(localStorage.getItem('cv-presets') || '{}');
   saved[name] = preset;
   localStorage.setItem('cv-presets', JSON.stringify(saved));
@@ -366,6 +553,16 @@ async function _cv_savePreset(id) {
   _cv_log(id, `Saved preset: ${name}`);
   algoSpeak(`Saved preset: ${name}`);
 }
+
+// Cleanup shadow tabs when window closes
+window.addEventListener('beforeunload', () => {
+  for (const id in _cv_instances) {
+    const inst = _cv_instances[id];
+    if (inst.shadowTabId && _cv_bridgeReady) {
+      _cv_bridgeSend({ action: 'closeShadow', data: { tabId: inst.shadowTabId } });
+    }
+  }
+});
 
 // Export functions
 window._cv_instances = _cv_instances;
@@ -377,6 +574,7 @@ window._cv_loadPreset = _cv_loadPreset;
 window._cv_savePreset = _cv_savePreset;
 window._cv_showTab = _cv_showTab;
 window._cv_PRESETS = _cv_PRESETS;
+window._cv_connectBridge = _cv_connectBridge;
 
 // Run the app
 _cv_open();
