@@ -6,6 +6,7 @@ let serverUrl = 'ws://localhost:8080';
 let connected = false;
 let shadowTabs = new Map(); // tabId -> { url, title, shadowId }
 let tabGroupId = null; // Chrome tab group for shadow tabs
+let pingInterval = null;
 
 // Load saved server URL
 chrome.storage.local.get(['serverUrl'], (result) => {
@@ -25,6 +26,13 @@ function connect() {
       updateBadge();
       // Send list of currently bridged tabs
       sendTabList();
+      // Start keepalive ping
+      if (pingInterval) clearInterval(pingInterval);
+      pingInterval = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ action: 'ping' }));
+        }
+      }, 30000);
     };
 
     ws.onmessage = async (event) => {
@@ -40,6 +48,10 @@ function connect() {
       connected = false;
       console.log('[FSBridge] Disconnected');
       updateBadge();
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
       // Reconnect after delay
       setTimeout(connect, 3000);
     };

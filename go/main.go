@@ -1039,12 +1039,20 @@ func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Handle tab list updates
-		if action, ok := data["action"].(string); ok && action == "tabList" {
-			// Could broadcast to connected Clean View instances
-			// For now just log
-			if tabs, ok := data["tabs"].([]interface{}); ok {
-				fmt.Printf("[ContentBridge] Got %d tabs\n", len(tabs))
+		// Handle actions
+		if action, ok := data["action"].(string); ok {
+			switch action {
+			case "tabList":
+				if tabs, ok := data["tabs"].([]interface{}); ok {
+					fmt.Printf("[ContentBridge] Got %d tabs\n", len(tabs))
+				}
+			case "ping":
+				// Respond to keepalive ping
+				if id, ok := data["id"].(string); ok {
+					conn.WriteMessage(websocket.TextMessage, []byte(`{"id":"`+id+`","result":"pong"}`))
+				} else {
+					conn.WriteMessage(websocket.TextMessage, []byte(`{"result":"pong"}`))
+				}
 			}
 		}
 	}
