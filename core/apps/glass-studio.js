@@ -92,9 +92,9 @@ function _gs_open() {
     </div>
   `;
 
-  // Load Three.js
+  // Load Three.js and init after a brief delay to ensure DOM is ready
   _gs_loadThree().then(() => {
-    _gs_init(id);
+    setTimeout(() => _gs_init(id), 100);
   });
 }
 
@@ -122,18 +122,26 @@ function _gs_init(id) {
   const canvas = document.getElementById('gs-canvas-' + id);
   if (!canvas || !window.THREE) return;
 
+  // Ensure canvas has dimensions
+  let width = canvas.clientWidth || 500;
+  let height = canvas.clientHeight || 400;
+  if (width < 10 || height < 10) {
+    width = 500;
+    height = 400;
+  }
+
   const THREE = window.THREE;
 
   // Scene
   const scene = new THREE.Scene();
 
   // Camera
-  const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
   camera.position.set(0, 0, 4);
 
   // Renderer
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
@@ -423,7 +431,9 @@ function _gs_export(id) {
 }
 
 // Export functions
+window._gs_instances = _gs_instances;
 window._gs_open = _gs_open;
+window._gs_init = _gs_init;
 window._gs_loadPreset = _gs_loadPreset;
 window._gs_updateMaterial = _gs_updateMaterial;
 window._gs_setShape = _gs_setShape;
