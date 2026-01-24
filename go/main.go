@@ -910,6 +910,66 @@ func handleEye(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Eye bridge endpoint for browser - connects on page load
+// This replaces the need to have Shell open for eye commands
+func handleEyeBridge(w http.ResponseWriter, r *http.Request) {
+	// Get token from query string
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Token required", 401)
+		return
+	}
+
+	// Verify token and get user
+	username := verifyToken(token)
+	if username == "" {
+		http.Error(w, "Invalid token", 401)
+		return
+	}
+
+	// Upgrade to WebSocket
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	// Register as browser connection for eye commands
+	browserConn := registerBrowserConn(username, conn)
+	defer unregisterBrowserConn(username)
+
+	// Send ready message
+	conn.WriteMessage(websocket.TextMessage, []byte("EYE_BRIDGE:ready"))
+
+	// Read messages from browser
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		msgStr := string(msg)
+
+		// Eye response from browser (direct bridge)
+		// Format: EYE:id:result or EYE:id!:error
+		if strings.HasPrefix(msgStr, "EYE:") {
+			sendEyeResponse(username, msgStr[4:])
+			continue
+		}
+
+		// Ping/pong for keepalive
+		if msgStr == "ping" {
+			conn.WriteMessage(websocket.TextMessage, []byte("pong"))
+			continue
+		}
+	}
+
+	_ = browserConn // Silence unused variable warning
+}
+
 func handleVerify(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token    string `json:"token"`
@@ -1335,9 +1395,14 @@ func main() {
 		handlePTY(w, r)
 	})
 
-	// Eye bridge: Direct AI-to-browser WebSocket
+	// Eye bridge: Direct AI-to-browser WebSocket (for Claude/eye CLI)
 	mux.HandleFunc("/api/eye", func(w http.ResponseWriter, r *http.Request) {
 		handleEye(w, r)
+	})
+
+	// Eye bridge: Browser-side connection (auto-connects on page load)
+	mux.HandleFunc("/api/eye-bridge", func(w http.ResponseWriter, r *http.Request) {
+		handleEyeBridge(w, r)
 	})
 
 	mux.HandleFunc("/api/terminal/exec", func(w http.ResponseWriter, r *http.Request) {

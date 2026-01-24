@@ -53,6 +53,7 @@
     <span style="font-size:14px;">🖥️</span> Start
   </div>
   <div id="taskbar-windows"></div>
+  <div id="system-tray"></div>
   <div id="clock"></div>
 </div>
 
@@ -635,6 +636,10 @@ async function init() {
 
   // Restore shader background if saved
   restoreShaderBackground();
+
+  // Connect eye bridge for Claude integration
+  connectEyeBridge();
+  updateEyeTray();
 }
 
 function restoreShaderBackground() {
@@ -1453,6 +1458,202 @@ function loadState() {
   const bg = localStorage.getItem('algo-bg-color');
   if (bg) document.getElementById('desktop').style.background = bg;
 }
+
+// ==================== SYSTEM TRAY ====================
+const systemTray = {
+  icons: {},  // id -> { element, onClick, onContextMenu }
+
+  add(id, icon, options = {}) {
+    if (this.icons[id]) return this.icons[id].element;
+
+    const el = document.createElement('div');
+    el.className = 'tray-icon' + (options.className ? ' ' + options.className : '');
+    el.innerHTML = icon;
+    el.title = options.title || id;
+
+    if (options.onClick) {
+      el.onclick = options.onClick;
+    }
+    if (options.onContextMenu) {
+      el.oncontextmenu = (e) => {
+        e.preventDefault();
+        options.onContextMenu(e);
+      };
+    }
+
+    const container = document.getElementById('system-tray');
+    if (container) container.appendChild(el);
+
+    this.icons[id] = { element: el, ...options };
+    return el;
+  },
+
+  remove(id) {
+    const item = this.icons[id];
+    if (item && item.element) {
+      item.element.remove();
+      delete this.icons[id];
+    }
+  },
+
+  update(id, icon) {
+    const item = this.icons[id];
+    if (item && item.element) {
+      item.element.innerHTML = icon;
+    }
+  },
+
+  get(id) {
+    return this.icons[id]?.element;
+  }
+};
+
+// ==================== EYE BRIDGE ====================
+let eyeBridgeWs = null;
+let eyeBridgeReconnectTimer = null;
+let eyeBridgeConnected = false;
+
+function connectEyeBridge() {
+  if (!sessionToken) return;
+  if (eyeBridgeWs && eyeBridgeWs.readyState === WebSocket.OPEN) return;
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/api/eye-bridge?token=${sessionToken}`;
+
+  try {
+    eyeBridgeWs = new WebSocket(wsUrl);
+
+    eyeBridgeWs.onopen = () => {
+      console.log('[EyeBridge] Connected');
+    };
+
+    eyeBridgeWs.onmessage = (event) => {
+      const msg = event.data;
+
+      if (msg === 'EYE_BRIDGE:ready') {
+        eyeBridgeConnected = true;
+        updateEyeTray();
+        return;
+      }
+
+      // Handle eye commands from Claude
+      // Format: EYE_CMD:id:expression
+      if (msg.startsWith('EYE_CMD:')) {
+        handleEyeCommand(msg.slice(8));
+        return;
+      }
+    };
+
+    eyeBridgeWs.onclose = () => {
+      console.log('[EyeBridge] Disconnected');
+      eyeBridgeConnected = false;
+      updateEyeTray();
+      scheduleEyeBridgeReconnect();
+    };
+
+    eyeBridgeWs.onerror = (err) => {
+      console.error('[EyeBridge] Error:', err);
+    };
+  } catch (e) {
+    console.error('[EyeBridge] Connect failed:', e);
+    scheduleEyeBridgeReconnect();
+  }
+}
+
+function scheduleEyeBridgeReconnect() {
+  if (eyeBridgeReconnectTimer) return;
+  eyeBridgeReconnectTimer = setTimeout(() => {
+    eyeBridgeReconnectTimer = null;
+    if (sessionToken) connectEyeBridge();
+  }, 3000);
+}
+
+function handleEyeCommand(data) {
+  // Parse id:expression
+  const colonIdx = data.indexOf(':');
+  if (colonIdx === -1) return;
+
+  const id = data.slice(0, colonIdx);
+  const expression = data.slice(colonIdx + 1);
+
+  // Visual feedback - blink the eye
+  blinkEyeTray();
+
+  // Execute and send response
+  (async () => {
+    try {
+      let result = eval(expression);
+      // Await promises
+      if (result && typeof result.then === 'function') {
+        result = await result;
+      }
+
+      // Serialize result
+      let response;
+      try {
+        response = JSON.stringify(result);
+      } catch (e) {
+        response = String(result);
+      }
+
+      sendEyeResponse(id, response, false);
+    } catch (e) {
+      sendEyeResponse(id, e.message || String(e), true);
+    }
+  })();
+}
+
+function sendEyeResponse(id, result, isError) {
+  if (!eyeBridgeWs || eyeBridgeWs.readyState !== WebSocket.OPEN) return;
+
+  // Format: EYE:id:result or EYE:id!:error
+  const sep = isError ? '!:' : ':';
+  eyeBridgeWs.send(`EYE:${id}${sep}${result}`);
+}
+
+function updateEyeTray() {
+  let el = systemTray.get('eye');
+  if (!el) {
+    el = systemTray.add('eye', '👁️<span class="eye-indicator"></span>', {
+      className: 'eye-tray',
+      title: 'Claude Eye Bridge',
+      onClick: () => {
+        // Try to open Claude Eyes app if it exists
+        const eyeApp = systemApps.find(a => a.name.toLowerCase().includes('eye') || a.name.toLowerCase().includes('claude'));
+        if (eyeApp) {
+          loadSystemApp(eyeApp.file);
+        } else {
+          algoSpeak(eyeBridgeConnected ? 'Eye bridge connected' : 'Eye bridge disconnected');
+        }
+      }
+    });
+  }
+
+  if (el) {
+    el.classList.toggle('connected', eyeBridgeConnected);
+    el.title = eyeBridgeConnected ? 'Claude Eye Bridge (connected)' : 'Claude Eye Bridge (disconnected)';
+  }
+}
+
+function blinkEyeTray() {
+  const el = systemTray.get('eye');
+  if (!el) return;
+
+  el.classList.remove('active');
+  void el.offsetWidth; // Force reflow
+  el.classList.add('active');
+}
+
+// Disconnect eye bridge on logout
+const originalLogout = logout;
+logout = function() {
+  if (eyeBridgeWs) {
+    eyeBridgeWs.close();
+    eyeBridgeWs = null;
+  }
+  eyeBridgeConnected = false;
+  originalLogout();
+};
 
 // ==================== BOOT ====================
 checkSession();
