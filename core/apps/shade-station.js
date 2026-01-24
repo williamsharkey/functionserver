@@ -75,6 +75,33 @@ void main() {
   color *= 1.0 - smoothstep(1.5, 2.5, radius);
   color += vec3(0.3, 0.5, 1.0) * (0.05 / radius);
   gl_FragColor = vec4(color, 1.0);
+}`,
+  'Fog': `precision mediump float;
+uniform float u_time;
+uniform vec2 u_resolution;
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / min(u_resolution.x, u_resolution.y);
+  float angle = atan(uv.y, uv.x);
+  float radius = length(uv);
+  float tunnel = 0.5 / radius;
+  float nodes = sin(angle * 8.0 + u_time * 0.7) * 0.5 + 0.5;
+  float ripple1 = sin(tunnel * 4.0 - u_time * 1.0);
+  float ripple2 = sin(tunnel * 8.0 - u_time * 1.7 + nodes * 2.0) * 0.7;
+  float ripple3 = sin(tunnel * 16.0 - u_time * 2.5 + nodes * 4.0) * 0.4;
+  float ripple4 = sin(tunnel * 32.0 - u_time * 3.2) * 0.2;
+  float depthMix = smoothstep(0.0, 2.0, tunnel);
+  float ripple = ripple1 + ripple2 * depthMix + ripple3 * depthMix * depthMix + ripple4 * pow(depthMix, 3.0);
+  vec3 blue = vec3(0.45, 0.55, 0.65);
+  vec3 gray = vec3(0.25, 0.28, 0.32);
+  vec3 highlight = vec3(0.65, 0.72, 0.78);
+  float pattern = ripple * 0.3 + 0.5;
+  vec3 color = mix(gray, blue, pattern);
+  color = mix(color, highlight, pow(max(pattern, 0.0), 3.0) * 0.6);
+  color *= smoothstep(0.0, 0.15, radius);
+  color *= 1.0 - smoothstep(1.5, 2.5, radius);
+  color += highlight * 0.06 / radius;
+  gl_FragColor = vec4(color, 1.0);
 }`
 };
 
