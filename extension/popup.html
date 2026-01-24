@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 280px;
+      padding: 12px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      background: #1a1a2e;
+      color: #ccc;
+      margin: 0;
+    }
+    h3 {
+      margin: 0 0 12px 0;
+      color: #fff;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: #12121a;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .dot.connected { background: #4a4; }
+    .setting {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      color: #888;
+      font-size: 11px;
+    }
+    input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #333;
+      background: #222;
+      color: #fff;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      background: #4a4;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    button:hover { background: #5b5; }
+    button.secondary {
+      background: #444;
+      margin-top: 8px;
+    }
+    button.secondary:hover { background: #555; }
+    .shadows {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #333;
+    }
+    .shadow-count {
+      color: #888;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <h3>🔗 FS Bridge</h3>
+
+  <div class="status">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Checking...</span>
+  </div>
+
+  <div class="setting">
+    <label>FunctionServer Port</label>
+    <input type="number" id="port" value="8080" min="1" max="65535">
+  </div>
+
+  <button id="save-btn">Save & Reconnect</button>
+  <button id="reconnect-btn" class="secondary">Reconnect</button>
+
+  <div class="shadows">
+    <span class="shadow-count" id="shadow-count">No shadow tabs</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

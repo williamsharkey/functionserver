@@ -970,6 +970,135 @@ func handleEyeBridge(w http.ResponseWriter, r *http.Request) {
 	_ = browserConn // Silence unused variable warning
 }
 
+// Content bridge connections (browser extension to local FunctionServer)
+type ContentBridgeConn struct {
+	Conn      *websocket.Conn
+	Responses map[string]chan map[string]interface{}
+	mu        sync.Mutex
+}
+
+var (
+	contentBridgeConn   *ContentBridgeConn
+	contentBridgeConnMu sync.RWMutex
+)
+
+// Handle content bridge WebSocket from browser extension
+func handleContentBridge(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	// Register this connection
+	contentBridgeConnMu.Lock()
+	contentBridgeConn = &ContentBridgeConn{
+		Conn:      conn,
+		Responses: make(map[string]chan map[string]interface{}),
+	}
+	contentBridgeConnMu.Unlock()
+
+	defer func() {
+		contentBridgeConnMu.Lock()
+		contentBridgeConn = nil
+		contentBridgeConnMu.Unlock()
+	}()
+
+	fmt.Println("[ContentBridge] Extension connected")
+
+	// Read messages from extension
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		var data map[string]interface{}
+		if err := json.Unmarshal(msg, &data); err != nil {
+			continue
+		}
+
+		// Handle responses to our requests
+		if id, ok := data["id"].(string); ok {
+			contentBridgeConnMu.RLock()
+			cb := contentBridgeConn
+			contentBridgeConnMu.RUnlock()
+
+			if cb != nil {
+				cb.mu.Lock()
+				if ch, exists := cb.Responses[id]; exists {
+					select {
+					case ch <- data:
+					default:
+					}
+				}
+				cb.mu.Unlock()
+			}
+		}
+
+		// Handle tab list updates
+		if action, ok := data["action"].(string); ok && action == "tabList" {
+			// Could broadcast to connected Clean View instances
+			// For now just log
+			if tabs, ok := data["tabs"].([]interface{}); ok {
+				fmt.Printf("[ContentBridge] Got %d tabs\n", len(tabs))
+			}
+		}
+	}
+
+	fmt.Println("[ContentBridge] Extension disconnected")
+}
+
+// Send a command to the content bridge and wait for response
+func contentBridgeSend(action string, tabId int, data map[string]interface{}) (map[string]interface{}, error) {
+	contentBridgeConnMu.RLock()
+	cb := contentBridgeConn
+	contentBridgeConnMu.RUnlock()
+
+	if cb == nil {
+		return nil, fmt.Errorf("no content bridge connected")
+	}
+
+	// Generate request ID
+	reqID := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// Create response channel
+	respChan := make(chan map[string]interface{}, 1)
+	cb.mu.Lock()
+	cb.Responses[reqID] = respChan
+	cb.mu.Unlock()
+
+	defer func() {
+		cb.mu.Lock()
+		delete(cb.Responses, reqID)
+		cb.mu.Unlock()
+	}()
+
+	// Build request
+	req := map[string]interface{}{
+		"id":     reqID,
+		"action": action,
+		"tabId":  tabId,
+		"data":   data,
+	}
+
+	reqJSON, _ := json.Marshal(req)
+	if err := cb.Conn.WriteMessage(websocket.TextMessage, reqJSON); err != nil {
+		return nil, err
+	}
+
+	// Wait for response
+	select {
+	case resp := <-respChan:
+		return resp, nil
+	case <-time.After(30 * time.Second):
+		return nil, fmt.Errorf("timeout")
+	}
+}
+
 func handleVerify(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token    string `json:"token"`
@@ -1403,6 +1532,11 @@ func main() {
 	// Eye bridge: Browser-side connection (auto-connects on page load)
 	mux.HandleFunc("/api/eye-bridge", func(w http.ResponseWriter, r *http.Request) {
 		handleEyeBridge(w, r)
+	})
+
+	// Content bridge: Browser extension connection (for Clean View shadow tabs)
+	mux.HandleFunc("/api/content-bridge", func(w http.ResponseWriter, r *http.Request) {
+		handleContentBridge(w, r)
 	})
 
 	mux.HandleFunc("/api/terminal/exec", func(w http.ResponseWriter, r *http.Request) {
