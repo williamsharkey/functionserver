@@ -447,9 +447,16 @@ function _ss_setAsBackground(id) {
   }
   render();
 
+  // Make desktop transparent so shader shows through
+  const desktop = document.getElementById('desktop');
+  if (desktop) {
+    window._shaderBgOriginalDesktopBg = getComputedStyle(desktop).background;
+    desktop.style.background = 'transparent';
+  }
+
   // Persist to localStorage
   localStorage.setItem('algo-shader-bg', code);
-  algoSpeak('Shader set as background! Will persist across sessions.');
+  algoSpeak('Shader set as background!');
 }
 
 // Remove shader background
@@ -459,6 +466,11 @@ function _ss_removeBackground() {
   if (window._shaderBgAnimFrame) {
     cancelAnimationFrame(window._shaderBgAnimFrame);
     window._shaderBgAnimFrame = null;
+  }
+  // Restore desktop background
+  const desktop = document.getElementById('desktop');
+  if (desktop && window._shaderBgOriginalDesktopBg) {
+    desktop.style.background = window._shaderBgOriginalDesktopBg;
   }
   localStorage.removeItem('algo-shader-bg');
   algoSpeak('Shader background removed');
