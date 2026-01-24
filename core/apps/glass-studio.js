@@ -88,6 +88,31 @@ function _gs_open() {
       <div style="margin-bottom:8px;">
         <label><input type="checkbox" id="gs-rotate-${id}" checked onchange="_gs_toggleRotate(${id})"> Auto Rotate</label>
       </div>
+      <hr style="border-color:#333;margin:12px 0;">
+      <div style="margin-bottom:8px;">
+        <label>Text / Emoji</label>
+        <input type="text" id="gs-text-${id}" placeholder="💻 or Start" style="width:100%;margin-top:4px;padding:6px;font-size:16px;" onchange="_gs_updateText(${id})">
+      </div>
+      <div style="margin-bottom:8px;">
+        <label>Text Mode</label>
+        <select id="gs-textmode-${id}" style="width:100%;margin-top:4px;padding:4px;" onchange="_gs_updateText(${id})">
+          <option value="inside">Inside (floating)</option>
+          <option value="emboss">Embossed (raised)</option>
+          <option value="engrave">Engraved (carved)</option>
+          <option value="cutout">Cutout (void)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label>Fit</label>
+        <select id="gs-fit-${id}" style="width:100%;margin-top:4px;padding:4px;" onchange="_gs_updateText(${id})">
+          <option value="square">Square</option>
+          <option value="rect">Rectangle (fit text)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label>Text Depth: <span id="gs-textdepth-val-${id}">0.3</span></label>
+        <input type="range" id="gs-textdepth-${id}" min="0.05" max="1" step="0.05" value="0.3" style="width:100%;" oninput="_gs_updateText(${id})">
+      </div>
       <button onclick="_gs_export(${id})" style="width:100%;padding:8px;margin-top:8px;cursor:pointer;">Export PNG</button>
     </div>
   `;
@@ -449,6 +474,249 @@ function _gs_export(id) {
   algoSpeak('Exported glass-icon.png');
 }
 
+// Create text/emoji geometry from canvas
+function _gs_createTextGeometry(text, depth) {
+  const THREE = window.THREE;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Measure text
+  const fontSize = 200;
+  ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  const metrics = ctx.measureText(text);
+  const textWidth = metrics.width;
+  const textHeight = fontSize * 1.2;
+
+  // Set canvas size with padding
+  const padding = 20;
+  canvas.width = textWidth + padding * 2;
+  canvas.height = textHeight + padding * 2;
+
+  // Draw text
+  ctx.fillStyle = 'white';
+  ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  // Get image data and trace outline
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const shapes = _gs_traceShapes(imageData, canvas.width, canvas.height);
+
+  if (shapes.length === 0) return null;
+
+  // Create extrude geometry from shapes
+  const extrudeSettings = {
+    depth: depth * 100,
+    bevelEnabled: true,
+    bevelThickness: 5,
+    bevelSize: 3,
+    bevelSegments: 3
+  };
+
+  const geometries = shapes.map(shape => new THREE.ExtrudeGeometry(shape, extrudeSettings));
+  const mergedGeometry = geometries.length > 0 ? geometries[0] : null;
+
+  if (mergedGeometry) {
+    // Scale and center
+    mergedGeometry.center();
+    const scale = 2 / Math.max(canvas.width, canvas.height);
+    mergedGeometry.scale(scale, -scale, scale);
+  }
+
+  return { geometry: mergedGeometry, aspect: textWidth / textHeight };
+}
+
+// Simple shape tracing from bitmap (marching squares simplified)
+function _gs_traceShapes(imageData, width, height) {
+  const THREE = window.THREE;
+  const data = imageData.data;
+  const threshold = 128;
+
+  // Find contours using simple edge detection
+  const shapes = [];
+  const visited = new Set();
+
+  // For simplicity, create a rounded rectangle that bounds the text
+  // Find bounding box of non-transparent pixels
+  let minX = width, maxX = 0, minY = height, maxY = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      if (alpha > threshold) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  if (maxX <= minX || maxY <= minY) return shapes;
+
+  // Create rounded rectangle shape
+  const w = maxX - minX;
+  const h = maxY - minY;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const r = Math.min(w, h) * 0.1;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(minX + r, minY);
+  shape.lineTo(maxX - r, minY);
+  shape.quadraticCurveTo(maxX, minY, maxX, minY + r);
+  shape.lineTo(maxX, maxY - r);
+  shape.quadraticCurveTo(maxX, maxY, maxX - r, maxY);
+  shape.lineTo(minX + r, maxY);
+  shape.quadraticCurveTo(minX, maxY, minX, maxY - r);
+  shape.lineTo(minX, minY + r);
+  shape.quadraticCurveTo(minX, minY, minX + r, minY);
+
+  shapes.push(shape);
+  return shapes;
+}
+
+function _gs_updateText(id) {
+  const inst = _gs_instances[id];
+  if (!inst) return;
+  const THREE = window.THREE;
+
+  const text = document.getElementById('gs-text-' + id).value;
+  const mode = document.getElementById('gs-textmode-' + id).value;
+  const fit = document.getElementById('gs-fit-' + id).value;
+  const depth = parseFloat(document.getElementById('gs-textdepth-' + id).value);
+
+  document.getElementById('gs-textdepth-val-' + id).textContent = depth.toFixed(2);
+
+  // Remove existing text mesh
+  if (inst.textMesh) {
+    inst.scene.remove(inst.textMesh);
+    inst.textMesh.geometry.dispose();
+    if (inst.textMesh.material.dispose) inst.textMesh.material.dispose();
+    inst.textMesh = null;
+  }
+
+  if (!text) return;
+
+  // Create text texture for inside/floating mode
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const fontSize = 256;
+  ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  const metrics = ctx.measureText(text);
+
+  canvas.width = Math.ceil(metrics.width) + 40;
+  canvas.height = fontSize * 1.4;
+
+  ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'white';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+
+  const aspect = canvas.width / canvas.height;
+
+  // Resize glass to fit text
+  if (fit === 'rect') {
+    const newW = Math.max(1.2, aspect * 1.0);
+    const newH = 1.0;
+    const newGeom = _gs_createRoundedBox(newW, newH, 0.4, 0.12, 8);
+    inst.mesh.geometry.dispose();
+    inst.mesh.geometry = newGeom;
+  } else {
+    // Square - use max dimension
+    const size = 1.2;
+    const newGeom = _gs_createRoundedBox(size, size, 0.4, 0.15, 8);
+    inst.mesh.geometry.dispose();
+    inst.mesh.geometry = newGeom;
+  }
+
+  // Create text plane/mesh based on mode
+  const planeW = fit === 'rect' ? aspect * 0.8 : 0.8;
+  const planeH = 0.8;
+
+  if (mode === 'inside') {
+    // Floating text inside glass
+    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
+    const planeMat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
+    inst.textMesh.position.z = 0;
+    inst.scene.add(inst.textMesh);
+  } else if (mode === 'emboss') {
+    // Raised text on surface
+    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
+    const planeMat = new THREE.MeshPhysicalMaterial({
+      map: texture,
+      transparent: true,
+      transmission: 0.5,
+      roughness: 0.1,
+      side: THREE.DoubleSide
+    });
+    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
+    inst.textMesh.position.z = 0.22 + depth * 0.1;
+    inst.scene.add(inst.textMesh);
+  } else if (mode === 'engrave') {
+    // Carved into surface (darker/shadowed)
+    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
+    const planeMat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      opacity: 0.4,
+      blending: THREE.MultiplyBlending
+    });
+    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
+    inst.textMesh.position.z = 0.18;
+    inst.scene.add(inst.textMesh);
+  } else if (mode === 'cutout') {
+    // Void/hole effect - render text as dark cutout
+    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
+
+    // Invert texture for cutout
+    const invCanvas = document.createElement('canvas');
+    invCanvas.width = canvas.width;
+    invCanvas.height = canvas.height;
+    const invCtx = invCanvas.getContext('2d');
+    invCtx.fillStyle = 'white';
+    invCtx.fillRect(0, 0, invCanvas.width, invCanvas.height);
+    invCtx.globalCompositeOperation = 'destination-out';
+    invCtx.drawImage(canvas, 0, 0);
+
+    const invTexture = new THREE.CanvasTexture(invCanvas);
+
+    const planeMat = new THREE.MeshBasicMaterial({
+      map: invTexture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      alphaTest: 0.5
+    });
+    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
+    inst.textMesh.position.z = 0.21;
+    inst.scene.add(inst.textMesh);
+
+    // Add dark backing for void effect
+    const backGeom = new THREE.PlaneGeometry(planeW, planeH);
+    const backMat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      color: 0x000000,
+      side: THREE.DoubleSide
+    });
+    const backMesh = new THREE.Mesh(backGeom, backMat);
+    backMesh.position.z = -0.1;
+    inst.textMesh.add(backMesh);
+  }
+}
+
 // Export functions
 window._gs_instances = _gs_instances;
 window._gs_open = _gs_open;
@@ -459,6 +727,7 @@ window._gs_setShape = _gs_setShape;
 window._gs_setBg = _gs_setBg;
 window._gs_toggleRotate = _gs_toggleRotate;
 window._gs_export = _gs_export;
+window._gs_updateText = _gs_updateText;
 window._gs_PRESETS = _gs_PRESETS;
 
 // Run the app
