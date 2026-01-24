@@ -224,6 +224,43 @@ ALGO.app.icon = "🐚";
       };
 
       ws.onmessage = (event) => {
+        // Handle Eye bridge commands (direct AI-to-browser JS evaluation)
+        if (typeof event.data === 'string' && event.data.startsWith('EYE_CMD:')) {
+          try {
+            const payload = event.data.slice(8); // Skip "EYE_CMD:"
+            const colonIdx = payload.indexOf(':');
+            const id = colonIdx > 0 ? payload.substring(0, colonIdx) : '';
+            const expression = colonIdx >= 0 ? payload.substring(colonIdx + 1) : payload;
+
+            // Evaluate the expression in the browser context
+            let result, error = null;
+            try {
+              result = eval(expression);
+            } catch (e) {
+              error = e.message;
+            }
+
+            // Send response if there's an ID (not fire-and-forget)
+            if (id) {
+              let resultStr;
+              if (error) {
+                ws.send('EYE:' + id + '!:' + error);
+              } else {
+                if (result === undefined) resultStr = 'undefined';
+                else if (result === null) resultStr = 'null';
+                else if (typeof result === 'object') {
+                  try { resultStr = JSON.stringify(result); }
+                  catch (e) { resultStr = String(result); }
+                } else resultStr = String(result);
+                ws.send('EYE:' + id + ':' + resultStr);
+              }
+            }
+          } catch (e) {
+            console.error('Eye bridge error:', e);
+          }
+          return;
+        }
+
         if (event.data instanceof ArrayBuffer) {
           term.write(new Uint8Array(event.data));
         } else {
