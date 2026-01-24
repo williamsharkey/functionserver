@@ -10,28 +10,30 @@ You are Claude, running inside a terminal within FunctionServer - a browser-base
 # One-time setup (if not already done)
 cat ~/.algo/config.json   # Check if config exists
 
-# Basic usage
-eye 'a:document.title'                    # Get page title
-eye 'a:1+1'                               # Evaluate any JS
-eye 'ALGO.bridge.openApp("shell")'        # Fire & forget (no id:)
+# Basic usage (MCP tool - just use plain expressions)
+eye 'document.title'                      # Get page title
+eye '1+1'                                 # Evaluate any JS
+eye 'ALGO.bridge.openApp("shell")'        # Open an app
 ```
 
-**The pattern:** `id:expression` gets a response, plain `expression` is fire-and-forget.
+**MCP vs CLI:**
+- **MCP tool** (Claude): Always returns results. Just use plain expressions.
+- **CLI** (humans): Use `id:expr` for response, plain `expr` for fire-and-forget.
 
 ## Eye Cheat Sheet
 
 ```bash
 # Inspect (short helpers available in browser)
-eye 'a:apps()'                            # List all app names
-eye 'a:wins()'                            # List open windows
-eye 'a:$(".window-title").textContent'    # Query single element
-eye 'a:$$(".window").length'              # Query all elements
+eye 'apps()'                              # List all app names
+eye 'wins()'                              # List open windows
+eye '$(".window-title").textContent'      # Query single element
+eye '$$(".window").length'                # Query all elements
 
 # Full API
-eye 'a:document.title'                    # Page title
-eye 'a:windows.length'                    # Open window count
-eye 'a:systemApps.map(a=>a.name)'         # List all apps
-eye 'a:ALGO.bridge.getState()'            # Full desktop state
+eye 'document.title'                      # Page title
+eye 'windows.length'                      # Open window count
+eye 'systemApps.map(a=>a.name)'           # List all apps
+eye 'ALGO.bridge.getState()'              # Full desktop state
 
 # Control
 eye 'ALGO.bridge.openApp("shade-station")'   # Open app
@@ -39,12 +41,12 @@ eye 'ALGO.bridge.closeWindow(0)'             # Close window
 eye 'ALGO.bridge.focusWindow(1)'             # Focus window
 
 # DOM
-eye 'a:document.querySelector(".window-title").textContent'
-eye 'a:[...document.querySelectorAll(".window")].length'
+eye 'document.querySelector(".window-title").textContent'
+eye '[...document.querySelectorAll(".window")].length'
 
 # Debug CSS
-eye 'a:JSON.stringify($(".menu").getBoundingClientRect())'
-eye 'a:getComputedStyle($(".menu")).bottom'
+eye 'JSON.stringify($(".menu").getBoundingClientRect())'
+eye 'getComputedStyle($(".menu")).bottom'
 
 # Inject CSS/JS
 eye 'document.body.style.background="red"'
@@ -107,27 +109,33 @@ document          // Full DOM access
 
 ## Common Patterns
 
-**Batch multiple queries (3x faster):**
+**Batch multiple queries (faster):**
 ```bash
-# Instead of 3 calls (~225ms):
-eye 'a:document.title'
-eye 'a:wins()'
-eye 'a:apps()'
+# Instead of 3 calls:
+eye 'document.title'
+eye 'wins()'
+eye 'apps()'
 
-# One call (~75ms):
-eye 'a:[document.title, wins(), apps()]'
+# One call:
+eye '[document.title, wins(), apps()]'
 ```
 
 **List window titles:**
 ```bash
-eye 'a:wins()'
+eye 'wins()'
 ```
 
 **Find and fix CSS issue:**
 ```bash
-eye 'a:JSON.stringify($("#menu").getBoundingClientRect())'
+eye 'JSON.stringify($("#menu").getBoundingClientRect())'
 # See the problem, then fix:
 eye '$("#menu").style.bottom="40px"'
+```
+
+**Async operations (eye-mcp awaits promises):**
+```bash
+eye 'saveFileToDisk("test.txt", "hello")'    # Returns true/false
+eye 'fetchDesktopFiles()'                     # Returns file list
 ```
 
 **Inject a style:**
@@ -150,6 +158,6 @@ eye 'window.myFunc = function(x) { return x * 2; }'
 
 ## You Are Inside the Machine
 
-This isn't automation from outside. When you call `eye 'a:document.title'`, you're executing JavaScript in the same VM as the apps. When you patch a function, that's the real running code. When you inject CSS, the user sees it instantly.
+This isn't automation from outside. When you call `eye 'document.title'`, you're executing JavaScript in the same VM as the apps. When you patch a function, that's the real running code. When you inject CSS, the user sees it instantly.
 
 The browser is your REPL. The OS is your canvas.
