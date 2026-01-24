@@ -6,13 +6,13 @@ ALGO.app.icon = '💎';
 const _gs_instances = {};
 
 const _gs_PRESETS = {
-  'Amber Glass': { color: '#ffaa44', transmission: 0.95, roughness: 0.05, ior: 1.5, thickness: 0.5 },
-  'Clear Glass': { color: '#ffffff', transmission: 0.98, roughness: 0.0, ior: 1.5, thickness: 0.3 },
-  'Frosted': { color: '#eeeeff', transmission: 0.9, roughness: 0.4, ior: 1.4, thickness: 0.5 },
-  'Ruby': { color: '#ff2244', transmission: 0.85, roughness: 0.02, ior: 1.7, thickness: 0.8 },
-  'Emerald': { color: '#22ff66', transmission: 0.85, roughness: 0.02, ior: 1.6, thickness: 0.7 },
-  'Sapphire': { color: '#4466ff', transmission: 0.85, roughness: 0.02, ior: 1.7, thickness: 0.8 },
-  'Obsidian': { color: '#222233', transmission: 0.7, roughness: 0.1, ior: 1.5, thickness: 1.0 }
+  'Clear Glass': { color: '#ffffff', transmission: 1.0, roughness: 0.0, ior: 1.5, thickness: 0.2 },
+  'Amber Glass': { color: '#ffaa44', transmission: 1.0, roughness: 0.0, ior: 1.5, thickness: 0.5 },
+  'Frosted': { color: '#ffffff', transmission: 0.95, roughness: 0.3, ior: 1.4, thickness: 0.5 },
+  'Ruby': { color: '#ff2244', transmission: 1.0, roughness: 0.0, ior: 1.7, thickness: 0.8 },
+  'Emerald': { color: '#22ff66', transmission: 1.0, roughness: 0.0, ior: 1.6, thickness: 0.7 },
+  'Sapphire': { color: '#4466ff', transmission: 1.0, roughness: 0.0, ior: 1.7, thickness: 0.8 },
+  'Obsidian': { color: '#111118', transmission: 0.8, roughness: 0.05, ior: 1.5, thickness: 2.0 }
 };
 
 const _gs_SHAPES = ['Rounded Box', 'Sphere', 'Torus', 'Blob', 'Icon Pill'];
@@ -188,17 +188,20 @@ function _gs_init(id) {
   dirLight2.position.set(-5, 3, -5);
   scene.add(dirLight2);
 
-  // Glass material
+  // Glass material - transmission requires transparent:true
   const material = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(0xffaa44),
+    color: new THREE.Color(0xffffff),
     metalness: 0,
-    roughness: 0.05,
-    transmission: 0.95,
+    roughness: 0,
+    transmission: 1,
     thickness: 0.5,
     ior: 1.5,
     envMapIntensity: 1,
-    clearcoat: 0.1,
-    clearcoatRoughness: 0.1
+    transparent: true,
+    opacity: 1,
+    side: THREE.DoubleSide,
+    attenuationColor: new THREE.Color(0xffaa44),
+    attenuationDistance: 0.5
   });
 
   // Default geometry - rounded box
@@ -334,7 +337,9 @@ function _gs_updateMaterial(id) {
   document.getElementById('gs-ior-val-' + id).textContent = ior.toFixed(2);
   document.getElementById('gs-thick-val-' + id).textContent = thick.toFixed(2);
 
-  inst.material.color.set(color);
+  // Use attenuationColor for glass tint, keep base color white for clarity
+  inst.material.attenuationColor.set(color);
+  inst.material.attenuationDistance = thick * 0.5;
   inst.material.transmission = trans;
   inst.material.roughness = rough;
   inst.material.ior = ior;
