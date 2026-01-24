@@ -2,31 +2,50 @@
 
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
-const portInput = document.getElementById('port');
+const serverUrlInput = document.getElementById('server-url');
+const serverPreset = document.getElementById('server-preset');
 const saveBtn = document.getElementById('save-btn');
 const reconnectBtn = document.getElementById('reconnect-btn');
-const puppetCount = document.getElementById('puppet-count');
+const shadowCount = document.getElementById('shadow-count');
 
 function updateStatus() {
   chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
     if (response) {
       statusDot.className = 'dot' + (response.connected ? ' connected' : '');
+      const serverDisplay = response.serverUrl?.replace('wss://', '').replace('ws://', '') || 'not set';
       statusText.textContent = response.connected
-        ? `Connected to localhost:${response.port}`
-        : `Disconnected (port ${response.port})`;
-      portInput.value = response.port;
+        ? `Connected to ${serverDisplay}`
+        : `Disconnected (${serverDisplay})`;
+      serverUrlInput.value = response.serverUrl || 'ws://localhost:8080';
     }
   });
 }
 
-saveBtn.addEventListener('click', () => {
-  const port = parseInt(portInput.value, 10);
-  if (port > 0 && port < 65536) {
-    chrome.runtime.sendMessage({ action: 'setPort', port }, () => {
-      statusText.textContent = 'Reconnecting...';
-      setTimeout(updateStatus, 1000);
-    });
+function applyPreset() {
+  const value = serverPreset.value;
+  if (value) {
+    serverUrlInput.value = value;
+    serverPreset.value = ''; // Reset dropdown
   }
+}
+
+saveBtn.addEventListener('click', () => {
+  let url = serverUrlInput.value.trim();
+
+  // Auto-add protocol if missing
+  if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+    if (url.includes('localhost') || url.match(/^[\d.:]+$/)) {
+      url = 'ws://' + url;
+    } else {
+      url = 'wss://' + url;
+    }
+    serverUrlInput.value = url;
+  }
+
+  chrome.runtime.sendMessage({ action: 'setServer', serverUrl: url }, () => {
+    statusText.textContent = 'Reconnecting...';
+    setTimeout(updateStatus, 1000);
+  });
 });
 
 reconnectBtn.addEventListener('click', () => {
@@ -35,6 +54,9 @@ reconnectBtn.addEventListener('click', () => {
     setTimeout(updateStatus, 1000);
   });
 });
+
+// Make applyPreset available globally for onclick
+window.applyPreset = applyPreset;
 
 // Initial status check
 updateStatus();

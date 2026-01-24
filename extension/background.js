@@ -1,15 +1,15 @@
 // FunctionServer Bridge - Background Service Worker
-// Manages WebSocket connection to local FunctionServer
+// Manages WebSocket connection to FunctionServer (local or remote)
 
 let ws = null;
-let port = 8080;
+let serverUrl = 'ws://localhost:8080';
 let connected = false;
 let shadowTabs = new Map(); // tabId -> { url, title, shadowId }
 let tabGroupId = null; // Chrome tab group for shadow tabs
 
-// Load saved port
-chrome.storage.local.get(['port'], (result) => {
-  if (result.port) port = result.port;
+// Load saved server URL
+chrome.storage.local.get(['serverUrl'], (result) => {
+  if (result.serverUrl) serverUrl = result.serverUrl;
   connect();
 });
 
@@ -17,7 +17,7 @@ function connect() {
   if (ws && ws.readyState === WebSocket.OPEN) return;
 
   try {
-    ws = new WebSocket(`ws://localhost:${port}/api/content-bridge`);
+    ws = new WebSocket(`${serverUrl}/api/content-bridge`);
 
     ws.onopen = () => {
       connected = true;
@@ -374,10 +374,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'getStatus') {
-    sendResponse({ connected, port });
-  } else if (msg.action === 'setPort') {
-    port = msg.port;
-    chrome.storage.local.set({ port });
+    sendResponse({ connected, serverUrl });
+  } else if (msg.action === 'setServer') {
+    serverUrl = msg.serverUrl;
+    chrome.storage.local.set({ serverUrl });
     if (ws) ws.close();
     connect();
     sendResponse({ ok: true });

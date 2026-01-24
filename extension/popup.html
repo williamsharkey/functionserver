@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <style>
     body {
-      width: 280px;
+      width: 300px;
       padding: 12px;
       font-family: system-ui, sans-serif;
       font-size: 13px;
@@ -34,6 +34,7 @@
       height: 10px;
       border-radius: 50%;
       background: #666;
+      flex-shrink: 0;
     }
     .dot.connected { background: #4a4; }
     .setting {
@@ -45,7 +46,7 @@
       color: #888;
       font-size: 11px;
     }
-    input {
+    input, select {
       width: 100%;
       padding: 6px 8px;
       border: 1px solid #333;
@@ -53,6 +54,9 @@
       color: #fff;
       border-radius: 4px;
       box-sizing: border-box;
+    }
+    select {
+      margin-bottom: 8px;
     }
     button {
       width: 100%;
@@ -79,6 +83,9 @@
       color: #888;
       font-size: 11px;
     }
+    .presets {
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
@@ -90,8 +97,15 @@
   </div>
 
   <div class="setting">
-    <label>FunctionServer Port</label>
-    <input type="number" id="port" value="8080" min="1" max="65535">
+    <label>Server</label>
+    <div class="presets">
+      <select id="server-preset" onchange="applyPreset()">
+        <option value="">-- Quick Select --</option>
+        <option value="ws://localhost:8080">localhost:8080</option>
+        <option value="wss://functionserver.com">functionserver.com</option>
+      </select>
+    </div>
+    <input type="text" id="server-url" placeholder="ws://localhost:8080 or wss://functionserver.com">
   </div>
 
   <button id="save-btn">Save & Reconnect</button>

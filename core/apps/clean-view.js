@@ -104,7 +104,9 @@ API.register('getImages', () => {
 function _cv_connectBridge() {
   if (_cv_bridge && _cv_bridge.readyState === WebSocket.OPEN) return;
 
-  const wsUrl = `ws://localhost:8080/api/content-bridge`;
+  // Connect to current server (works for localhost OR remote like functionserver.com)
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/api/content-bridge`;
 
   try {
     _cv_bridge = new WebSocket(wsUrl);
