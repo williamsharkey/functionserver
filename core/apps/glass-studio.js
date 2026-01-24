@@ -589,26 +589,35 @@ function _gs_updateText(id) {
 
   document.getElementById('gs-textdepth-val-' + id).textContent = depth.toFixed(2);
 
-  // Remove existing text mesh
+  // Remove existing text meshes
   if (inst.textMesh) {
     inst.scene.remove(inst.textMesh);
-    inst.textMesh.geometry.dispose();
-    if (inst.textMesh.material.dispose) inst.textMesh.material.dispose();
+    if (inst.textMesh.geometry) inst.textMesh.geometry.dispose();
+    if (inst.textMesh.material && inst.textMesh.material.dispose) inst.textMesh.material.dispose();
     inst.textMesh = null;
+  }
+  if (inst.textMeshBack) {
+    inst.scene.remove(inst.textMeshBack);
+    if (inst.textMeshBack.geometry) inst.textMeshBack.geometry.dispose();
+    if (inst.textMeshBack.material && inst.textMeshBack.material.dispose) inst.textMeshBack.material.dispose();
+    inst.textMeshBack = null;
   }
 
   if (!text) return;
 
-  // Create text texture for inside/floating mode
+  // Create high-res text texture
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  const fontSize = 256;
+  const fontSize = 400;
   ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
   const metrics = ctx.measureText(text);
 
-  canvas.width = Math.ceil(metrics.width) + 40;
-  canvas.height = fontSize * 1.4;
+  const padding = 60;
+  canvas.width = Math.ceil(metrics.width) + padding * 2;
+  canvas.height = fontSize * 1.3;
 
+  // Clear and draw
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
@@ -617,103 +626,103 @@ function _gs_updateText(id) {
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
 
   const aspect = canvas.width / canvas.height;
 
   // Resize glass to fit text
+  let glassW, glassH;
   if (fit === 'rect') {
-    const newW = Math.max(1.2, aspect * 1.0);
-    const newH = 1.0;
-    const newGeom = _gs_createRoundedBox(newW, newH, 0.4, 0.12, 8);
-    inst.mesh.geometry.dispose();
-    inst.mesh.geometry = newGeom;
+    glassW = Math.max(1.4, aspect * 1.1);
+    glassH = 1.1;
   } else {
-    // Square - use max dimension
-    const size = 1.2;
-    const newGeom = _gs_createRoundedBox(size, size, 0.4, 0.15, 8);
-    inst.mesh.geometry.dispose();
-    inst.mesh.geometry = newGeom;
+    glassW = glassH = 1.4;
   }
+  const newGeom = _gs_createRoundedBox(glassW, glassH, 0.5, 0.15, 8);
+  inst.mesh.geometry.dispose();
+  inst.mesh.geometry = newGeom;
 
-  // Create text plane/mesh based on mode
-  const planeW = fit === 'rect' ? aspect * 0.8 : 0.8;
-  const planeH = 0.8;
+  // Text plane dimensions (slightly smaller than glass)
+  const planeW = fit === 'rect' ? aspect * 0.85 : 0.85;
+  const planeH = 0.85;
+  const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
 
   if (mode === 'inside') {
-    // Floating text inside glass
-    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
-    const planeMat = new THREE.MeshBasicMaterial({
+    // Solid colored text floating inside - add to glass mesh so it rotates together
+    const mat = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       side: THREE.DoubleSide,
-      depthWrite: false
+      depthTest: true,
+      depthWrite: false,
+      color: 0xffffff
     });
-    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
-    inst.textMesh.position.z = 0;
-    inst.scene.add(inst.textMesh);
+    inst.textMesh = new THREE.Mesh(planeGeom.clone(), mat);
+    inst.textMesh.renderOrder = 1;
+    inst.mesh.add(inst.textMesh); // Add as child of glass
   } else if (mode === 'emboss') {
-    // Raised text on surface
-    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
-    const planeMat = new THREE.MeshPhysicalMaterial({
+    // Raised - two layers for 3D effect
+    const frontMat = new THREE.MeshStandardMaterial({
       map: texture,
       transparent: true,
-      transmission: 0.5,
-      roughness: 0.1,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide,
+      metalness: 0.3,
+      roughness: 0.4,
+      emissive: 0x222222
     });
-    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
-    inst.textMesh.position.z = 0.22 + depth * 0.1;
-    inst.scene.add(inst.textMesh);
+    inst.textMesh = new THREE.Mesh(planeGeom.clone(), frontMat);
+    inst.textMesh.position.z = 0.26 + depth * 0.15;
+    inst.mesh.add(inst.textMesh);
+
+    // Shadow layer behind
+    const shadowMat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.3,
+      color: 0x000000,
+      side: THREE.FrontSide
+    });
+    inst.textMeshBack = new THREE.Mesh(planeGeom.clone(), shadowMat);
+    inst.textMeshBack.position.z = 0.24;
+    inst.textMeshBack.position.x = 0.02;
+    inst.textMeshBack.position.y = -0.02;
+    inst.mesh.add(inst.textMeshBack);
   } else if (mode === 'engrave') {
-    // Carved into surface (darker/shadowed)
-    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
-    const planeMat = new THREE.MeshBasicMaterial({
+    // Carved in - darker inset text
+    const mat = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       side: THREE.DoubleSide,
-      opacity: 0.4,
-      blending: THREE.MultiplyBlending
+      color: 0x333333,
+      opacity: 0.8
     });
-    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
-    inst.textMesh.position.z = 0.18;
-    inst.scene.add(inst.textMesh);
+    inst.textMesh = new THREE.Mesh(planeGeom.clone(), mat);
+    inst.textMesh.position.z = 0.15 - depth * 0.1;
+    inst.mesh.add(inst.textMesh);
   } else if (mode === 'cutout') {
-    // Void/hole effect - render text as dark cutout
-    const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
+    // Apply alpha map to glass material for true cutout
+    const alphaTex = texture.clone();
+    alphaTex.needsUpdate = true;
 
-    // Invert texture for cutout
-    const invCanvas = document.createElement('canvas');
-    invCanvas.width = canvas.width;
-    invCanvas.height = canvas.height;
-    const invCtx = invCanvas.getContext('2d');
-    invCtx.fillStyle = 'white';
-    invCtx.fillRect(0, 0, invCanvas.width, invCanvas.height);
-    invCtx.globalCompositeOperation = 'destination-out';
-    invCtx.drawImage(canvas, 0, 0);
+    // Store original and apply cutout
+    if (!inst.originalAlphaMap) {
+      inst.originalAlphaMap = inst.material.alphaMap;
+    }
+    inst.material.alphaMap = alphaTex;
+    inst.material.alphaTest = 0.5;
+    inst.material.needsUpdate = true;
 
-    const invTexture = new THREE.CanvasTexture(invCanvas);
-
-    const planeMat = new THREE.MeshBasicMaterial({
-      map: invTexture,
-      transparent: true,
-      side: THREE.DoubleSide,
-      alphaTest: 0.5
-    });
-    inst.textMesh = new THREE.Mesh(planeGeom, planeMat);
-    inst.textMesh.position.z = 0.21;
-    inst.scene.add(inst.textMesh);
-
-    // Add dark backing for void effect
-    const backGeom = new THREE.PlaneGeometry(planeW, planeH);
+    // Add back plane to show void
     const backMat = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
-      color: 0x000000,
-      side: THREE.DoubleSide
+      color: 0x111122,
+      side: THREE.BackSide
     });
-    const backMesh = new THREE.Mesh(backGeom, backMat);
-    backMesh.position.z = -0.1;
-    inst.textMesh.add(backMesh);
+    inst.textMesh = new THREE.Mesh(planeGeom.clone(), backMat);
+    inst.textMesh.position.z = -0.1;
+    inst.mesh.add(inst.textMesh);
   }
 }
 
