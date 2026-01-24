@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	osuser "os/user"
@@ -1513,6 +1514,56 @@ func main() {
 		}
 
 			json.NewEncoder(w).Encode(map[string]interface{}{"apps": apps})
+	})
+
+	// Proxy endpoint for Clean View app (CORS bypass)
+	mux.HandleFunc("/api/proxy", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		targetURL := r.URL.Query().Get("url")
+		if targetURL == "" {
+			http.Error(w, "Missing url parameter", 400)
+			return
+		}
+
+		// Validate URL
+		parsedURL, err := url.Parse(targetURL)
+		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+			http.Error(w, "Invalid URL", 400)
+			return
+		}
+
+		// Fetch the target URL
+		client := &http.Client{Timeout: 30 * time.Second}
+		req, err := http.NewRequest("GET", targetURL, nil)
+		if err != nil {
+			http.Error(w, "Failed to create request", 500)
+			return
+		}
+
+		// Set a browser-like user agent
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			http.Error(w, "Failed to fetch URL: "+err.Error(), 500)
+			return
+		}
+		defer resp.Body.Close()
+
+		// Copy response headers
+		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+
+		// Copy body
+		io.Copy(w, resp.Body)
 	})
 
 	// MCP (Model Context Protocol) endpoint for Claude Code integration
