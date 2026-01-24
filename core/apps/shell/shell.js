@@ -226,38 +226,44 @@ ALGO.app.icon = "🐚";
       ws.onmessage = (event) => {
         // Handle Eye bridge commands (direct AI-to-browser JS evaluation)
         if (typeof event.data === 'string' && event.data.startsWith('EYE_CMD:')) {
-          try {
-            const payload = event.data.slice(8); // Skip "EYE_CMD:"
-            const colonIdx = payload.indexOf(':');
-            const id = colonIdx > 0 ? payload.substring(0, colonIdx) : '';
-            const expression = colonIdx >= 0 ? payload.substring(colonIdx + 1) : payload;
-
-            // Evaluate the expression in the browser context
-            let result, error = null;
+          (async () => {
             try {
-              result = eval(expression);
-            } catch (e) {
-              error = e.message;
-            }
+              const payload = event.data.slice(8); // Skip "EYE_CMD:"
+              const colonIdx = payload.indexOf(':');
+              const id = colonIdx > 0 ? payload.substring(0, colonIdx) : '';
+              const expression = colonIdx >= 0 ? payload.substring(colonIdx + 1) : payload;
 
-            // Send response if there's an ID (not fire-and-forget)
-            if (id) {
-              let resultStr;
-              if (error) {
-                ws.send('EYE:' + id + '!:' + error);
-              } else {
-                if (result === undefined) resultStr = 'undefined';
-                else if (result === null) resultStr = 'null';
-                else if (typeof result === 'object') {
-                  try { resultStr = JSON.stringify(result); }
-                  catch (e) { resultStr = String(result); }
-                } else resultStr = String(result);
-                ws.send('EYE:' + id + ':' + resultStr);
+              // Evaluate the expression in the browser context
+              let result, error = null;
+              try {
+                result = eval(expression);
+                // Await if result is a Promise
+                if (result && typeof result.then === 'function') {
+                  result = await result;
+                }
+              } catch (e) {
+                error = e.message;
               }
+
+              // Send response if there's an ID (not fire-and-forget)
+              if (id) {
+                let resultStr;
+                if (error) {
+                  ws.send('EYE:' + id + '!:' + error);
+                } else {
+                  if (result === undefined) resultStr = 'undefined';
+                  else if (result === null) resultStr = 'null';
+                  else if (typeof result === 'object') {
+                    try { resultStr = JSON.stringify(result); }
+                    catch (e) { resultStr = String(result); }
+                  } else resultStr = String(result);
+                  ws.send('EYE:' + id + ':' + resultStr);
+                }
+              }
+            } catch (e) {
+              console.error('Eye bridge error:', e);
             }
-          } catch (e) {
-            console.error('Eye bridge error:', e);
-          }
+          })();
           return;
         }
 

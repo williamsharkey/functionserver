@@ -480,11 +480,16 @@ function _ss_restoreBackground() {
 }
 
 // Export functions
+window._ss_open = _ss_open;
+window._ss_preset = _ss_preset;
+window._ss_new = _ss_new;
+window._ss_compile = _ss_compile;
 window._ss_saveToDesktop = _ss_saveToDesktop;
 window._ss_openFile = _ss_openFile;
 window._ss_setAsBackground = _ss_setAsBackground;
 window._ss_removeBackground = _ss_removeBackground;
 window._ss_restoreBackground = _ss_restoreBackground;
+window._ss_PRESETS = _ss_PRESETS;
 
 // Run the app
 _ss_open();

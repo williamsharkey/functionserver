@@ -74,7 +74,11 @@ func connect() error {
 
 	if conn != nil {
 		conn.Close()
+		conn = nil
 	}
+
+	// Reload config in case token was refreshed
+	loadConfig()
 
 	url := config.Server
 	if !strings.Contains(url, "?") {
@@ -104,6 +108,13 @@ func readLoop() {
 
 		_, msg, err := c.ReadMessage()
 		if err != nil {
+			// Connection died - clear it so next evalExpr reconnects
+			connMu.Lock()
+			if conn == c {
+				conn.Close()
+				conn = nil
+			}
+			connMu.Unlock()
 			return
 		}
 
@@ -160,7 +171,35 @@ func evalExpr(expr string) (string, error) {
 		pendingMu.Lock()
 		delete(pending, id)
 		pendingMu.Unlock()
-		return "", err
+
+		// Connection died - clear it and retry once
+		connMu.Lock()
+		if conn == c {
+			conn.Close()
+			conn = nil
+		}
+		connMu.Unlock()
+
+		// Retry with fresh connection
+		if err := connect(); err != nil {
+			return "", fmt.Errorf("reconnect failed: %v", err)
+		}
+		connMu.Lock()
+		c = conn
+		connMu.Unlock()
+
+		// Re-register pending channel and resend
+		ch = make(chan string, 1)
+		pendingMu.Lock()
+		pending[id] = ch
+		pendingMu.Unlock()
+
+		if err := c.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+			pendingMu.Lock()
+			delete(pending, id)
+			pendingMu.Unlock()
+			return "", fmt.Errorf("write failed after reconnect: %v", err)
+		}
 	}
 
 	// Wait for response with timeout
