@@ -101,21 +101,14 @@ function _gs_open() {
 async function _gs_loadThree() {
   if (window.THREE) return;
 
-  const scripts = [
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js'
-  ];
-
-  for (const src of scripts) {
-    if (document.querySelector(`script[src="${src}"]`)) continue;
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
+  // Load Three.js r160 for best MeshPhysicalMaterial support
+  await new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
 }
 
 function _gs_init(id) {
@@ -213,17 +206,34 @@ function _gs_init(id) {
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
 
-  // Controls
-  const controls = new THREE.OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.enablePan = false;
+  // Simple drag controls
+  let isDragging = false;
+  let prevMouse = { x: 0, y: 0 };
+  let targetRotation = { x: 0, y: 0 };
+
+  canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    prevMouse = { x: e.clientX, y: e.clientY };
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    targetRotation.y += dx * 0.01;
+    targetRotation.x += dy * 0.01;
+    prevMouse = { x: e.clientX, y: e.clientY };
+  });
+
+  canvas.addEventListener('mouseup', () => isDragging = false);
+  canvas.addEventListener('mouseleave', () => isDragging = false);
 
   // Store instance
   _gs_instances[id] = {
-    scene, camera, renderer, mesh, material, controls,
+    scene, camera, renderer, mesh, material,
     envMap, pmremGenerator, envScene, envMat,
-    autoRotate: true, bgType: 'gradient'
+    autoRotate: true, bgType: 'gradient',
+    targetRotation, isDragging: () => isDragging
   };
 
   // Animation loop
@@ -238,12 +248,15 @@ function _gs_init(id) {
     }
 
     const inst = _gs_instances[id];
-    if (inst.autoRotate) {
-      inst.mesh.rotation.y += 0.005;
-      inst.mesh.rotation.x = Math.sin(Date.now() * 0.001) * 0.1;
+    if (inst.autoRotate && !isDragging) {
+      inst.targetRotation.y += 0.005;
+      inst.targetRotation.x = Math.sin(Date.now() * 0.001) * 0.1;
     }
 
-    inst.controls.update();
+    // Smooth rotation
+    inst.mesh.rotation.x += (inst.targetRotation.x - inst.mesh.rotation.x) * 0.1;
+    inst.mesh.rotation.y += (inst.targetRotation.y - inst.mesh.rotation.y) * 0.1;
+
     inst.renderer.render(inst.scene, inst.camera);
     requestAnimationFrame(animate);
   }
