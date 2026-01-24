@@ -200,8 +200,8 @@ function _gs_init(id) {
     transparent: true,
     opacity: 1,
     side: THREE.DoubleSide,
-    attenuationColor: new THREE.Color(0xffaa44),
-    attenuationDistance: 0.5
+    attenuationColor: new THREE.Color(0xffffff),
+    attenuationDistance: 2.0
   });
 
   // Default geometry - rounded box
@@ -338,8 +338,9 @@ function _gs_updateMaterial(id) {
   document.getElementById('gs-thick-val-' + id).textContent = thick.toFixed(2);
 
   // Use attenuationColor for glass tint, keep base color white for clarity
+  // Higher attenuationDistance = more transparent tint
   inst.material.attenuationColor.set(color);
-  inst.material.attenuationDistance = thick * 0.5;
+  inst.material.attenuationDistance = 2.0;
   inst.material.transmission = trans;
   inst.material.roughness = rough;
   inst.material.ior = ior;
