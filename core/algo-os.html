@@ -770,7 +770,7 @@ function createDesktopIcon(ic) {
     if (ic.action === 'openDiskFile') {
       const content = await getFileFromDisk(ic.filePath);
       if (content !== null) {
-        openSavedFile({ name: ic.fileName, content: content });
+        openSavedFile({ name: ic.fileName, content: content }, ic.filePath);
       } else {
         algoSpeak('Failed to open file');
       }
@@ -793,7 +793,9 @@ function createDesktopIcon(ic) {
 
 function showFileContextMenu(e, filePath, fileName) {
   const menu = document.getElementById('context-menu');
+  const isJS = fileName.endsWith('.js');
   menu.innerHTML =
+    (isJS ? '<div class="ctx-item" onclick="runDiskFile(\'' + filePath + '\', \'' + fileName + '\')">▶ Run</div>' : '') +
     '<div class="ctx-item" onclick="openDiskFileByPath(\'' + filePath + '\', \'' + fileName + '\')">📂 Open</div>' +
     '<div class="ctx-item" onclick="renameDiskFile(\'' + filePath + '\', \'' + fileName + '\')">✏️ Rename</div>' +
     '<div class="ctx-separator"></div>' +
@@ -803,11 +805,21 @@ function showFileContextMenu(e, filePath, fileName) {
   menu.classList.add('visible');
 }
 
+async function runDiskFile(path, name) {
+  hideContextMenu();
+  const content = await getFileFromDisk(path);
+  if (content !== null) {
+    runApp(content, name);
+  } else {
+    algoSpeak('Failed to load file');
+  }
+}
+
 async function openDiskFileByPath(path, name) {
   hideContextMenu();
   const content = await getFileFromDisk(path);
   if (content !== null) {
-    openSavedFile({ name: name, content: content });
+    openSavedFile({ name: name, content: content }, path);
   } else {
     algoSpeak('Failed to open file');
   }
@@ -1207,9 +1219,15 @@ function openHelp() {
 }
 
 // ==================== FILE HANDLING ====================
-function openSavedFile(file) {
+function openSavedFile(file, filePath) {
+  // Files in ~/apps/ folder auto-run instead of opening in editor
+  const isApp = filePath && (filePath.startsWith('~/apps/') || filePath.startsWith('~/apps\\'));
   if (file.name.endsWith('.js')) {
-    openJSIDE(file.content, file.name);
+    if (isApp) {
+      runApp(file.content, file.name);
+    } else {
+      openJSIDE(file.content, file.name);
+    }
   } else if (file.type === 'image') {
     viewImage(file);
   } else {
