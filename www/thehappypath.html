@@ -552,6 +552,54 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
 
       <div class="divider"></div>
 
+      <h2>Pitfalls &amp; Best Practices</h2>
+
+      <p>Lessons learned from real usage:</p>
+
+      <h3>Use ALGO.createWindow(), not ALGO.app</h3>
+      <p>The <code>ALGO.app.content</code> pattern doesn't reliably create windows. Use <code>ALGO.createWindow()</code> directly:</p>
+      <div class="code-block">
+<span class="cm">// Don't do this:</span>
+ALGO.app.content = canvas;
+
+<span class="cm">// Do this:</span>
+<span class="fn">ALGO.createWindow</span>({
+  title: <span class="str">"My App"</span>,
+  width: <span class="num">400</span>,
+  height: <span class="num">300</span>,
+  content: <span class="str">'&lt;canvas id="my-canvas"&gt;&lt;/canvas&gt;'</span>
+});
+const canvas = <span class="fn">document.getElementById</span>(<span class="str">"my-canvas"</span>);
+      </div>
+
+      <h3>Avoid long sequential async operations</h3>
+      <p>Multiple sequential <code>_exec()</code> calls can freeze the browser. Use parallel execution:</p>
+      <div class="code-block">
+<span class="cm">// Don't do this:</span>
+<span class="kw">for</span> (const dir of dirs) {
+  <span class="kw">await</span> _exec(<span class="str">"git status "</span> + dir);  <span class="cm">// Sequential = slow + freezes</span>
+}
+
+<span class="cm">// Do this:</span>
+<span class="kw">await</span> Promise.all(dirs.map(dir => _exec(<span class="str">"git status "</span> + dir)));
+      </div>
+
+      <h3>Save frequently</h3>
+      <p><code>Lens.save()</code> persists to disk. If the browser freezes, unsaved work is lost. Save after significant edits.</p>
+
+      <h3>Use Lens.help() in fresh sessions</h3>
+      <p>Call <code>Lens.help()</code> to get a cheat sheet of all available commands. Great for fresh Claude sessions.</p>
+
+      <h3>Recovery from frozen browser</h3>
+      <p>If eye commands timeout:</p>
+      <ol>
+        <li>Refresh the browser (F5/Cmd+R)</li>
+        <li>Reload Studio: <code>getFileFromDisk('~/studio.js').then(code => runApp(code, 'studio.js'))</code></li>
+        <li>Your saved files are safe on disk</li>
+      </ol>
+
+      <div class="divider"></div>
+
       <h2>Building the Future</h2>
 
       <p>FunctionServer is infrastructure for AI-native applications. The happy path is just the beginning.</p>
