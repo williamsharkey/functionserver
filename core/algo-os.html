@@ -630,6 +630,56 @@ ALGO.lens = {
     }
     target.click();
     return '✓ clicked';
+  },
+
+  // === GIT SHORTCUTS (use ALGO.exec, work without Studio) ===
+
+  // Get project root from a file path
+  _projectRoot: function(path) {
+    if (!path) return null;
+    const match = path.match(/~\/repos\/([^\/]+)/);
+    return match ? '~/repos/' + match[1] : null;
+  },
+
+  // Git commit with message
+  commit: async function(msg, path) {
+    const root = this._projectRoot(path) || (typeof Studio !== 'undefined' && Studio.getTabs?.()[0] ? this._projectRoot(Studio.getTabs()[0]) : null);
+    if (!root) return '✗ no project detected';
+    if (!msg) return '✗ provide commit message';
+    const result = await ALGO.exec('git -C ' + root + ' add -A && git -C ' + root + ' commit -m "' + msg.replace(/"/g, '\\"') + '"');
+    return result.includes('nothing to commit') ? '✓ nothing to commit' : '✓ committed';
+  },
+
+  // Git push to origin
+  push: async function(path) {
+    const root = this._projectRoot(path) || (typeof Studio !== 'undefined' && Studio.getTabs?.()[0] ? this._projectRoot(Studio.getTabs()[0]) : null);
+    if (!root) return '✗ no project detected';
+    if (!ALGO.github.isConfigured()) return '✗ GitHub not configured';
+    const result = await ALGO.exec('git -C ' + root + ' push origin HEAD 2>&1');
+    return result.includes('->') ? '✓ pushed' : result.includes('up-to-date') ? '✓ up-to-date' : '✗ ' + result.slice(0, 100);
+  },
+
+  // Git diff - show uncommitted changes
+  diff: async function(path) {
+    const root = this._projectRoot(path) || (typeof Studio !== 'undefined' && Studio.getTabs?.()[0] ? this._projectRoot(Studio.getTabs()[0]) : null);
+    if (!root) return '✗ no project detected';
+    const result = await ALGO.exec('git -C ' + root + ' diff --stat');
+    return result.trim() || '(no changes)';
+  },
+
+  // Git status - short format
+  gitStatus: async function(path) {
+    const root = this._projectRoot(path) || (typeof Studio !== 'undefined' && Studio.getTabs?.()[0] ? this._projectRoot(Studio.getTabs()[0]) : null);
+    if (!root) return '✗ no project detected';
+    const result = await ALGO.exec('git -C ' + root + ' status -s');
+    return result.trim() || '(clean)';
+  },
+
+  // Git log - recent commits
+  log: async function(n = 5, path) {
+    const root = this._projectRoot(path) || (typeof Studio !== 'undefined' && Studio.getTabs?.()[0] ? this._projectRoot(Studio.getTabs()[0]) : null);
+    if (!root) return '✗ no project detected';
+    return await ALGO.exec('git -C ' + root + ' log --oneline -' + n);
   }
 };
 window.Lens = ALGO.lens;
