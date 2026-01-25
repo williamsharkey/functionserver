@@ -354,10 +354,11 @@ Lens.save()
 
   <h3>DOM Viewport</h3>
 
-  <p>Lens can also render any DOM element to a compact text grid:</p>
+  <p>Lens can render any DOM element to a compact text grid:</p>
 
   <pre><code>Lens.look(<span class="str">'#studio-container'</span>, {width: <span class="num">60</span>, height: <span class="num">20</span>})
 <span class="result">// → "127 elements
+//   0123456789012345678901234567890123456789
 //  0│+ New              Examples...        ▶ Run  💾
 //  1│Files   ↻         API Reference       Git
 //  2│📄 app.js          ALGO.createWindow   Commit
@@ -369,13 +370,63 @@ Lens.save()
   <pre><code>Lens.click(<span class="num">2</span>, <span class="num">3</span>)   <span class="cm">// Click "app.js" at row 2, col 3</span>
 <span class="result">// → "✓ clicked"</span></code></pre>
 
-  <h3>Real-Time Awareness</h3>
+  <h3>Position Inspection</h3>
 
-  <pre><code>Lens.dash()
-<span class="result">// → "w:Studio|XYZ|Shell e:2 m:app.js"</span>
-<span class="cm">//    windows        errors  modified files</span></code></pre>
+  <p>Discover what actions are available at any position:</p>
 
-  <p>One call shows: open windows, error count, modified files. No polling. No verbose state dumps.</p>
+  <pre><code>Lens.at(<span class="num">2</span>, <span class="num">3</span>)   <span class="cm">// What's at row 2, col 3?</span>
+<span class="result">// → "A:\"app.js\" [click,href:/files/app.js]"</span></code></pre>
+
+  <p>Or list all interactive elements in a container:</p>
+
+  <pre><code>Lens.actions(<span class="str">'#toolbar'</span>)
+<span class="result">// → "0:button:\"Run\"
+//    1:button:\"Save\"
+//    2:a:\"Settings\"
+//    3:input:\"Search...\""</span>
+
+Lens.do(<span class="str">'#toolbar'</span>, <span class="num">0</span>)  <span class="cm">// Click "Run" button</span>
+<span class="result">// → "✓ clicked"</span></code></pre>
+
+  <p><strong>Why this matters:</strong> Instead of guessing what elements exist or parsing HTML, Claude can inspect a location and see exactly what actions are available. This enables exploration of unfamiliar UIs.</p>
+
+  <h3>State & Helpers</h3>
+
+  <table>
+    <tr><th>Command</th><th>Purpose</th><th>Output</th></tr>
+    <tr><td><code>Lens.state()</code></td><td>Compact system state</td><td><code>w:Studio|Shell e:0 u:william</code></td></tr>
+    <tr><td><code>Lens.dash()</code></td><td>Dashboard with icons</td><td><code>[Studio|Shell] 🎮📝💻</code></td></tr>
+    <tr><td><code>Lens.define(name, fn)</code></td><td>Register helper</td><td><code>✓ name</code></td></tr>
+    <tr><td><code>Lens.call(name, args)</code></td><td>Call helper</td><td>Result</td></tr>
+  </table>
+
+  <h3>Position Inspection</h3>
+
+  <table>
+    <tr><th>Command</th><th>Purpose</th><th>Output</th></tr>
+    <tr><td><code>Lens.look(sel, opts)</code></td><td>Render to text grid</td><td>Numbered rows</td></tr>
+    <tr><td><code>Lens.at(row, col)</code></td><td>What's at position?</td><td>Element + actions</td></tr>
+    <tr><td><code>Lens.click(row, col)</code></td><td>Click at position</td><td><code>✓ clicked "text"</code></td></tr>
+    <tr><td><code>Lens.actions(sel)</code></td><td>List all interactive</td><td>Indexed action list</td></tr>
+    <tr><td><code>Lens.do(sel, index)</code></td><td>Execute by index</td><td><code>✓ clicked</code></td></tr>
+  </table>
+
+  <h2>Persistent Helpers</h2>
+
+  <p>Define reusable functions that persist across calls:</p>
+
+  <pre><code>Lens.define(<span class="str">'pos'</span>, () => `P(${px},${py})`)
+<span class="result">// → "✓ pos"</span>
+
+Lens.call(<span class="str">'pos'</span>)
+<span class="result">// → "P(3,5)"</span>
+
+<span class="cm">// Define more complex helpers</span>
+Lens.define(<span class="str">'move'</span>, <span class="str">'(dx,dy) => { px+=dx; py+=dy; render(); return Lens.call("pos"); }'</span>)
+Lens.call(<span class="str">'move'</span>, <span class="num">1</span>, <span class="num">0</span>)
+<span class="result">// → "P(4,5)"</span></code></pre>
+
+  <p><strong>Why helpers matter:</strong> Instead of re-sending the same code every call, define it once. Reduces token usage by 80%+ for repeated operations.</p>
 
   <h2>Batch Operations</h2>
 
@@ -390,6 +441,18 @@ Lens.save()
 <span class="result">// → "✓setLine ✓setLine ✓save ✓run"</span></code></pre>
 
   <p><strong>Four operations. One API call. One response.</strong></p>
+
+  <h2>Compact State</h2>
+
+  <p>Get system state in minimal tokens:</p>
+
+  <pre><code>Lens.state()
+<span class="result">// → "w:Studio|Shell e:0 u:william"</span>
+
+Lens.dash()
+<span class="result">// → "[Studio|Shell|(Settings)] 🎮📝💻🌐⚙️"</span></code></pre>
+
+  <p>One line tells you: active windows, minimized windows (in parens), error count, current user, and available apps. No JSON parsing needed.</p>
 
   <h2>Why This Matters</h2>
 

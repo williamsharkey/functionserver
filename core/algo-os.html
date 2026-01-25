@@ -412,15 +412,21 @@ ALGO.bridge = {
     }
   },
 
-  // Open an app by ID
-  openApp: function(appId) {
+  // Open an app by ID or name
+  openApp: function(appIdOrName) {
     try {
-      const app = systemApps.find(a => a.id === appId);
+      // Match by id, name, or case-insensitive name
+      const app = systemApps.find(a =>
+        a.id === appIdOrName ||
+        a.name === appIdOrName ||
+        a.name.toLowerCase() === appIdOrName.toLowerCase() ||
+        a.id.toLowerCase() === appIdOrName.toLowerCase()
+      );
       if (app) {
-        runSystemApp(appId);
-        return { success: true, opened: appId };
+        runSystemApp(app.id);
+        return { success: true, opened: app.id, name: app.name };
       }
-      return { success: false, error: 'App not found: ' + appId };
+      return { success: false, error: 'App not found: ' + appIdOrName };
     } catch(e) {
       return { success: false, error: e.message };
     }
@@ -446,6 +452,183 @@ ALGO.bridge = {
     }
   }
 };
+
+// ==================== LENS ====================
+// Token-efficient API for AI agents
+ALGO.lens = {
+  // Persistent helper registry
+  helpers: {},
+
+  // Define a reusable helper function
+  define: function(name, fn) {
+    if (typeof fn === 'string') {
+      this.helpers[name] = new Function('return ' + fn)();
+    } else {
+      this.helpers[name] = fn;
+    }
+    return '✓ ' + name;
+  },
+
+  // Call a defined helper
+  call: function(name, ...args) {
+    if (!this.helpers[name]) return '✗ ' + name + ' not defined';
+    try {
+      return this.helpers[name](...args);
+    } catch(e) {
+      return '✗ ' + e.message;
+    }
+  },
+
+  // Compact state query - one line output
+  state: function() {
+    const w = windows.filter(w => !w.minimized).map(w => w.title?.substring(0,12) || w.appName).join('|');
+    const errs = document.querySelectorAll('.error:not(:empty), [class*="error"]:not(:empty)').length;
+    return `w:${w || 'none'} e:${errs} u:${currentUser || 'guest'}`;
+  },
+
+  // Dashboard - compact status
+  dash: function() {
+    const wins = windows.map(w => (w.minimized ? '(' : '') + (w.title?.substring(0,8) || w.appName) + (w.minimized ? ')' : '')).join('|');
+    const apps = systemApps.slice(0, 5).map(a => a.icon).join('');
+    return `[${wins || 'desktop'}] ${apps}`;
+  },
+
+  // Render DOM to text grid with coordinates
+  look: function(selector, opts = {}) {
+    const el = document.querySelector(selector || 'body');
+    if (!el) return '✗ not found: ' + selector;
+
+    const width = opts.width || 60;
+    const height = opts.height || 20;
+    const rect = el.getBoundingClientRect();
+
+    // Gather interactive elements
+    const interactive = el.querySelectorAll('button, a, input, [onclick], [role="button"], .clickable');
+    const items = [];
+
+    interactive.forEach((e, i) => {
+      const r = e.getBoundingClientRect();
+      const x = Math.floor((r.left - rect.left) / rect.width * width);
+      const y = Math.floor((r.top - rect.top) / rect.height * height);
+      const text = (e.textContent || e.value || e.placeholder || e.title || '').trim().substring(0, 20);
+      if (text && x >= 0 && x < width && y >= 0 && y < height) {
+        items.push({ x, y, text, tag: e.tagName, el: e });
+      }
+    });
+
+    // Build grid
+    const grid = Array(height).fill(null).map(() => Array(width).fill(' '));
+    items.forEach(item => {
+      for (let i = 0; i < item.text.length && item.x + i < width; i++) {
+        grid[item.y][item.x + i] = item.text[i];
+      }
+    });
+
+    // Format with row numbers
+    let out = items.length + ' elements\n';
+    out += '  ' + '0123456789'.repeat(Math.ceil(width / 10)).substring(0, width) + '\n';
+    grid.forEach((row, i) => {
+      out += String(i).padStart(2) + '│' + row.join('') + '\n';
+    });
+
+    // Store for inspect()
+    this._lastLook = { selector, items, rect };
+    return out;
+  },
+
+  // Inspect what's at a position (row, col) from last look()
+  at: function(row, col) {
+    if (!this._lastLook) return '✗ call look() first';
+
+    const { items } = this._lastLook;
+    const found = items.filter(item => {
+      return item.y === row && col >= item.x && col < item.x + item.text.length;
+    });
+
+    if (found.length === 0) return '(empty)';
+
+    return found.map(item => {
+      const el = item.el;
+      const actions = [];
+      if (el.onclick || el.tagName === 'BUTTON' || el.tagName === 'A') actions.push('click');
+      if (el.tagName === 'INPUT') actions.push('type');
+      if (el.href) actions.push('href:' + el.href.substring(0, 30));
+
+      return `${item.tag}:"${item.text}" [${actions.join(',')}]`;
+    }).join(' | ');
+  },
+
+  // Click at position from last look()
+  click: function(row, col) {
+    if (!this._lastLook) return '✗ call look() first';
+
+    const { items } = this._lastLook;
+    const found = items.find(item => {
+      return item.y === row && col >= item.x && col < item.x + item.text.length;
+    });
+
+    if (!found) return '✗ nothing at ' + row + ',' + col;
+
+    found.el.click();
+    return '✓ clicked "' + found.text + '"';
+  },
+
+  // Batch operations - run multiple lens commands
+  batch: function(ops) {
+    const results = [];
+    for (const op of ops) {
+      const [method, ...args] = op;
+      if (typeof this[method] === 'function') {
+        results.push('✓' + method);
+        this[method](...args);
+      } else if (this.helpers[method]) {
+        results.push('✓' + method);
+        this.helpers[method](...args);
+      } else {
+        results.push('✗' + method);
+      }
+    }
+    return results.join(' ');
+  },
+
+  // Get all interactive elements in a selector
+  actions: function(selector) {
+    const el = document.querySelector(selector || 'body');
+    if (!el) return '✗ not found';
+
+    const interactive = el.querySelectorAll('button, a, input, select, textarea, [onclick], [role="button"]');
+    const actions = [];
+
+    interactive.forEach((e, i) => {
+      const text = (e.textContent || e.value || e.placeholder || e.title || e.className || '').trim().substring(0, 25);
+      if (text) {
+        const type = e.tagName === 'INPUT' ? e.type : e.tagName.toLowerCase();
+        actions.push(`${i}:${type}:"${text}"`);
+      }
+    });
+
+    return actions.slice(0, 30).join('\n') || '(no actions)';
+  },
+
+  // Execute action by index from actions() output
+  do: function(selector, index) {
+    const el = document.querySelector(selector || 'body');
+    if (!el) return '✗ not found';
+
+    const interactive = el.querySelectorAll('button, a, input, select, textarea, [onclick], [role="button"]');
+    if (index >= interactive.length) return '✗ index out of range';
+
+    const target = interactive[index];
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      target.focus();
+      return '✓ focused';
+    }
+    target.click();
+    return '✓ clicked';
+  }
+};
+window.Lens = ALGO.lens;
+
 window.ALGO = ALGO;
 
 // Eye shortcuts - terse helpers for eye CLI
@@ -1220,8 +1403,13 @@ function openHelp() {
 
 // ==================== FILE HANDLING ====================
 function openSavedFile(file, filePath) {
-  // Files in ~/apps/ folder auto-run instead of opening in editor
-  const isApp = filePath && (filePath.startsWith('~/apps/') || filePath.startsWith('~/apps\\'));
+  // Files in ~/apps/ or ~/games/ folder auto-run instead of opening in editor
+  // Also auto-run if file contains ALGO.app.name (marks it as an app)
+  const isAppFolder = filePath && (
+    filePath.startsWith('~/apps/') || filePath.startsWith('~/apps\\') ||
+    filePath.startsWith('~/games/') || filePath.startsWith('~/games\\')
+  );
+  const isApp = isAppFolder || (file.content && /ALGO\.app\.name\s*=/.test(file.content));
   if (file.name.endsWith('.js')) {
     if (isApp) {
       runApp(file.content, file.name);
@@ -1369,13 +1557,16 @@ function runUserApp(appId) {
   if (app) runApp(app);
 }
 
-function runApp(app) {
-  if (app.code) {
+function runApp(appOrCode, name) {
+  // Handle both object {code, name} and direct (code, name) arguments
+  const code = typeof appOrCode === 'string' ? appOrCode : appOrCode?.code;
+  const appName = name || appOrCode?.name || 'App';
+  if (code) {
     try {
-      const fullCode = ALGO_API_CODE + '\n' + app.code;
+      const fullCode = ALGO_API_CODE + '\n' + code;
       eval(fullCode);
     } catch (e) {
-      algoSpeak('Error: ' + e.message);
+      algoSpeak('Error in ' + appName + ': ' + e.message);
     }
   }
 }
