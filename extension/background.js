@@ -114,16 +114,35 @@ async function handleMessage(msg) {
       break;
 
     case 'eval':
-      // Evaluate expression in tab context
+      // Evaluate expression in tab context via script injection
+      // This bypasses extension CSP by running in the page's context
       try {
         const results = await chrome.scripting.executeScript({
           target: { tabId },
+          world: 'MAIN', // Run in page context, not isolated world
           func: (expr) => {
-            try {
-              return { success: true, result: eval(expr) };
-            } catch (e) {
-              return { success: false, error: e.message };
-            }
+            return new Promise((resolve) => {
+              const resultKey = '__fsBridgeResult_' + Date.now();
+
+              // Wrap expression to capture result
+              const wrappedCode = `
+                try {
+                  window['${resultKey}'] = { success: true, result: (function() { ${expr} })() };
+                } catch (e) {
+                  window['${resultKey}'] = { success: false, error: e.message };
+                }
+              `;
+
+              const script = document.createElement('script');
+              script.textContent = wrappedCode;
+              document.documentElement.appendChild(script);
+              script.remove();
+
+              // Get result and clean up
+              const result = window[resultKey];
+              delete window[resultKey];
+              resolve(result || { success: true, result: undefined });
+            });
           },
           args: [data.expression]
         });
