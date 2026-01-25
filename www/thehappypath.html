@@ -600,6 +600,46 @@ const canvas = <span class="fn">document.getElementById</span>(<span class="str"
 
       <div class="divider"></div>
 
+      <h2>Project &amp; Folder Management</h2>
+
+      <p>FunctionServer uses <code>~/repos/</code> for project folders. Each project is a git repository.</p>
+
+      <h3>Project Structure</h3>
+      <div class="code-block">
+~/
+├── studio.js           <span class="cm"># Studio IDE</span>
+├── code-metrics.js     <span class="cm"># Utility apps</span>
+├── project-manager.js  <span class="cm"># Project browser</span>
+└── repos/
+    ├── my-app/         <span class="cm"># Project folder (git repo)</span>
+    │   ├── app.js
+    │   └── .git/
+    └── another-project/
+      </div>
+
+      <h3>Git Workflow via Shell</h3>
+      <div class="code-block">
+<span class="cm">// All git commands use -C flag (stateless shell)</span>
+Studio.github._exec(<span class="str">"git -C ~/repos/my-app status"</span>)
+Studio.github._exec(<span class="str">"git -C ~/repos/my-app add -A"</span>)
+Studio.github._exec(<span class="str">"git -C ~/repos/my-app commit -m 'message'"</span>)
+Studio.github._exec(<span class="str">"git -C ~/repos/my-app log --oneline -5"</span>)
+      </div>
+
+      <h3>Creating New Projects</h3>
+      <div class="code-block">
+<span class="cm">// Create project folder and init git</span>
+Studio.github._exec(<span class="str">"mkdir -p ~/repos/new-project"</span>)
+Studio.github._exec(<span class="str">"git -C ~/repos/new-project init"</span>)
+
+<span class="cm">// Create and edit main file</span>
+<span class="fn">Lens.open</span>(<span class="str">"~/repos/new-project/app.js"</span>)
+<span class="fn">Lens.insertLine</span>(<span class="num">1</span>, <span class="str">"// My new app"</span>)
+<span class="fn">Lens.save</span>()
+      </div>
+
+      <div class="divider"></div>
+
       <h2>Building the Future</h2>
 
       <p>FunctionServer is infrastructure for AI-native applications. The happy path is just the beginning.</p>
