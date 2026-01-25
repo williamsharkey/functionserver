@@ -1,5 +1,7 @@
 // FunctionServer Launcher - Quick access to all tools
 // Load this first in fresh sessions
+ALGO.app.name = 'Launcher';
+ALGO.app.icon = '🚀';
 
 const W = 350, H = 320;
 
