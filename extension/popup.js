@@ -6,7 +6,6 @@ const serverUrlInput = document.getElementById('server-url');
 const serverPreset = document.getElementById('server-preset');
 const saveBtn = document.getElementById('save-btn');
 const reconnectBtn = document.getElementById('reconnect-btn');
-const shadowCount = document.getElementById('shadow-count');
 
 function updateStatus() {
   chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
@@ -21,13 +20,14 @@ function updateStatus() {
   });
 }
 
-function applyPreset() {
+// Handle preset dropdown
+serverPreset.addEventListener('change', () => {
   const value = serverPreset.value;
   if (value) {
     serverUrlInput.value = value;
-    serverPreset.value = ''; // Reset dropdown
+    serverPreset.value = '';
   }
-}
+});
 
 saveBtn.addEventListener('click', () => {
   let url = serverUrlInput.value.trim();
@@ -55,11 +55,8 @@ reconnectBtn.addEventListener('click', () => {
   });
 });
 
-// Make applyPreset available globally for onclick
-window.applyPreset = applyPreset;
-
 // Initial status check
 updateStatus();
 
-// Refresh status periodically while popup is open
+// Refresh status periodically
 setInterval(updateStatus, 2000);

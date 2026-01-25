@@ -16,9 +16,6 @@
       margin: 0 0 12px 0;
       color: #fff;
       font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
     .status {
       display: flex;
@@ -37,9 +34,7 @@
       flex-shrink: 0;
     }
     .dot.connected { background: #4a4; }
-    .setting {
-      margin-bottom: 12px;
-    }
+    .setting { margin-bottom: 12px; }
     label {
       display: block;
       margin-bottom: 4px;
@@ -55,9 +50,7 @@
       border-radius: 4px;
       box-sizing: border-box;
     }
-    select {
-      margin-bottom: 8px;
-    }
+    select { margin-bottom: 8px; }
     button {
       width: 100%;
       padding: 8px;
@@ -69,52 +62,27 @@
       font-size: 12px;
     }
     button:hover { background: #5b5; }
-    button.secondary {
-      background: #444;
-      margin-top: 8px;
-    }
+    button.secondary { background: #444; margin-top: 8px; }
     button.secondary:hover { background: #555; }
-    .shadows {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #333;
-    }
-    .shadow-count {
-      color: #888;
-      font-size: 11px;
-    }
-    .presets {
-      margin-bottom: 8px;
-    }
   </style>
 </head>
 <body>
   <h3>🔗 FS Bridge</h3>
-
   <div class="status">
     <div class="dot" id="status-dot"></div>
     <span id="status-text">Checking...</span>
   </div>
-
   <div class="setting">
     <label>Server</label>
-    <div class="presets">
-      <select id="server-preset" onchange="applyPreset()">
-        <option value="">-- Quick Select --</option>
-        <option value="ws://localhost:8080">localhost:8080</option>
-        <option value="wss://functionserver.com">functionserver.com</option>
-      </select>
-    </div>
+    <select id="server-preset">
+      <option value="">-- Quick Select --</option>
+      <option value="ws://localhost:8080">localhost:8080</option>
+      <option value="wss://functionserver.com">functionserver.com</option>
+    </select>
     <input type="text" id="server-url" placeholder="ws://localhost:8080 or wss://functionserver.com">
   </div>
-
   <button id="save-btn">Save & Reconnect</button>
   <button id="reconnect-btn" class="secondary">Reconnect</button>
-
-  <div class="shadows">
-    <span class="shadow-count" id="shadow-count">No shadow tabs</span>
-  </div>
-
   <script src="popup.js"></script>
 </body>
 </html>

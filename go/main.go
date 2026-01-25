@@ -970,19 +970,17 @@ func handleEyeBridge(w http.ResponseWriter, r *http.Request) {
 	_ = browserConn // Silence unused variable warning
 }
 
-// Content bridge connections (browser extension to local FunctionServer)
-type ContentBridgeConn struct {
-	Conn      *websocket.Conn
-	Responses map[string]chan map[string]interface{}
-	mu        sync.Mutex
-}
-
+// Content bridge - connects browser extension and Clean View instances
 var (
-	contentBridgeConn   *ContentBridgeConn
-	contentBridgeConnMu sync.RWMutex
+	extensionConn    *websocket.Conn
+	extensionConnMu  sync.RWMutex
+	browserConns     = make(map[*websocket.Conn]bool)
+	browserConnsMu   sync.RWMutex
+	pendingResponses = make(map[string]*websocket.Conn) // request ID -> requesting browser conn
+	pendingMu        sync.Mutex
 )
 
-// Handle content bridge WebSocket from browser extension
+// Handle content bridge WebSocket - serves both extension and browsers
 func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
@@ -993,117 +991,121 @@ func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Register this connection
-	contentBridgeConnMu.Lock()
-	contentBridgeConn = &ContentBridgeConn{
-		Conn:      conn,
-		Responses: make(map[string]chan map[string]interface{}),
-	}
-	contentBridgeConnMu.Unlock()
+	// Check if this is the extension (query param) or a browser
+	isExtension := r.URL.Query().Get("ext") == "1"
 
-	defer func() {
-		contentBridgeConnMu.Lock()
-		contentBridgeConn = nil
-		contentBridgeConnMu.Unlock()
-	}()
+	if isExtension {
+		extensionConnMu.Lock()
+		extensionConn = conn
+		extensionConnMu.Unlock()
 
-	fmt.Println("[ContentBridge] Extension connected")
+		defer func() {
+			extensionConnMu.Lock()
+			if extensionConn == conn {
+				extensionConn = nil
+			}
+			extensionConnMu.Unlock()
+		}()
 
-	// Read messages from extension
-	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
+		fmt.Println("[ContentBridge] Extension connected")
 
-		var data map[string]interface{}
-		if err := json.Unmarshal(msg, &data); err != nil {
-			continue
-		}
+		// Read messages from extension
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
 
-		// Handle responses to our requests
-		if id, ok := data["id"].(string); ok {
-			contentBridgeConnMu.RLock()
-			cb := contentBridgeConn
-			contentBridgeConnMu.RUnlock()
+			var data map[string]interface{}
+			if err := json.Unmarshal(msg, &data); err != nil {
+				continue
+			}
 
-			if cb != nil {
-				cb.mu.Lock()
-				if ch, exists := cb.Responses[id]; exists {
-					select {
-					case ch <- data:
-					default:
+			// Forward responses back to requesting browser
+			if id, ok := data["id"].(string); ok {
+				pendingMu.Lock()
+				browserConn, exists := pendingResponses[id]
+				if exists {
+					delete(pendingResponses, id)
+				}
+				pendingMu.Unlock()
+
+				if exists && browserConn != nil {
+					browserConn.WriteMessage(websocket.TextMessage, msg)
+				}
+			}
+
+			// Handle tabList - could broadcast to all browsers
+			if action, ok := data["action"].(string); ok {
+				if action == "tabList" {
+					if tabs, ok := data["tabs"].([]interface{}); ok {
+						fmt.Printf("[ContentBridge] Got %d tabs\n", len(tabs))
 					}
 				}
-				cb.mu.Unlock()
 			}
 		}
 
-		// Handle actions
-		if action, ok := data["action"].(string); ok {
-			switch action {
-			case "tabList":
-				if tabs, ok := data["tabs"].([]interface{}); ok {
-					fmt.Printf("[ContentBridge] Got %d tabs\n", len(tabs))
-				}
-			case "ping":
-				// Respond to keepalive ping
+		fmt.Println("[ContentBridge] Extension disconnected")
+	} else {
+		// This is a browser (Clean View)
+		browserConnsMu.Lock()
+		browserConns[conn] = true
+		browserConnsMu.Unlock()
+
+		defer func() {
+			browserConnsMu.Lock()
+			delete(browserConns, conn)
+			browserConnsMu.Unlock()
+		}()
+
+		fmt.Println("[ContentBridge] Browser connected")
+
+		// Read messages from browser and forward to extension
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
+
+			var data map[string]interface{}
+			if err := json.Unmarshal(msg, &data); err != nil {
+				continue
+			}
+
+			// Handle ping locally
+			if action, ok := data["action"].(string); ok && action == "ping" {
 				if id, ok := data["id"].(string); ok {
 					conn.WriteMessage(websocket.TextMessage, []byte(`{"id":"`+id+`","result":"pong"}`))
-				} else {
-					conn.WriteMessage(websocket.TextMessage, []byte(`{"result":"pong"}`))
 				}
+				continue
 			}
+
+			// Forward request to extension
+			extensionConnMu.RLock()
+			ext := extensionConn
+			extensionConnMu.RUnlock()
+
+			if ext == nil {
+				// No extension connected, send error
+				if id, ok := data["id"].(string); ok {
+					errResp := fmt.Sprintf(`{"id":"%s","error":"Extension not connected"}`, id)
+					conn.WriteMessage(websocket.TextMessage, []byte(errResp))
+				}
+				continue
+			}
+
+			// Track pending request
+			if id, ok := data["id"].(string); ok {
+				pendingMu.Lock()
+				pendingResponses[id] = conn
+				pendingMu.Unlock()
+			}
+
+			// Forward to extension
+			ext.WriteMessage(websocket.TextMessage, msg)
 		}
-	}
 
-	fmt.Println("[ContentBridge] Extension disconnected")
-}
-
-// Send a command to the content bridge and wait for response
-func contentBridgeSend(action string, tabId int, data map[string]interface{}) (map[string]interface{}, error) {
-	contentBridgeConnMu.RLock()
-	cb := contentBridgeConn
-	contentBridgeConnMu.RUnlock()
-
-	if cb == nil {
-		return nil, fmt.Errorf("no content bridge connected")
-	}
-
-	// Generate request ID
-	reqID := fmt.Sprintf("%d", time.Now().UnixNano())
-
-	// Create response channel
-	respChan := make(chan map[string]interface{}, 1)
-	cb.mu.Lock()
-	cb.Responses[reqID] = respChan
-	cb.mu.Unlock()
-
-	defer func() {
-		cb.mu.Lock()
-		delete(cb.Responses, reqID)
-		cb.mu.Unlock()
-	}()
-
-	// Build request
-	req := map[string]interface{}{
-		"id":     reqID,
-		"action": action,
-		"tabId":  tabId,
-		"data":   data,
-	}
-
-	reqJSON, _ := json.Marshal(req)
-	if err := cb.Conn.WriteMessage(websocket.TextMessage, reqJSON); err != nil {
-		return nil, err
-	}
-
-	// Wait for response
-	select {
-	case resp := <-respChan:
-		return resp, nil
-	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("timeout")
+		fmt.Println("[ContentBridge] Browser disconnected")
 	}
 }
 

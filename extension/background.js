@@ -18,7 +18,7 @@ function connect() {
   if (ws && ws.readyState === WebSocket.OPEN) return;
 
   try {
-    ws = new WebSocket(`${serverUrl}/api/content-bridge`);
+    ws = new WebSocket(`${serverUrl}/api/content-bridge?ext=1`);
 
     ws.onopen = () => {
       connected = true;
