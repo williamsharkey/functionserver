@@ -686,6 +686,98 @@ window.Lens = ALGO.lens;
 
 window.ALGO = ALGO;
 
+// ==================== AI EYES ====================
+// Visual feedback for AI actions - shows humans what AI is looking at/editing
+// Effects are silent side-effects, don't pollute return values
+ALGO.eyes = {
+  _initialized: false,
+  _init() {
+    if (this._initialized) return;
+    const style = document.createElement('style');
+    style.id = 'ai-eyes-styles';
+    style.textContent = `
+      @keyframes ai-saccade { 0% { opacity: 0; } 20% { opacity: 0.35; } 100% { opacity: 0; } }
+      @keyframes ai-edit { 0% { box-shadow: inset 0 0 0 2px rgba(100,255,100,0.5); } 100% { box-shadow: none; } }
+      @keyframes ai-delete { 0% { opacity: 0.8; transform: translateX(0); } 100% { opacity: 0; transform: translateX(20px); } }
+      .ai-eye-box { position: fixed; pointer-events: none; border: 2px solid rgba(167,139,250,0.5); border-radius: 3px; animation: ai-saccade 0.5s ease-out forwards; z-index: 99999; }
+      .ai-eye-edit { animation: ai-edit 0.4s ease-out forwards !important; }
+      .ai-eye-ghost { position: fixed; pointer-events: none; animation: ai-delete 0.3s ease-out forwards; z-index: 99999; background: rgba(255,100,100,0.15); border-radius: 2px; }
+    `;
+    document.head.appendChild(style);
+    this._initialized = true;
+  },
+
+  // Silent highlight - fire and forget
+  look(el) {
+    this._init();
+    if (typeof el === 'string') el = document.querySelector(el);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const box = document.createElement('div');
+    box.className = 'ai-eye-box';
+    box.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 500);
+  },
+
+  // Silent edit flash
+  edit(el) {
+    this._init();
+    if (typeof el === 'string') el = document.querySelector(el);
+    if (!el) return;
+    el.classList.add('ai-eye-edit');
+    setTimeout(() => el.classList.remove('ai-eye-edit'), 400);
+  },
+
+  // Silent delete ghost
+  evaporate(el) {
+    this._init();
+    if (typeof el === 'string') el = document.querySelector(el);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const ghost = document.createElement('div');
+    ghost.className = 'ai-eye-ghost';
+    ghost.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
+    document.body.appendChild(ghost);
+    setTimeout(() => ghost.remove(), 300);
+  },
+
+  // Highlight editor region by line range
+  codeRegion(startLine, count) {
+    this._init();
+    const ta = document.querySelector('#studio-code');
+    if (!ta) return;
+    const r = ta.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+    const top = r.top + (startLine - 1) * lineHeight;
+    const height = Math.min(count * lineHeight, r.height);
+    const box = document.createElement('div');
+    box.className = 'ai-eye-box';
+    box.style.cssText = `left:${r.left}px;top:${Math.max(r.top, top)}px;width:${r.width}px;height:${height}px`;
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 500);
+  },
+
+  // Wrap Lens functions to add visual feedback (called after Studio loads)
+  wrapLens() {
+    if (!Lens.code || Lens._eyesWrapped) return;
+    const wrap = (name, before, after) => {
+      const orig = Lens[name]?.bind(Lens);
+      if (orig) Lens[name] = function(...args) {
+        if (before) before(...args);
+        const result = orig(...args);
+        if (after) Promise.resolve(result).then(r => after(r, ...args));
+        return result;
+      };
+    };
+    wrap('code', (s, n) => this.codeRegion(s || 1, n || 20));
+    wrap('setLine', (n) => this.codeRegion(n, 1), () => this.edit(document.querySelector('#studio-code')));
+    wrap('insertLine', (n) => this.codeRegion(n, 1));
+    wrap('deleteLine', (n) => this.codeRegion(n, 1));
+    Lens._eyesWrapped = true;
+  }
+};
+
 // Eye shortcuts - terse helpers for eye CLI
 window.$ = s => document.querySelector(s);
 window.$$ = s => [...document.querySelectorAll(s)];
@@ -1750,6 +1842,8 @@ function runApp(appOrCode, name) {
     try {
       const fullCode = ALGO_API_CODE + '\n' + code;
       eval(fullCode);
+      // Hook AI Eyes after app loads (wraps Lens if Studio added functions)
+      if (ALGO.eyes?.wrapLens) ALGO.eyes.wrapLens();
     } catch (e) {
       algoSpeak('Error in ' + appName + ': ' + e.message);
     }
