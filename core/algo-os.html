@@ -903,6 +903,159 @@ window.setupHappyPath = async function(projectName) {
   return 'Project ready: ' + slug;
 };
 
+// ==================== GUARDIAN - Console Monitor ====================
+// Watches for errors/warnings, offers AI help with throttling
+ALGO.guardian = {
+  _watching: false,
+  _callback: null,
+  _throttleMs: 2000,
+  _lastSent: 0,
+  _lastMsg: '',
+  _suppressedCount: 0,
+  _origError: null,
+  _origWarn: null,
+  _origOnError: null,
+
+  watch(callback) {
+    if (this._watching) return 'Already watching';
+    this._watching = true;
+    this._callback = callback;
+    this._suppressedCount = 0;
+
+    // Store originals
+    this._origError = console.error;
+    this._origWarn = console.warn;
+    this._origOnError = window.onerror;
+
+    const self = this;
+
+    // Hook console.error
+    console.error = function(...args) {
+      self._origError.apply(console, args);
+      self._onMessage('error', args.map(a => String(a)).join(' '));
+    };
+
+    // Hook console.warn
+    console.warn = function(...args) {
+      self._origWarn.apply(console, args);
+      self._onMessage('warn', args.map(a => String(a)).join(' '));
+    };
+
+    // Hook window.onerror
+    window.onerror = function(msg, src, line, col, err) {
+      if (self._origOnError) self._origOnError(msg, src, line, col, err);
+      self._onMessage('error', msg + (src ? ' at ' + src + ':' + line : ''));
+    };
+
+    return 'Guardian watching';
+  },
+
+  _onMessage(level, msg) {
+    const now = Date.now();
+
+    // Dedupe: skip if same message within throttle window
+    if (msg === this._lastMsg && now - this._lastSent < this._throttleMs) {
+      this._suppressedCount++;
+      return;
+    }
+
+    // Throttle: skip if too soon
+    if (now - this._lastSent < this._throttleMs) {
+      this._suppressedCount++;
+      return;
+    }
+
+    this._lastSent = now;
+    this._lastMsg = msg;
+
+    // Call callback if provided
+    if (this._callback) {
+      const suppressed = this._suppressedCount;
+      this._suppressedCount = 0;
+      this._callback({ level, msg, suppressed });
+    }
+
+    // Show help toast for errors
+    if (level === 'error') {
+      this._offerHelp(msg);
+    }
+  },
+
+  _offerHelp(errorMsg) {
+    // Create toast
+    const toast = document.createElement('div');
+    toast.className = 'guardian-toast';
+    toast.innerHTML =
+      '<div style="font-weight:500;color:#f87171;">Error detected</div>' +
+      '<div style="font-size:12px;color:#a1a1aa;margin:6px 0;max-height:60px;overflow:hidden;text-overflow:ellipsis;">' +
+        errorMsg.slice(0, 150) + (errorMsg.length > 150 ? '...' : '') +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;">' +
+        '<button onclick="ALGO.guardian._acceptHelp(this.closest(\'.guardian-toast\'))" style="flex:1;padding:6px 12px;background:#3b82f6;border:none;border-radius:4px;color:#fff;cursor:pointer;font-size:12px;">Get AI help</button>' +
+        '<button onclick="this.closest(\'.guardian-toast\').remove()" style="padding:6px 12px;background:#27272a;border:1px solid #3f3f46;border-radius:4px;color:#a1a1aa;cursor:pointer;font-size:12px;">Dismiss</button>' +
+      '</div>';
+    toast.style.cssText = 'position:fixed;bottom:60px;right:20px;background:#18181b;border:1px solid #3f3f46;border-radius:8px;padding:12px 16px;width:300px;z-index:10001;box-shadow:0 4px 12px rgba(0,0,0,0.4);font:14px system-ui;color:#fafafa;animation:guardian-slide-in 0.3s ease-out;';
+
+    // Add animation style if not present
+    if (!document.getElementById('guardian-styles')) {
+      const style = document.createElement('style');
+      style.id = 'guardian-styles';
+      style.textContent = '@keyframes guardian-slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } @keyframes guardian-slide-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }';
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(toast);
+    toast._errorMsg = errorMsg;
+
+    // Auto-dismiss after 8 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.animation = 'guardian-slide-out 0.3s ease-out forwards';
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, 8000);
+  },
+
+  _acceptHelp(toast) {
+    const errorMsg = toast._errorMsg;
+    toast.remove();
+
+    // Use algoSpeak to offer help (times out after 4s)
+    algoSpeak('I noticed an error. Would you like me to help debug?', 4000);
+
+    // Send to eye bridge if connected
+    if (window.eyeBridge && window.eyeBridge.send) {
+      window.eyeBridge.send(JSON.stringify({
+        type: 'guardian',
+        event: 'help_requested',
+        error: errorMsg
+      }));
+    }
+  },
+
+  stop() {
+    if (!this._watching) return 'Not watching';
+    this._watching = false;
+
+    // Restore originals
+    if (this._origError) console.error = this._origError;
+    if (this._origWarn) console.warn = this._origWarn;
+    if (this._origOnError) window.onerror = this._origOnError;
+
+    this._callback = null;
+    return 'Guardian stopped. Suppressed ' + this._suppressedCount + ' messages.';
+  },
+
+  status() {
+    return {
+      watching: this._watching,
+      suppressed: this._suppressedCount,
+      throttleMs: this._throttleMs,
+      lastMsg: this._lastMsg ? this._lastMsg.slice(0, 50) + '...' : null
+    };
+  }
+};
+
 // ==================== AUTH ====================
 function checkSession() {
   const saved = localStorage.getItem('algo-session');
