@@ -282,6 +282,18 @@ section { padding: 120px 24px; }
   margin: 16px 0 0 40px;
 }
 
+.feature-list {
+  margin: 16px 0;
+  padding-left: 24px;
+}
+
+.feature-list li {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+  margin-bottom: 8px;
+}
+
 .callout {
   background: rgba(167, 139, 250, 0.1);
   border: 1px solid rgba(167, 139, 250, 0.3);
@@ -387,6 +399,32 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
       </div>
 
       <p>The difference isn't incremental. It's <strong>15x fewer tokens</strong> and <strong>instant feedback</strong>. The AI sees what the user sees, edits surgically, and verifies immediately.</p>
+
+      <div class="divider"></div>
+
+      <h2>Fresh Session Setup</h2>
+
+      <p>Starting a new Claude session? Run these commands to load your tools.</p>
+
+      <div class="code-block">
+<span class="cm">// Option 1: Load launcher, then setup everything</span>
+<span class="fn">getFileFromDisk</span>(<span class="str">"~/launcher.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"launcher.js"</span>))
+<span class="fn">setupHappyPath</span>()  <span class="cm">// Loads Studio + Project Manager</span>
+
+<span class="cm">// Option 2: Load Studio directly</span>
+<span class="fn">getFileFromDisk</span>(<span class="str">"~/studio.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"studio.js"</span>))
+
+<span class="cm">// Get the command cheat sheet</span>
+<span class="fn">Lens.help</span>()
+      </div>
+
+      <p>Once loaded, you have access to:</p>
+      <ul class="feature-list">
+        <li><code>Lens.*</code> - Surgical code editing (state, code, grep, setLine, run, etc.)</li>
+        <li><code>Studio.*</code> - IDE operations (open, save, new)</li>
+        <li><code>PM.*</code> - Project manager (projects, git operations)</li>
+        <li><code>GitHubAuth.*</code> - Push/pull with authentication</li>
+      </ul>
 
       <div class="divider"></div>
 
