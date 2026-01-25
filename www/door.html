@@ -484,9 +484,31 @@ Lens.save()                      <span class="cm">// → "✓ saved"</span></cod
 
   <hr>
 
+  <h2>What Came After: GitHub Integration</h2>
+
+  <p>Once AI could write code, the next question was: can it ship? Not generate files—actually create repositories, commit, and push.</p>
+
+  <p>We added GitHub OAuth using Device Flow (the same sign-in experience as GitHub CLI). No personal access tokens to copy. Just click "Sign in with GitHub," enter a code, done.</p>
+
+  <p>Then we built <code>setupHappyPath()</code>:</p>
+
+  <pre><code>setupHappyPath(<span class="str">"particle simulator"</span>)
+<span class="cm">// Creates ~/repos/particle-simulator/</span>
+<span class="cm">// Initializes git, creates skeleton files</span>
+<span class="cm">// Creates github.com/username/particle-simulator</span>
+<span class="cm">// Commits and pushes</span>
+<span class="cm">// Opens in Studio, ready to edit</span></code></pre>
+
+  <p>One command. Idea to GitHub repository. The AI isn't just a code generator anymore—it's a developer with commit access.</p>
+
+  <p><a href="/thehappypath.html">Read the full Happy Path guide →</a></p>
+
+  <hr>
+
   <div class="cta-section">
     <p><strong>Try it:</strong> <a href="/app">functionserver.com/app</a></p>
-    <p><strong>Lens:</strong> <a href="/lens.html">Read about AI-first UI design</a></p>
+    <p><strong>The Happy Path:</strong> <a href="/thehappypath.html">One-command GitHub projects</a></p>
+    <p><strong>Lens:</strong> <a href="/lens.html">AI-first UI design</a></p>
     <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
   </div>
 

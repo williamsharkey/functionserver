@@ -412,7 +412,10 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
 <span class="fn">getFileFromDisk</span>(<span class="str">"~/launcher.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"launcher.js"</span>))
 <span class="fn">setupHappyPath</span>()  <span class="cm">// Loads Studio + Project Manager</span>
 
-<span class="cm">// Option 2: Load Studio directly</span>
+<span class="cm">// Option 2: Create a new project in one command</span>
+<span class="fn">setupHappyPath</span>(<span class="str">"my cool app"</span>)  <span class="cm">// Creates ~/repos/my-cool-app/, git init, opens in Studio</span>
+
+<span class="cm">// Option 3: Load Studio directly</span>
 <span class="fn">getFileFromDisk</span>(<span class="str">"~/studio.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"studio.js"</span>))
 
 <span class="cm">// Get the command cheat sheet</span>
@@ -424,7 +427,7 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
         <li><code>Lens.*</code> - Surgical code editing (state, code, grep, setLine, run, etc.)</li>
         <li><code>Studio.*</code> - IDE operations (open, save, new)</li>
         <li><code>PM.*</code> - Project manager (projects, git operations)</li>
-        <li><code>GitHubAuth.*</code> - Push/pull with authentication</li>
+        <li><code>GitHubAuth.*</code> - OAuth sign-in, push/pull with authentication</li>
       </ul>
 
       <div class="divider"></div>
@@ -679,16 +682,82 @@ Studio.github._exec(<span class="str">"git -C ~/repos/new-project init"</span>)
 
       <div class="divider"></div>
 
+      <h2>One-Command GitHub Projects</h2>
+
+      <p>The <code>setupHappyPath()</code> function now handles the entire project creation workflow:</p>
+
+      <div class="code-block">
+<span class="cm">// Create a new project with full GitHub integration</span>
+<span class="fn">setupHappyPath</span>(<span class="str">"particle simulator"</span>)
+
+<span class="cm">// What happens automatically:</span>
+<span class="cm">// 1. Creates ~/repos/particle-simulator/</span>
+<span class="cm">// 2. Initializes git repo</span>
+<span class="cm">// 3. Creates skeleton app files (main.js, README.md)</span>
+<span class="cm">// 4. Commits: "Initial commit: particle simulator skeleton"</span>
+<span class="cm">// 5. If GitHub auth configured:</span>
+<span class="cm">//    - Creates github.com/username/particle-simulator</span>
+<span class="cm">//    - Sets origin and pushes</span>
+<span class="cm">// 6. Opens main.js in Studio, ready to edit</span>
+
+<span class="cm">// Call again to reopen existing project:</span>
+<span class="fn">setupHappyPath</span>(<span class="str">"particle simulator"</span>)  <span class="cm">// Idempotent - just opens it</span>
+      </div>
+
+      <p>From idea to GitHub repository in one command. No manual repo creation, no copy-pasting clone URLs, no git configuration.</p>
+
+      <div class="divider"></div>
+
+      <h2>GitHub OAuth Sign-In</h2>
+
+      <p>FunctionServer uses GitHub's Device Flow for easy authentication. No personal access tokens to copy.</p>
+
+      <div class="step">
+        <span class="step-num">1</span>
+        <h4>Open GitHub Auth</h4>
+        <p>Load the authentication app from the launcher or directly:</p>
+        <div class="code-block">
+<span class="fn">getFileFromDisk</span>(<span class="str">"~/github-auth.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"github-auth.js"</span>))
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">2</span>
+        <h4>Click "Sign in with GitHub"</h4>
+        <p>You'll see a code (like <code>ABCD-1234</code>). GitHub opens in a new tab.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">3</span>
+        <h4>Enter the code on GitHub</h4>
+        <p>Paste the code, authorize FunctionServer for repo access. Done.</p>
+      </div>
+
+      <p>That's it. Now <code>setupHappyPath()</code> will automatically create repos on your GitHub account. Push and pull work without any configuration.</p>
+
+      <div class="callout">
+        <p><strong>Why Device Flow?</strong> It's the same flow GitHub CLI uses. No tokens to copy, no scopes to configure manually, and it works from any browser without installing anything.</p>
+      </div>
+
+      <div class="divider"></div>
+
       <h2>Building the Future</h2>
 
       <p>FunctionServer is infrastructure for AI-native applications. The happy path is just the beginning.</p>
 
+      <p>What's working now:</p>
+      <ul>
+        <li><strong>GitHub OAuth</strong> - Sign in with Device Flow, automatic repo creation</li>
+        <li><strong>One-command projects</strong> - <code>setupHappyPath("name")</code> goes from idea to GitHub</li>
+        <li><strong>Surgical code editing</strong> - Lens API for token-efficient AI development</li>
+        <li><strong>Live browser debugging</strong> - Eye bridge for real-time DOM access</li>
+      </ul>
+
       <p>What we're building toward:</p>
       <ul>
-        <li><strong>Atomic transactions</strong> - Batch edits that commit or rollback together</li>
-        <li><strong>Real PTY terminals</strong> - Full shell access with color support</li>
-        <li><strong>GitHub integration</strong> - Push, PR, and collaborate without leaving the browser</li>
+        <li><strong>Real PTY terminals</strong> - Full shell access with color support for Claude Code</li>
         <li><strong>Multi-agent coordination</strong> - Multiple AI agents working on the same codebase</li>
+        <li><strong>Atomic transactions</strong> - Batch edits that commit or rollback together</li>
       </ul>
 
       <p>The old way treats AI as a code generator. The new way treats AI as a <em>developer</em>: one that can see, navigate, edit, run, debug, and iterate.</p>

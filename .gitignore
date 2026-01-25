@@ -30,3 +30,4 @@ npm-debug.log*
 # Binaries
 go/functionserver
 go/cmd/eye/eye
+.env
