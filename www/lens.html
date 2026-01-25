@@ -262,11 +262,131 @@ footer {
 
 footer a { color: var(--accent); text-decoration: none; }
 
+.vision-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 32px 0;
+}
+
+.vision-compare > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.vision-compare h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.vision-compare .caption {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: 12px 0 0 0;
+}
+
+.fake-desktop {
+  background: #1a1a2e;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 160px;
+}
+
+.fake-window {
+  background: #0d0d0d;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.fake-titlebar {
+  background: linear-gradient(#3a3a3a, #2a2a2a);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fake-titlebar .dots {
+  display: flex;
+  gap: 4px;
+}
+
+.fake-titlebar .dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+
+.fake-titlebar .dots span:nth-child(2) { background: #ffbd2e; }
+.fake-titlebar .dots span:nth-child(3) { background: #28c840; }
+
+.fake-titlebar .title {
+  font-size: 11px;
+  color: #999;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.fake-toolbar {
+  background: #1a1a1a;
+  padding: 6px 10px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #333;
+}
+
+.fake-toolbar .btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: #2a2a2a;
+  border-radius: 4px;
+  color: #888;
+}
+
+.fake-toolbar .btn.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.fake-editor {
+  padding: 10px;
+  font-family: 'SF Mono', monospace;
+  font-size: 11px;
+}
+
+.fake-editor .line {
+  color: #ccc;
+  line-height: 1.6;
+}
+
+.fake-editor .ln {
+  color: #555;
+  margin-right: 12px;
+  user-select: none;
+}
+
+.claude-view pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 @media (max-width: 600px) {
   h1 { font-size: 28px; }
   article { padding: 100px 16px 60px; }
   nav { padding: 16px 20px; }
   .comparison { grid-template-columns: 1fr; }
+  .vision-compare { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -283,6 +403,54 @@ footer a { color: var(--accent); text-decoration: none; }
   <h1>Lens: A Visual Interface Designed for Claude</h1>
 
   <p class="lead">What if we designed a UI for AI first? Not "AI-assisted" or "AI-compatible"—but <em>AI-native</em>. An interface where Claude can see, navigate, and edit faster than traditional file operations. That's Lens.</p>
+
+  <h2>How Claude Sees</h2>
+
+  <p>When you look at FunctionServer, you see a desktop with windows, icons, and buttons. When Claude looks through Lens, it sees something different:</p>
+
+  <div class="vision-compare">
+    <div class="human-view">
+      <h4>What You See</h4>
+      <div class="fake-desktop">
+        <div class="fake-window">
+          <div class="fake-titlebar">
+            <span class="dots"><span></span><span></span><span></span></span>
+            <span class="title">Studio - app.js</span>
+          </div>
+          <div class="fake-toolbar">
+            <span class="btn">+ New</span>
+            <span class="btn">Save</span>
+            <span class="btn active">Run</span>
+          </div>
+          <div class="fake-editor">
+            <div class="line"><span class="ln">1</span>function hello() {</div>
+            <div class="line"><span class="ln">2</span>  return "world";</div>
+            <div class="line"><span class="ln">3</span>}</div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">Pixels, colors, spatial layout</p>
+    </div>
+    <div class="claude-view">
+      <h4>What Claude Sees</h4>
+      <pre><code>Lens.look(<span class="str">'body'</span>)
+<span class="result"> 0123456789012345678901234
+0│Studio - app.js
+1│+ New    Save    ▶ Run
+2│
+3│1:function hello() {
+4│2:  return "world";
+5│3:}</span>
+
+Lens.at(<span class="num">1</span>, <span class="num">16</span>)
+<span class="result">→ BUTTON:"Run" [click]</span></code></pre>
+      <p class="caption">Text grid with coordinates + actions</p>
+    </div>
+  </div>
+
+  <p>Claude doesn't parse pixels or decode screenshots. It receives a <strong>text grid with coordinates</strong>—every element addressable by row and column. Want to click "Run"? <code>Lens.click(1, 16)</code>. Want to know what's there first? <code>Lens.at(1, 16)</code>.</p>
+
+  <p>This isn't OCR or computer vision. It's a <strong>native text representation</strong> designed for how language models actually work.</p>
 
   <h2>The Problem: Tokens Are Expensive</h2>
 
@@ -398,12 +566,6 @@ Lens.do(<span class="str">'#toolbar'</span>, <span class="num">0</span>)  <span 
     <tr><td><code>Lens.dash()</code></td><td>Dashboard with icons</td><td><code>[Studio|Shell] 🎮📝💻</code></td></tr>
     <tr><td><code>Lens.define(name, fn)</code></td><td>Register helper</td><td><code>✓ name</code></td></tr>
     <tr><td><code>Lens.call(name, args)</code></td><td>Call helper</td><td>Result</td></tr>
-  </table>
-
-  <h3>Position Inspection</h3>
-
-  <table>
-    <tr><th>Command</th><th>Purpose</th><th>Output</th></tr>
     <tr><td><code>Lens.look(sel, opts)</code></td><td>Render to text grid</td><td>Numbered rows</td></tr>
     <tr><td><code>Lens.at(row, col)</code></td><td>What's at position?</td><td>Element + actions</td></tr>
     <tr><td><code>Lens.click(row, col)</code></td><td>Click at position</td><td><code>✓ clicked "text"</code></td></tr>
@@ -478,6 +640,52 @@ Lens.dash()
     <li>Faster iteration cycles</li>
     <li>Lower costs (fewer tokens = cheaper)</li>
   </ul>
+
+  <h3>Live Collaboration</h3>
+
+  <p>When Claude uses Lens, you see everything happen in real-time. Buttons click. Text appears. Windows open. It's not a transcript of what happened—it's happening right now, in your browser.</p>
+
+  <p>Ask Claude to "open Studio and fix the bug in app.js" and watch as it:</p>
+  <ol>
+    <li>Opens the Studio window</li>
+    <li>Navigates to app.js</li>
+    <li>Searches for the bug with <code>Lens.grep('error')</code></li>
+    <li>Edits the specific line with <code>Lens.setLine()</code></li>
+    <li>Saves and runs to verify</li>
+  </ol>
+
+  <p>You can interrupt, redirect, or take over at any point. It's pair programming where your partner can see your screen.</p>
+
+  <hr>
+
+  <h2>The Bridge: Real-Time Connection</h2>
+
+  <p>Lens is powered by <strong>eye</strong>—a WebSocket bridge that gives Claude direct access to the browser's JavaScript VM. No HTTP overhead. No JSON wrapping. Just raw JavaScript execution in ~25ms.</p>
+
+  <pre><code><span class="cm">// From Claude's terminal, execute JS in your browser</span>
+eye <span class="str">'document.title'</span>
+<span class="result">→ "FunctionServer"</span>
+
+eye <span class="str">'Lens.look("#desktop")'</span>
+<span class="result">→ "42 elements
+    01234567890123456789...
+   0│📁 Documents
+   1│📁 Projects
+   2│🎮 game.js
+   ..."</span>
+
+eye <span class="str">'Lens.click(2, 0)'</span>
+<span class="result">→ "✓ clicked \"game.js\""</span></code></pre>
+
+  <p>The connection is bidirectional. Claude can:</p>
+  <ul>
+    <li><strong>Read</strong> — Query DOM, check state, inspect elements</li>
+    <li><strong>Write</strong> — Click buttons, fill forms, modify content</li>
+    <li><strong>Execute</strong> — Run any JavaScript, define functions, patch code live</li>
+    <li><strong>Watch</strong> — See changes instantly as they happen</li>
+  </ul>
+
+  <p>This isn't remote control through an API. Claude is <em>inside</em> the browser, with the same access as code running in the console.</p>
 
   <hr>
 
