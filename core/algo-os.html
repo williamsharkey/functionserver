@@ -1724,6 +1724,7 @@ const systemTray = {
 let eyeBridgeWs = null;
 let eyeBridgeReconnectTimer = null;
 let eyeBridgeConnected = false;
+let eyeBridgePingInterval = null;
 
 function connectEyeBridge() {
   if (!sessionToken) return;
@@ -1737,6 +1738,13 @@ function connectEyeBridge() {
 
     eyeBridgeWs.onopen = () => {
       console.log('[EyeBridge] Connected');
+      // Start keepalive ping every 25 seconds
+      if (eyeBridgePingInterval) clearInterval(eyeBridgePingInterval);
+      eyeBridgePingInterval = setInterval(() => {
+        if (eyeBridgeWs && eyeBridgeWs.readyState === WebSocket.OPEN) {
+          eyeBridgeWs.send('ping');
+        }
+      }, 25000);
     };
 
     eyeBridgeWs.onmessage = (event) => {
@@ -1759,6 +1767,10 @@ function connectEyeBridge() {
     eyeBridgeWs.onclose = () => {
       console.log('[EyeBridge] Disconnected');
       eyeBridgeConnected = false;
+      if (eyeBridgePingInterval) {
+        clearInterval(eyeBridgePingInterval);
+        eyeBridgePingInterval = null;
+      }
       updateEyeTray();
       scheduleEyeBridgeReconnect();
     };
@@ -1810,7 +1822,26 @@ function handleEyeCommand(data) {
 
       sendEyeResponse(id, response, false);
     } catch (e) {
-      sendEyeResponse(id, e.message || String(e), true);
+      // Enhanced error with line number extraction
+      let errorMsg = e.message || String(e);
+
+      // Try to extract line number from stack
+      if (e.stack) {
+        const match = e.stack.match(/<anonymous>:(\d+):(\d+)/);
+        if (match) {
+          errorMsg += ` (line ${match[1]}, col ${match[2]})`;
+        }
+      }
+
+      // For syntax errors, try to get more context
+      if (e instanceof SyntaxError && expression) {
+        const lines = expression.split('\n');
+        if (lines.length > 1) {
+          errorMsg += ` [${lines.length} lines]`;
+        }
+      }
+
+      sendEyeResponse(id, errorMsg, true);
     }
   })();
 }
