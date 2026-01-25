@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Happy Path - FunctionServer</title>
+<meta name="description" content="A guide to AI-first development: how to build projects with maximum feedback and minimum token waste.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #09090b;
+  --surface: #18181b;
+  --text: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #52525b;
+  --border: #27272a;
+  --accent: #a78bfa;
+  --green: #86efac;
+  --red: #fca5a5;
+  --yellow: #fde68a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif { font-family: 'Newsreader', 'New York', Georgia, serif; }
+
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%);
+}
+
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  background: rgba(9, 9, 11, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+}
+
+nav .links { display: flex; gap: 24px; }
+
+nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  transition: color 0.15s;
+}
+
+nav a:hover { color: var(--text); }
+
+.nav-cta {
+  background: var(--text);
+  color: var(--bg) !important;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+section { padding: 120px 24px; }
+.container { max-width: 800px; margin: 0 auto; }
+
+#hero {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  padding-top: 80px;
+}
+
+#hero .container { text-align: center; }
+
+.hero-eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  margin-bottom: 24px;
+}
+
+#hero h1 {
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: clamp(36px, 6vw, 56px);
+  font-weight: 400;
+  line-height: 1.15;
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
+}
+
+#hero h1 em { font-style: italic; color: var(--accent); }
+
+.hero-desc {
+  font-size: 17px;
+  color: var(--text-secondary);
+  max-width: 560px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.prose {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.prose h2 {
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: 28px;
+  font-weight: 400;
+  margin: 64px 0 20px;
+  letter-spacing: -0.01em;
+}
+
+.prose h2:first-child { margin-top: 0; }
+
+.prose h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 40px 0 12px;
+  color: var(--text);
+}
+
+.prose p {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.prose strong { color: var(--text); font-weight: 500; }
+.prose em { color: var(--text); }
+
+.prose code {
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 14px;
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.prose ul, .prose ol {
+  color: var(--text-secondary);
+  margin: 16px 0 16px 24px;
+  line-height: 1.8;
+}
+
+.prose li { margin-bottom: 8px; }
+
+.code-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 24px 0;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.code-block .cm { color: var(--text-tertiary); }
+.code-block .kw { color: var(--accent); }
+.code-block .str { color: var(--green); }
+.code-block .fn { color: #93c5fd; }
+.code-block .num { color: var(--yellow); }
+
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 32px 0;
+}
+
+.comparison-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.comparison-box.old { border-color: rgba(252, 165, 165, 0.3); }
+.comparison-box.new { border-color: rgba(134, 239, 172, 0.3); }
+
+.comparison-box h4 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-box.old h4 { color: var(--red); }
+.comparison-box.new h4 { color: var(--green); }
+
+.comparison-box pre {
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.comparison-box .tokens {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.comparison-box.old .tokens { color: var(--red); }
+.comparison-box.new .tokens { color: var(--green); }
+
+.step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 24px 0;
+}
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  margin-right: 12px;
+}
+
+.step h4 {
+  display: inline;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.step p {
+  margin: 12px 0 0 40px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.step .code-block {
+  margin: 16px 0 0 40px;
+}
+
+.callout {
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 32px 0;
+}
+
+.callout p { margin: 0; color: var(--text-secondary); }
+.callout strong { color: var(--accent); }
+
+.divider {
+  width: 48px;
+  height: 1px;
+  background: var(--border);
+  margin: 80px auto;
+}
+
+footer {
+  padding: 48px 24px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+footer .links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+footer a {
+  color: var(--text-tertiary);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+footer a:hover { color: var(--text-secondary); }
+footer p { color: var(--text-tertiary); font-size: 12px; }
+
+@media (max-width: 768px) {
+  .comparison { grid-template-columns: 1fr; }
+  nav .links { display: none; }
+  section { padding: 80px 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<nav>
+  <a href="/" class="logo">FunctionServer</a>
+  <div class="links">
+    <a href="/">Home</a>
+    <a href="/lens.html">Lens</a>
+    <a href="/door.html">The Door</a>
+    <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
+  </div>
+  <a href="/app" class="nav-cta">Enter</a>
+</nav>
+
+<section id="hero">
+  <div class="container">
+    <p class="hero-eyebrow">A guide to AI-first development</p>
+    <h1>The <em>Happy Path</em></h1>
+    <p class="hero-desc">How to build projects on FunctionServer with maximum feedback and minimum token waste. The old way is blind and expensive. The new way is surgical and cheap.</p>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="prose">
+
+      <h2>The Problem with Traditional AI Coding</h2>
+
+      <p>When AI writes code the traditional way, it's flying blind. It reads entire files to understand them, writes entire files back, and has no way to verify its changes worked. Every operation burns tokens. Every cycle is slow.</p>
+
+      <div class="comparison">
+        <div class="comparison-box old">
+          <h4><span>x</span> The Old Way</h4>
+          <pre>1. Read entire 500-line file
+2. Parse mentally, find the bug
+3. Rewrite entire 500 lines
+4. Hope it worked
+5. User runs it, reports error
+6. Read entire file again...
+7. Repeat</pre>
+          <div class="tokens">~3000 tokens per cycle</div>
+        </div>
+        <div class="comparison-box new">
+          <h4><span>+</span> The Happy Path</h4>
+          <pre>1. Lens.grep('fetchData')
+   -> "42: async function fetchData"
+2. Lens.code(40, 10)
+   -> see 10 lines of context
+3. Lens.setLine(42, 'fixed code')
+4. Lens.run()
+   -> see error instantly
+5. Fix and verify in same call</pre>
+          <div class="tokens">~200 tokens per cycle</div>
+        </div>
+      </div>
+
+      <p>The difference isn't incremental. It's <strong>15x fewer tokens</strong> and <strong>instant feedback</strong>. The AI sees what the user sees, edits surgically, and verifies immediately.</p>
+
+      <div class="divider"></div>
+
+      <h2>The Happy Path: Step by Step</h2>
+
+      <p>Here's how to build a project on FunctionServer the right way. We'll create a particle simulation from scratch, entirely through the browser.</p>
+
+      <div class="step">
+        <span class="step-num">1</span>
+        <h4>Check the desktop state</h4>
+        <p>Before doing anything, see what's running. One call gives you everything.</p>
+        <div class="code-block">
+<span class="fn">Lens.state</span>()
+<span class="cm">// -> "user:root wins:2[Studio,Shell] apps:12 files:3"</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">2</span>
+        <h4>Open Studio and create a file</h4>
+        <p>Open the IDE and start with a new file. No file system navigation needed.</p>
+        <div class="code-block">
+<span class="fn">ALGO.bridge.openApp</span>(<span class="str">'studio'</span>)
+<span class="fn">Lens.open</span>(<span class="str">'~/particles.js'</span>)  <span class="cm">// creates if doesn't exist</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">3</span>
+        <h4>Write code with insertLine</h4>
+        <p>Build up the file line by line. Each insert is atomic and verified.</p>
+        <div class="code-block">
+<span class="fn">Lens.insertLine</span>(<span class="num">1</span>, <span class="str">'// Particle simulation'</span>)  <span class="cm">// -> "OK +L1"</span>
+<span class="fn">Lens.insertLine</span>(<span class="num">2</span>, <span class="str">'ALGO.app.name = "Particles";'</span>)
+<span class="fn">Lens.insertLine</span>(<span class="num">3</span>, <span class="str">'ALGO.app.icon = "o";'</span>)
+<span class="cm">// ... build up the file</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">4</span>
+        <h4>Run and see results instantly</h4>
+        <p>Execute the app. Errors appear immediately in the console.</p>
+        <div class="code-block">
+<span class="fn">Lens.run</span>()  <span class="cm">// -> "OK running"</span>
+<span class="cm">// If there's an error:</span>
+<span class="cm">// -> "ERROR: Unexpected token at line 42, col 15"</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">5</span>
+        <h4>Debug with surgical precision</h4>
+        <p>See exactly the problematic area, fix just that line.</p>
+        <div class="code-block">
+<span class="fn">Lens.code</span>(<span class="num">40</span>, <span class="num">5</span>)      <span class="cm">// see lines 40-44</span>
+<span class="fn">Lens.setLine</span>(<span class="num">42</span>, <span class="str">'const x = getValue();'</span>)  <span class="cm">// fix</span>
+<span class="fn">Lens.run</span>()              <span class="cm">// verify</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">6</span>
+        <h4>Save and commit</h4>
+        <p>Persist to disk and create a git commit.</p>
+        <div class="code-block">
+<span class="fn">Lens.save</span>()  <span class="cm">// -> "OK saved"</span>
+<span class="fn">Studio.github._exec</span>(<span class="str">'git -C ~/repos/particles add -A && git commit -m "Initial"'</span>)
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Key insight:</strong> At no point did we read an entire file. At no point did we write an entire file. Every operation was surgical, verified, and cheap.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>The Lens API</h2>
+
+      <p>Lens is the interface that makes this possible. It's designed for AI agents: terse, efficient, and feedback-rich.</p>
+
+      <h3>Navigation</h3>
+      <div class="code-block">
+<span class="fn">Lens.state</span>()              <span class="cm">// Desktop overview: windows, apps, files</span>
+<span class="fn">Lens.files</span>()              <span class="cm">// List saved files</span>
+<span class="fn">Lens.open</span>(<span class="str">'path'</span>)         <span class="cm">// Open file in Studio</span>
+      </div>
+
+      <h3>Reading (Token-Efficient)</h3>
+      <div class="code-block">
+<span class="fn">Lens.code</span>(<span class="num">1</span>, <span class="num">20</span>)          <span class="cm">// View lines 1-20 with line numbers</span>
+<span class="fn">Lens.line</span>(<span class="num">42</span>)             <span class="cm">// View just line 42</span>
+<span class="fn">Lens.grep</span>(<span class="str">'pattern'</span>)      <span class="cm">// Find matches (returns line numbers)</span>
+      </div>
+
+      <h3>Editing (Surgical)</h3>
+      <div class="code-block">
+<span class="fn">Lens.setLine</span>(<span class="num">42</span>, <span class="str">'code'</span>)  <span class="cm">// Replace line 42</span>
+<span class="fn">Lens.insertLine</span>(<span class="num">5</span>, <span class="str">'x'</span>)   <span class="cm">// Insert at line 5</span>
+<span class="fn">Lens.deleteLine</span>(<span class="num">10</span>)       <span class="cm">// Delete line 10</span>
+<span class="fn">Lens.replace</span>(<span class="str">'a'</span>, <span class="str">'b'</span>)    <span class="cm">// Find/replace all</span>
+      </div>
+
+      <h3>Execution</h3>
+      <div class="code-block">
+<span class="fn">Lens.save</span>()               <span class="cm">// Save current file</span>
+<span class="fn">Lens.run</span>()                <span class="cm">// Execute as app</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>Eye: Direct VM Access</h2>
+
+      <p>Behind Lens is <code>eye</code>: a direct WebSocket bridge to the browser's JavaScript VM. When you need to go beyond Lens, eye lets you execute any expression.</p>
+
+      <div class="code-block">
+<span class="cm">// Query the DOM</span>
+<span class="fn">eye</span> <span class="str">'document.title'</span>
+<span class="fn">eye</span> <span class="str">'$$(".window").length'</span>
+
+<span class="cm">// Inspect live state</span>
+<span class="fn">eye</span> <span class="str">'JSON.stringify(windows[0])'</span>
+
+<span class="cm">// Hot-patch running code</span>
+<span class="fn">eye</span> <span class="str">'window.DEBUG = true'</span>
+
+<span class="cm">// Inject CSS fixes</span>
+<span class="fn">eye</span> <span class="str">'$(".menu").style.bottom = "40px"'</span>
+      </div>
+
+      <p>The AI isn't automating from outside. It's <em>inside</em> the same address space, touching the same objects, seeing the same pixels.</p>
+
+      <div class="divider"></div>
+
+      <h2>The Feedback Loop</h2>
+
+      <p>The happy path isn't just about saving tokens. It's about <strong>closing the feedback loop</strong>.</p>
+
+      <p>Traditional AI coding is open-loop: write code, hand it off, wait for human to report results. FunctionServer is closed-loop: write, execute, see result, adjust. All in the same context.</p>
+
+      <div class="comparison">
+        <div class="comparison-box old">
+          <h4><span>x</span> Open Loop</h4>
+          <pre>AI writes code
+ -> hands to user
+   -> user runs it
+     -> user describes error
+       -> AI guesses fix
+         -> repeat...</pre>
+        </div>
+        <div class="comparison-box new">
+          <h4><span>+</span> Closed Loop</h4>
+          <pre>AI writes code
+ -> Lens.run()
+   -> sees error directly
+     -> Lens.code() to inspect
+       -> Lens.setLine() to fix
+         -> Lens.run() to verify</pre>
+        </div>
+      </div>
+
+      <p>This is how humans debug. Now AI can debug the same way.</p>
+
+      <div class="divider"></div>
+
+      <h2>Building the Future</h2>
+
+      <p>FunctionServer is infrastructure for AI-native applications. The happy path is just the beginning.</p>
+
+      <p>What we're building toward:</p>
+      <ul>
+        <li><strong>Atomic transactions</strong> - Batch edits that commit or rollback together</li>
+        <li><strong>Real PTY terminals</strong> - Full shell access with color support</li>
+        <li><strong>GitHub integration</strong> - Push, PR, and collaborate without leaving the browser</li>
+        <li><strong>Multi-agent coordination</strong> - Multiple AI agents working on the same codebase</li>
+      </ul>
+
+      <p>The old way treats AI as a code generator. The new way treats AI as a <em>developer</em>: one that can see, navigate, edit, run, debug, and iterate.</p>
+
+      <p>Welcome to the happy path.</p>
+
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="links">
+      <a href="/app">Launch</a>
+      <a href="/">Home</a>
+      <a href="/lens.html">Lens</a>
+      <a href="/door.html">The Door</a>
+      <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
+    </div>
+    <p>Open source under MIT</p>
+  </div>
+</footer>
+
+</body>
+</html>
