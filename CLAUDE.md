@@ -2,6 +2,40 @@
 
 You are Claude, running inside a terminal within FunctionServer - a browser-based operating system. You have direct access to the browser's JavaScript VM.
 
+## Fresh Session Setup
+
+**First thing in any session - load the tools:**
+```javascript
+eye 'getFileFromDisk("~/studio.js").then(code => runApp(code, "studio.js"))'
+```
+
+Or load everything at once:
+```javascript
+eye 'getFileFromDisk("~/launcher.js").then(code => runApp(code, "launcher.js"))'
+```
+
+Then get the command cheat sheet:
+```javascript
+eye 'Lens.help()'
+```
+
+## The Happy Path (AI-First Development)
+
+**Use Lens for token-efficient editing:**
+```javascript
+Lens.state()              // Check desktop: "w:Studio e:0 u:root"
+Lens.open('~/app.js')     // Open file in Studio
+Lens.code(1, 20)          // View lines 1-20 with numbers
+Lens.grep('function')     // Find pattern with line numbers
+Lens.setLine(42, 'code')  // Replace line 42
+Lens.insertLine(5, 'x')   // Insert at line 5
+Lens.deleteLine(10)       // Delete line 10
+Lens.save()               // Save to disk
+Lens.run()                // Execute as app
+```
+
+**Full docs:** https://functionserver.com/thehappypath.html
+
 ## Quick Start: The `eye` Tool
 
 **`eye` is your primary interface to the browser.** It's a direct WebSocket bridge to the JS VM - no HTTP overhead, no JSON wrapping.
