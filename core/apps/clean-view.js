@@ -26,17 +26,10 @@ $$('article').forEach(article => {
 // Simplify header
 const header = $('header');
 if (header) header.style.background = '#000';`,
-    api: `// API endpoints for Twitter
-API.register('getTweets', () => {
-  return $$('article [data-testid="tweetText"]').map(el => ({
-    text: el.textContent,
-    time: el.closest('article')?.querySelector('time')?.getAttribute('datetime')
-  }));
-});
+    api: `// API endpoints for Twitter (using query for CSP compatibility)
+API.registerQuery('getTweets', 'article [data-testid="tweetText"]', el => el.text);
 
-API.register('getUsers', () => {
-  return [...new Set($$('article [data-testid="User-Name"] a').map(a => a.href))];
-});`
+API.registerQuery('getUsers', 'article [data-testid="User-Name"] a', el => el.text);`
   },
   'Hacker News - Minimal': {
     url: 'https://news.ycombinator.com',
@@ -264,13 +257,14 @@ function _cv_open() {
     shadowTabId: null
   };
 
-  // Initialize global CleanView API
+  // Initialize or update global CleanView API
   if (!window.CleanView) {
     window.CleanView = {
       instances: _cv_instances,
       call: async (endpoint, ...args) => {
-        for (const id in _cv_instances) {
-          const inst = _cv_instances[id];
+        // Use window.CleanView.instances to always get current reference
+        for (const id in window.CleanView.instances) {
+          const inst = window.CleanView.instances[id];
           if (inst.endpoints[endpoint]) {
             return await inst.endpoints[endpoint](...args);
           }
@@ -279,13 +273,15 @@ function _cv_open() {
       },
       list: () => {
         const endpoints = [];
-        for (const id in _cv_instances) {
-          endpoints.push(...Object.keys(_cv_instances[id].endpoints));
+        for (const id in window.CleanView.instances) {
+          endpoints.push(...Object.keys(window.CleanView.instances[id].endpoints));
         }
         return endpoints;
       }
     };
   }
+  // Always update instances reference to current _cv_instances
+  window.CleanView.instances = _cv_instances;
 
   // Connect to bridge
   _cv_connectBridge();
@@ -406,18 +402,30 @@ async function _cv_loadShadow(id, url) {
   inst.html = content.html;
   inst.url = content.url || url;
 
-  _cv_setIframeContent(id, 'original', inst.html, inst.url);
-  _cv_setIframeContent(id, 'transformed', inst.html, inst.url);
+  // Strip scripts for shadow mode - iframes are just previews, transforms run on shadow tab
+  _cv_setIframeContent(id, 'original', inst.html, inst.url, true);
+  _cv_setIframeContent(id, 'transformed', inst.html, inst.url, true);
 
   _cv_status(id, `Loaded via shadow: ${inst.url}`);
-  _cv_log(id, `Loaded ${inst.html.length} bytes from shadow tab`);
+  _cv_log(id, `Loaded ${inst.html.length} bytes from shadow tab (scripts stripped for preview)`);
 }
 
-function _cv_setIframeContent(id, which, html, baseUrl) {
+function _cv_setIframeContent(id, which, html, baseUrl, stripScripts = false) {
   const iframe = document.getElementById(`cv-${which}-${id}`);
   if (!iframe) return;
 
-  const helpers = `
+  let processedHtml = html;
+
+  // Strip scripts to prevent errors from content JS trying to run in sandboxed iframe
+  if (stripScripts) {
+    processedHtml = processedHtml
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<script[^>]*\/>/gi, '')
+      .replace(/\son\w+="[^"]*"/gi, '')  // Remove inline event handlers
+      .replace(/\son\w+='[^']*'/gi, '');
+  }
+
+  const helpers = stripScripts ? '' : `
     <script>
       window.$ = s => document.querySelector(s);
       window.$$ = s => [...document.querySelectorAll(s)];
@@ -425,7 +433,7 @@ function _cv_setIframeContent(id, which, html, baseUrl) {
   `;
 
   const baseTag = baseUrl ? `<base href="${baseUrl}">` : '';
-  const modifiedHtml = html.replace('<head>', `<head>${baseTag}${helpers}`);
+  const modifiedHtml = processedHtml.replace('<head>', `<head>${baseTag}${helpers}`);
 
   iframe.srcdoc = modifiedHtml;
 }
@@ -453,7 +461,7 @@ async function _cv_runTransform(id) {
         tabId: inst.shadowTabId
       });
       inst.html = content.html;
-      _cv_setIframeContent(id, 'transformed', inst.html, inst.url);
+      _cv_setIframeContent(id, 'transformed', inst.html, inst.url, true);
       _cv_status(id, 'Transform applied (shadow)');
       return;
     } catch (e) {
@@ -510,6 +518,31 @@ function _cv_registerAPI(id) {
           };
         }
         _cv_log(id, `Registered API: ${name}`);
+      },
+      // Query-based registration (works on CSP-restricted sites)
+      registerQuery: (name, selector, mapper) => {
+        if (inst.mode === 'shadow' && inst.shadowTabId && _cv_bridgeReady) {
+          inst.endpoints[name] = async () => {
+            const result = await _cv_bridgeSend({
+              action: 'query',
+              tabId: inst.shadowTabId,
+              data: { selector, all: true }
+            });
+            // Apply optional mapper function to results
+            return mapper ? result.map(mapper) : result;
+          };
+        } else {
+          inst.endpoints[name] = async () => {
+            const els = [...iframe.contentDocument.querySelectorAll(selector)];
+            const results = els.map(el => ({
+              tag: el.tagName,
+              text: el.textContent?.slice(0, 200),
+              html: el.outerHTML?.slice(0, 500)
+            }));
+            return mapper ? results.map(mapper) : results;
+          };
+        }
+        _cv_log(id, `Registered query API: ${name}`);
       }
     };
 
@@ -566,7 +599,7 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// Export functions
+// Export functions and debug objects
 window._cv_instances = _cv_instances;
 window._cv_open = _cv_open;
 window._cv_load = _cv_load;
@@ -577,6 +610,10 @@ window._cv_savePreset = _cv_savePreset;
 window._cv_showTab = _cv_showTab;
 window._cv_PRESETS = _cv_PRESETS;
 window._cv_connectBridge = _cv_connectBridge;
+// Debug exports
+window._cv_getBridge = () => _cv_bridge;
+window._cv_getPendingRequests = () => _cv_pendingRequests;
+window._cv_getBridgeReady = () => _cv_bridgeReady;
 
 // Run the app
 _cv_open();

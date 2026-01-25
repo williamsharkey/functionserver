@@ -79,7 +79,7 @@ async function handleMessage(msg) {
       break;
 
     case 'listTabs':
-      sendTabList();
+      sendTabList(id);
       break;
 
     case 'getContent':
@@ -114,35 +114,24 @@ async function handleMessage(msg) {
       break;
 
     case 'eval':
-      // Evaluate expression in tab context via script injection
-      // This bypasses extension CSP by running in the page's context
+      // Evaluate expression in isolated world (can read DOM but not page JS)
+      // For sites with strict CSP, this is the only option
       try {
         const results = await chrome.scripting.executeScript({
           target: { tabId },
-          world: 'MAIN', // Run in page context, not isolated world
+          // Use isolated world - can access DOM but not page's JS context
+          // This avoids CSP issues with eval
           func: (expr) => {
-            return new Promise((resolve) => {
-              const resultKey = '__fsBridgeResult_' + Date.now();
-
-              // Wrap expression to capture result
-              const wrappedCode = `
-                try {
-                  window['${resultKey}'] = { success: true, result: (function() { ${expr} })() };
-                } catch (e) {
-                  window['${resultKey}'] = { success: false, error: e.message };
-                }
-              `;
-
-              const script = document.createElement('script');
-              script.textContent = wrappedCode;
-              document.documentElement.appendChild(script);
-              script.remove();
-
-              // Get result and clean up
-              const result = window[resultKey];
-              delete window[resultKey];
-              resolve(result || { success: true, result: undefined });
-            });
+            try {
+              // Add helper functions
+              const $ = (s) => document.querySelector(s);
+              const $$ = (s) => [...document.querySelectorAll(s)];
+              // Run expression with helpers in scope
+              const fn = new Function('$', '$$', expr);
+              return { success: true, result: fn($, $$) };
+            } catch (e) {
+              return { success: false, error: e.message };
+            }
           },
           args: [data.expression]
         });
@@ -373,7 +362,7 @@ function send(msg) {
   }
 }
 
-async function sendTabList() {
+async function sendTabList(requestId) {
   try {
     const tabs = await chrome.tabs.query({});
     const tabList = tabs.map(t => ({
@@ -383,9 +372,18 @@ async function sendTabList() {
       active: t.active,
       favIconUrl: t.favIconUrl
     }));
-    send({ action: 'tabList', tabs: tabList });
+    // Include request ID if provided (for request/response routing)
+    const msg = { action: 'tabList', tabs: tabList };
+    if (requestId) {
+      msg.id = requestId;
+      msg.result = tabList;  // Also include as result for promise resolution
+    }
+    send(msg);
   } catch (e) {
     console.error('[FSBridge] Error getting tabs:', e);
+    if (requestId) {
+      send({ id: requestId, error: e.message });
+    }
   }
 }
 

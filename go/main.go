@@ -1023,6 +1023,7 @@ func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 
 			// Forward responses back to requesting browser
 			if id, ok := data["id"].(string); ok {
+				fmt.Printf("[ContentBridge] Extension response for id=%s\n", id)
 				pendingMu.Lock()
 				browserConn, exists := pendingResponses[id]
 				if exists {
@@ -1031,7 +1032,10 @@ func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 				pendingMu.Unlock()
 
 				if exists && browserConn != nil {
+					fmt.Printf("[ContentBridge] Forwarding response to browser\n")
 					browserConn.WriteMessage(websocket.TextMessage, msg)
+				} else {
+					fmt.Printf("[ContentBridge] No pending request found for id=%s (exists=%v)\n", id, exists)
 				}
 			}
 
@@ -1085,12 +1089,17 @@ func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 			ext := extensionConn
 			extensionConnMu.RUnlock()
 
+			action, _ := data["action"].(string)
+			reqId, _ := data["id"].(string)
+			fmt.Printf("[ContentBridge] Browser request: action=%s id=%s\n", action, reqId)
+
 			if ext == nil {
 				// No extension connected, send error
 				if id, ok := data["id"].(string); ok {
 					errResp := fmt.Sprintf(`{"id":"%s","error":"Extension not connected"}`, id)
 					conn.WriteMessage(websocket.TextMessage, []byte(errResp))
 				}
+				fmt.Println("[ContentBridge] No extension connected!")
 				continue
 			}
 
@@ -1099,9 +1108,15 @@ func handleContentBridge(w http.ResponseWriter, r *http.Request) {
 				pendingMu.Lock()
 				pendingResponses[id] = conn
 				pendingMu.Unlock()
+				fmt.Printf("[ContentBridge] Tracking pending request: %s\n", id)
 			}
 
 			// Forward to extension
+			truncLen := 200
+			if len(msg) < truncLen {
+				truncLen = len(msg)
+			}
+			fmt.Printf("[ContentBridge] Forwarding to extension: %s\n", string(msg)[:truncLen])
 			ext.WriteMessage(websocket.TextMessage, msg)
 		}
 
