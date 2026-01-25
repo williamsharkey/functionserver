@@ -787,10 +787,26 @@ window.setupHappyPath = async function(projectName) {
     console.log('Opening existing project: ' + slug);
   }
 
-  // Open in Studio
+  // Open in Studio - find main file for existing projects
   if (typeof Studio !== 'undefined') {
-    Studio.close(repoPath + '/main.js');
-    Studio.open(repoPath + '/main.js');
+    let mainFile = repoPath + '/main.js';
+
+    // For existing projects, find the first .js file if main.js doesn't exist
+    const files = await ALGO.exec('ls ' + repoPath + '/*.js 2>/dev/null');
+    if (files.trim()) {
+      const jsFiles = files.trim().split('\n').filter(f => !f.includes('node_modules'));
+      if (jsFiles.length > 0) {
+        // Prefer main.js, index.js, app.js, or first found
+        const basename = f => f.split('/').pop();
+        const preferred = jsFiles.find(f => ['main.js', 'index.js', 'app.js'].includes(basename(f)));
+        mainFile = preferred || jsFiles[0];
+        // Convert full path to ~/repos/... format
+        mainFile = mainFile.replace(/^\/home\/[^\/]+\//, '~/');
+      }
+    }
+
+    Studio.close(mainFile);
+    Studio.open(mainFile);
   }
   return 'Project ready: ' + slug;
 };
