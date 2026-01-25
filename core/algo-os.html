@@ -642,6 +642,109 @@ window.$$ = s => [...document.querySelectorAll(s)];
 window.apps = () => systemApps.map(a => a.name);
 window.wins = () => windows.map(w => ({id: w.id, title: w.title, app: w.appName}));
 
+// ==================== CORE UTILITIES ====================
+// Shell execution - available without loading Studio
+ALGO.exec = async function(cmd) {
+  if (!sessionToken) return 'Error: Not logged in';
+  try {
+    const r = await fetch(API_BASE + '/terminal/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionToken },
+      body: JSON.stringify({ command: cmd, cwd: '~' })
+    });
+    if (r.ok) {
+      const data = await r.json();
+      return data.output || data.error || '';
+    }
+    return 'Request failed: ' + r.status;
+  } catch(e) { return 'Error: ' + e.message; }
+};
+
+// GitHub auth - read token from localStorage without loading github-auth.js
+ALGO.github = {
+  STORAGE_KEY: 'fs_github_auth',
+  _load() { try { return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || {}; } catch { return {}; } },
+  _save(auth) { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(auth)); },
+  getToken() { return this._load().token || null; },
+  getUsername() { return this._load().username || null; },
+  isConfigured() { const a = this._load(); return !!(a.token && a.username); },
+  getAuthUrl(repoUrl) {
+    const token = this.getToken();
+    if (!token) return repoUrl;
+    const m = repoUrl.match(/git@github\.com:(.+)\.git/);
+    if (m) return 'https://' + token + '@github.com/' + m[1] + '.git';
+    const h = repoUrl.match(/https:\/\/github\.com\/(.+)/);
+    if (h) return 'https://' + token + '@github.com/' + h[1];
+    return repoUrl;
+  }
+};
+
+// setupHappyPath - one-command project creation, available globally
+window.setupHappyPath = async function(projectName) {
+  // Load Studio if needed
+  if (typeof Studio === 'undefined') {
+    const code = await getFileFromDisk('~/studio.js');
+    if (code) await runApp(code, 'studio.js');
+  }
+
+  // If no project name, just load tools
+  if (!projectName) {
+    console.log('Tools loaded. Use Lens.help() for commands.');
+    return 'Happy path ready!';
+  }
+
+  // Slugify: "pixel draw" -> "pixel-draw"
+  const slug = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const repoPath = '~/repos/' + slug;
+
+  // Check if exists
+  const exists = await ALGO.exec('ls ' + repoPath + ' 2>/dev/null && echo yes || echo no');
+
+  if (exists.trim() === 'no') {
+    console.log('Creating new project: ' + slug);
+
+    // Create folder and init
+    await ALGO.exec('mkdir -p ' + repoPath);
+    await ALGO.exec('git -C ' + repoPath + ' init');
+
+    // Create skeleton files
+    const appCode = '// ' + projectName + '\nALGO.app.name = "' + projectName + '";\nALGO.app.icon = "*";\n\nALGO.createWindow({\n  title: "' + projectName + '",\n  width: 400,\n  height: 300,\n  content: "<div style=\'padding:20px\'>Hello from ' + projectName + '!</div>"\n});';
+    const readmeCode = '# ' + projectName + '\n\nA FunctionServer app.\n\n## Run\n\nOpen main.js in Studio and use Lens.run()';
+
+    await saveFileToDisk('repos/' + slug + '/main.js', appCode);
+    await saveFileToDisk('repos/' + slug + '/README.md', readmeCode);
+
+    // Initial commit
+    await ALGO.exec('git -C ' + repoPath + ' add -A');
+    await ALGO.exec('git -C ' + repoPath + ' commit -m "Initial commit: ' + projectName + ' skeleton"');
+
+    // If GitHub configured, create repo and push
+    if (ALGO.github.isConfigured()) {
+      const username = ALGO.github.getUsername();
+      const token = ALGO.github.getToken();
+      console.log('Creating GitHub repo: ' + username + '/' + slug);
+
+      await ALGO.exec('curl -s -X POST -H "Authorization: token ' + token + '" -H "Accept: application/vnd.github.v3+json" https://api.github.com/user/repos -d \'{"name":"' + slug + '","private":false}\'');
+
+      const remoteUrl = 'https://' + token + '@github.com/' + username + '/' + slug + '.git';
+      await ALGO.exec('git -C ' + repoPath + ' remote add origin ' + remoteUrl);
+      await ALGO.exec('git -C ' + repoPath + ' push -u origin master 2>&1 || git -C ' + repoPath + ' push -u origin main 2>&1');
+      console.log('Pushed to GitHub: github.com/' + username + '/' + slug);
+    } else {
+      console.log('GitHub not configured. Use GitHub Auth app to enable push.');
+    }
+  } else {
+    console.log('Opening existing project: ' + slug);
+  }
+
+  // Open in Studio
+  if (typeof Studio !== 'undefined') {
+    Studio.close(repoPath + '/main.js');
+    Studio.open(repoPath + '/main.js');
+  }
+  return 'Project ready: ' + slug;
+};
+
 // ==================== AUTH ====================
 function checkSession() {
   const saved = localStorage.getItem('algo-session');
