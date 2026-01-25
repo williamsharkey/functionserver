@@ -1,7 +1,7 @@
 // GitHub Auth - Manage GitHub credentials for FunctionServer
 // Supports GitHub Device Flow for easy sign-in
 
-const W = 480, H = 500;
+const W = 480, H = 520;
 const STORAGE_KEY = "fs_github_auth";
 const GITHUB_CLIENT_ID = "Ov23liMPasWyBKlzGUDT";
 
@@ -48,96 +48,167 @@ window.GitHubAuth = {
   }
 };
 
-// Device Flow state
-let pollInterval = null;
+// Device Flow state - must be global
+window.ghPollInterval = null;
+window.ghPollCount = 0;
 
 window.startDeviceFlow = async function() {
   output("Starting GitHub sign-in...");
 
   // Step 1: Request device code
-  const codeResult = await Studio.github._exec(
-    'curl -s -X POST "https://github.com/login/device/code" ' +
-    '-H "Accept: application/json" ' +
-    '-d "client_id=' + GITHUB_CLIENT_ID + '&scope=repo"'
-  );
+  let codeResult;
+  try {
+    codeResult = await Studio.github._exec(
+      'curl -s -X POST "https://github.com/login/device/code" ' +
+      '-H "Accept: application/json" ' +
+      '-d "client_id=' + GITHUB_CLIENT_ID + '&scope=repo"'
+    );
+  } catch(e) {
+    output("Network error: " + e.message);
+    return;
+  }
 
   let codeData;
   try {
     codeData = JSON.parse(codeResult);
   } catch(e) {
-    output("Error: " + codeResult);
+    output("Error parsing response:\n" + codeResult);
     return;
   }
 
   if (codeData.error) {
-    output("Error: " + codeData.error_description);
+    output("GitHub error: " + (codeData.error_description || codeData.error));
     return;
   }
 
   const { device_code, user_code, verification_uri, interval } = codeData;
 
-  // Step 2: Show code and open GitHub
-  output("Enter this code on GitHub:\n\n    " + user_code + "\n\nOpening GitHub in new tab...\nWaiting for approval...");
+  if (!user_code || !device_code) {
+    output("Invalid response from GitHub:\n" + JSON.stringify(codeData, null, 2));
+    return;
+  }
+
+  // Step 2: Show code with copy button
+  showCodeUI(user_code, verification_uri);
   window.open(verification_uri, '_blank');
 
   // Step 3: Poll for token
-  const pollMs = (interval || 5) * 1000;
-  pollInterval = setInterval(async () => {
-    const tokenResult = await Studio.github._exec(
-      'curl -s -X POST "https://github.com/login/oauth/access_token" ' +
-      '-H "Accept: application/json" ' +
-      '-d "client_id=' + GITHUB_CLIENT_ID + '&device_code=' + device_code + '&grant_type=urn:ietf:params:oauth:grant-type:device_code"'
-    );
+  window.ghPollCount = 0;
+  const pollMs = Math.max((interval || 5) * 1000, 5000);
+
+  window.ghPollInterval = setInterval(async () => {
+    window.ghPollCount++;
+    updatePollStatus(window.ghPollCount);
+
+    let tokenResult;
+    try {
+      tokenResult = await Studio.github._exec(
+        'curl -s -X POST "https://github.com/login/oauth/access_token" ' +
+        '-H "Accept: application/json" ' +
+        '-d "client_id=' + GITHUB_CLIENT_ID + '&device_code=' + device_code + '&grant_type=urn:ietf:params:oauth:grant-type:device_code"'
+      );
+    } catch(e) {
+      console.log("Poll error:", e);
+      return; // Keep polling
+    }
 
     let tokenData;
     try {
       tokenData = JSON.parse(tokenResult);
     } catch(e) {
+      console.log("Parse error:", tokenResult);
       return; // Keep polling
     }
 
+    console.log("Poll response:", tokenData);
+
     if (tokenData.error === 'authorization_pending') {
-      return; // Keep polling
+      return; // Keep polling - user hasn't approved yet
     }
 
     if (tokenData.error === 'slow_down') {
-      return; // Keep polling (GitHub wants us to slow down)
+      return; // Keep polling
+    }
+
+    if (tokenData.error === 'expired_token') {
+      clearInterval(window.ghPollInterval);
+      output("Code expired. Please try again.");
+      return;
     }
 
     if (tokenData.error) {
-      clearInterval(pollInterval);
-      output("Error: " + tokenData.error_description);
+      clearInterval(window.ghPollInterval);
+      output("Error: " + (tokenData.error_description || tokenData.error));
       return;
     }
 
     if (tokenData.access_token) {
-      clearInterval(pollInterval);
+      clearInterval(window.ghPollInterval);
+      output("Got token! Fetching user info...");
 
       // Get username
-      const userResult = await Studio.github._exec(
-        'curl -s -H "Authorization: token ' + tokenData.access_token + '" https://api.github.com/user'
-      );
-      let userData;
+      let userResult;
       try {
-        userData = JSON.parse(userResult);
-      } catch(e) {
-        userData = { login: 'unknown' };
-      }
+        userResult = await Studio.github._exec(
+          'curl -s -H "Authorization: token ' + tokenData.access_token + '" https://api.github.com/user'
+        );
+        const userData = JSON.parse(userResult);
 
-      saveAuth({ token: tokenData.access_token, username: userData.login });
-      output("Signed in as: " + userData.login);
-      render();
+        if (userData.login) {
+          saveAuth({ token: tokenData.access_token, username: userData.login });
+          output("Successfully signed in as: " + userData.login);
+          setTimeout(render, 1000);
+        } else {
+          saveAuth({ token: tokenData.access_token, username: 'unknown' });
+          output("Signed in (couldn't fetch username)");
+          setTimeout(render, 1000);
+        }
+      } catch(e) {
+        saveAuth({ token: tokenData.access_token, username: 'unknown' });
+        output("Signed in (couldn't fetch username)");
+        setTimeout(render, 1000);
+      }
     }
   }, pollMs);
+
+  // Timeout after 10 minutes
+  setTimeout(() => {
+    if (window.ghPollInterval) {
+      clearInterval(window.ghPollInterval);
+      output("Timed out waiting for approval. Please try again.");
+    }
+  }, 600000);
+};
+
+function showCodeUI(code, url) {
+  const el = document.getElementById("gh-output");
+  if (!el) return;
+
+  el.innerHTML =
+    '<div style="text-align:center;padding:10px;">' +
+    '<div style="color:#aaa;margin-bottom:8px;">Enter this code on GitHub:</div>' +
+    '<div style="font-size:28px;font-weight:bold;letter-spacing:4px;font-family:monospace;background:#000;padding:15px 20px;border-radius:8px;display:inline-block;user-select:all;cursor:text;">' + code + '</div>' +
+    '<div style="margin-top:10px;">' +
+    '<button onclick="navigator.clipboard.writeText(\'' + code + '\');this.textContent=\'Copied!\';setTimeout(()=>this.textContent=\'Copy Code\',2000)" style="padding:8px 16px;background:#333;border:1px solid #555;border-radius:4px;color:#fff;cursor:pointer;">Copy Code</button>' +
+    '</div>' +
+    '<div style="color:#666;margin-top:12px;font-size:12px;">Waiting for approval<span id="poll-dots">...</span></div>' +
+    '</div>';
+}
+
+function updatePollStatus(count) {
+  const dots = document.getElementById("poll-dots");
+  if (dots) {
+    dots.textContent = '.'.repeat((count % 3) + 1);
+  }
 }
 
 window.cancelDeviceFlow = function() {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+  if (window.ghPollInterval) {
+    clearInterval(window.ghPollInterval);
+    window.ghPollInterval = null;
     output("Sign-in cancelled.");
   }
-}
+};
 
 function render() {
   const auth = loadAuth();
