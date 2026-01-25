@@ -340,8 +340,24 @@ function _cv_setIframeContent(id, which, html, baseUrl, stripScripts = false) {
     </script>
   `;
 
+  // CSS to hide loading spinners when scripts are stripped (content won't load anyway)
+  const hideSpinners = stripScripts ? `
+    <style>
+      /* Hide Twitter/X loading indicators */
+      [role="progressbar"], svg[aria-label*="Loading"],
+      [data-testid="cellInnerDiv"] > div > div > div:empty,
+      [class*="loading"], [class*="spinner"], [class*="shimmer"],
+      div[style*="animation"], svg circle[stroke-dasharray] {
+        display: none !important;
+      }
+      /* Hide "What's happening" section spinners */
+      [aria-label="Timeline: Trending now"] [role="progressbar"],
+      aside [role="progressbar"] { display: none !important; }
+    </style>
+  ` : '';
+
   const baseTag = baseUrl ? `<base href="${baseUrl}">` : '';
-  const modifiedHtml = processedHtml.replace('<head>', `<head>${baseTag}${helpers}`);
+  const modifiedHtml = processedHtml.replace('<head>', `<head>${baseTag}${helpers}${hideSpinners}`);
 
   iframe.srcdoc = modifiedHtml;
 }
