@@ -465,10 +465,28 @@ programsMenu.bottom: 383.3px  <span class="cm">// Aligned!</span></code></pre>
 
   <hr>
 
+  <h2>What Came Next: Lens</h2>
+
+  <p>After months of using MCP to debug the browser, we noticed patterns. Claude was wasting tokens reading entire files to make one-line changes. It couldn't "see" UI state without verbose DOM dumps. Every edit was expensive.</p>
+
+  <p>So we built <strong>Lens</strong>—a token-efficient viewport designed for AI. Instead of reading a 1000-line file, Claude can:</p>
+
+  <pre><code>Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// → "42:async function fetchData"</span>
+Lens.setLine(<span class="num">42</span>, <span class="str">'new code'</span>)    <span class="cm">// → "✓ L42"</span>
+Lens.save()                      <span class="cm">// → "✓ saved"</span></code></pre>
+
+  <p>Three calls. Zero file reads. 60x fewer tokens.</p>
+
+  <p>Lens can also render DOM to a text grid, letting Claude "see" the UI without parsing HTML. It's part of <strong>Studio</strong>, a full IDE built for FunctionServer.</p>
+
+  <p><a href="/lens.html">Read the full Lens article →</a></p>
+
+  <hr>
+
   <div class="cta-section">
     <p><strong>Try it:</strong> <a href="/app">functionserver.com/app</a></p>
+    <p><strong>Lens:</strong> <a href="/lens.html">Read about Claude-first UI design</a></p>
     <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
-    <p><strong>Docs:</strong> See CLAUDE.md and CLAUDE-MORPHEUS.md in the repo</p>
   </div>
 
 </article>

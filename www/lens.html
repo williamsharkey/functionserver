@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lens: A Visual Interface Designed for Claude</title>
+<meta name="description" content="What if we designed a UI for AI first? Lens is a token-efficient viewport that lets Claude see, navigate, and edit code faster than traditional file operations.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #09090b;
+  --surface: #18181b;
+  --text: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #52525b;
+  --border: #27272a;
+  --accent: #a78bfa;
+  --green: #86efac;
+  --red: #fca5a5;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%);
+}
+
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  background: rgba(9, 9, 11, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+}
+
+nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+nav a:hover { color: var(--text); }
+
+.nav-cta {
+  background: var(--text);
+  color: var(--bg) !important;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+article {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 120px 24px 80px;
+}
+
+h1 {
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 400;
+  line-height: 1.2;
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
+}
+
+.lead {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 48px;
+  line-height: 1.8;
+}
+
+h2 {
+  font-family: 'Newsreader', 'New York', Georgia, serif;
+  font-size: 28px;
+  font-weight: 400;
+  margin-top: 64px;
+  margin-bottom: 20px;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 500;
+  margin-top: 40px;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+p {
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+strong { color: var(--text); font-weight: 500; }
+em { color: var(--text); font-style: italic; }
+
+ol, ul {
+  margin-bottom: 20px;
+  padding-left: 24px;
+  color: var(--text-secondary);
+}
+
+li { margin-bottom: 8px; }
+
+code {
+  font-family: 'SF Mono', ui-monospace, monospace;
+  font-size: 14px;
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 24px 0;
+  overflow-x: auto;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.cm { color: var(--text-tertiary); }
+.kw { color: var(--accent); }
+.str { color: var(--green); }
+.num { color: #fcd34d; }
+.result { color: var(--text-tertiary); font-style: italic; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0;
+  font-size: 14px;
+}
+
+th, td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+}
+
+td { color: var(--text-secondary); }
+td code { font-size: 12px; }
+
+blockquote {
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  padding: 24px 28px;
+  margin: 48px 0;
+  border-radius: 0 8px 8px 0;
+}
+
+blockquote p {
+  margin-bottom: 0;
+  font-size: 15px;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 32px 0;
+}
+
+.comparison > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.comparison h4 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  color: var(--text-tertiary);
+}
+
+.comparison.bad h4 { color: var(--red); }
+.comparison.good h4 { color: var(--green); }
+
+.comparison pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 48px 0;
+}
+
+.cta-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin: 48px 0;
+  text-align: center;
+}
+
+.cta-section p { margin-bottom: 8px; }
+.cta-section a { color: var(--accent); text-decoration: none; }
+.cta-section a:hover { text-decoration: underline; }
+
+footer {
+  padding: 40px 24px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+footer a { color: var(--accent); text-decoration: none; }
+
+@media (max-width: 600px) {
+  h1 { font-size: 28px; }
+  article { padding: 100px 16px 60px; }
+  nav { padding: 16px 20px; }
+  .comparison { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<nav>
+  <a href="/" class="logo">FunctionServer</a>
+  <a href="/app" class="nav-cta">Enter</a>
+</nav>
+
+<article>
+  <h1>Lens: A Visual Interface Designed for Claude</h1>
+
+  <p class="lead">What if we designed a UI for AI first? Not "AI-assisted" or "AI-compatible"—but <em>AI-native</em>. An interface where Claude can see, navigate, and edit faster than traditional file operations. That's Lens.</p>
+
+  <h2>The Problem: Tokens Are Expensive</h2>
+
+  <p>When Claude edits code through traditional tools, the workflow looks like this:</p>
+
+  <ol>
+    <li>Read entire file (1000+ tokens)</li>
+    <li>Parse and understand structure</li>
+    <li>Generate entire new file (1000+ tokens)</li>
+    <li>Write to disk</li>
+    <li>Repeat for every change</li>
+  </ol>
+
+  <p>A simple one-line fix costs thousands of tokens. And Claude is blind—it can't see if the edit worked without reading the file again.</p>
+
+  <h2>The Solution: Surgical Operations</h2>
+
+  <p>Lens provides a different workflow:</p>
+
+  <div class="comparison">
+    <div>
+      <h4>Traditional (high tokens)</h4>
+      <pre><code><span class="cm">// Read entire file</span>
+Read file.js  <span class="result">// 847 lines</span>
+
+<span class="cm">// Rewrite entire file</span>
+Write file.js <span class="result">// 847 lines</span>
+
+<span class="cm">// ~3000 tokens for one edit</span></code></pre>
+    </div>
+    <div>
+      <h4>Lens (minimal tokens)</h4>
+      <pre><code>Lens.grep(<span class="str">'fetchData'</span>)
+<span class="result">// → "42:async function fetchData"</span>
+
+Lens.setLine(<span class="num">42</span>, <span class="str">'new code'</span>)
+<span class="result">// → "✓ L42"</span>
+
+Lens.save()
+<span class="result">// → "✓ saved"</span>
+
+<span class="cm">// ~50 tokens total</span></code></pre>
+    </div>
+  </div>
+
+  <p><strong>That's 60x fewer tokens for the same edit.</strong></p>
+
+  <h2>The Lens API</h2>
+
+  <h3>Code Navigation</h3>
+
+  <table>
+    <tr><th>Command</th><th>Purpose</th><th>Output</th></tr>
+    <tr><td><code>Lens.code()</code></td><td>View with line numbers</td><td>Numbered lines</td></tr>
+    <tr><td><code>Lens.line(42)</code></td><td>Get specific line</td><td>Line content</td></tr>
+    <tr><td><code>Lens.line(42, 5)</code></td><td>Get lines 42-46</td><td>5 lines</td></tr>
+    <tr><td><code>Lens.grep('pattern')</code></td><td>Find in code</td><td>Matching lines with numbers</td></tr>
+  </table>
+
+  <h3>Surgical Editing</h3>
+
+  <table>
+    <tr><th>Command</th><th>Purpose</th><th>Output</th></tr>
+    <tr><td><code>Lens.setLine(42, 'code')</code></td><td>Replace one line</td><td><code>✓ L42</code></td></tr>
+    <tr><td><code>Lens.insertLine(42, 'code')</code></td><td>Insert at line</td><td><code>✓ +L42</code></td></tr>
+    <tr><td><code>Lens.deleteLine(42)</code></td><td>Delete line</td><td><code>✓ -L42</code></td></tr>
+    <tr><td><code>Lens.replace('a', 'b')</code></td><td>Find/replace all</td><td><code>✓ Replaced</code></td></tr>
+  </table>
+
+  <h3>DOM Viewport</h3>
+
+  <p>Lens can also render any DOM element to a compact text grid:</p>
+
+  <pre><code>Lens.look(<span class="str">'#studio-container'</span>, {width: <span class="num">60</span>, height: <span class="num">20</span>})
+<span class="result">// → "127 elements
+//  0│+ New              Examples...        ▶ Run  💾
+//  1│Files   ↻         API Reference       Git
+//  2│📄 app.js          ALGO.createWindow   Commit
+//  3│📄 utils.js        Create a new window History
+// ..."</span></code></pre>
+
+  <p>Claude can "see" the UI without parsing verbose HTML. Then target elements by position:</p>
+
+  <pre><code>Lens.click(<span class="num">2</span>, <span class="num">3</span>)   <span class="cm">// Click "app.js" at row 2, col 3</span>
+<span class="result">// → "✓ clicked"</span></code></pre>
+
+  <h3>Real-Time Awareness</h3>
+
+  <pre><code>Lens.dash()
+<span class="result">// → "w:Studio|XYZ|Shell e:2 m:app.js"</span>
+<span class="cm">//    windows        errors  modified files</span></code></pre>
+
+  <p>One call shows: open windows, error count, modified files. No polling. No verbose state dumps.</p>
+
+  <h2>Batch Operations</h2>
+
+  <p>Chain multiple operations in a single call:</p>
+
+  <pre><code>Lens.batch([
+  [<span class="str">'setLine'</span>, <span class="num">42</span>, <span class="str">'const x = await fetch(url);'</span>],
+  [<span class="str">'setLine'</span>, <span class="num">43</span>, <span class="str">'const data = await x.json();'</span>],
+  [<span class="str">'save'</span>],
+  [<span class="str">'run'</span>]
+])
+<span class="result">// → "✓setLine ✓setLine ✓save ✓run"</span></code></pre>
+
+  <p><strong>Four operations. One API call. One response.</strong></p>
+
+  <h2>Why This Matters</h2>
+
+  <blockquote>
+    <p>"The best interface for AI isn't a better API. It's an interface designed from scratch for how AI actually works—in tokens, not pixels."</p>
+  </blockquote>
+
+  <p>Lens inverts the traditional assumption. Instead of adapting AI to human interfaces, we built an interface for AI that humans can also use.</p>
+
+  <h3>For Claude:</h3>
+  <ul>
+    <li>See code with line numbers for addressing</li>
+    <li>Edit surgically without reading/rewriting entire files</li>
+    <li>See UI state without parsing HTML</li>
+    <li>Know immediately if edits worked</li>
+    <li>Batch operations to minimize round-trips</li>
+  </ul>
+
+  <h3>For Humans:</h3>
+  <ul>
+    <li>Watch Claude navigate code in real-time</li>
+    <li>See exactly which lines Claude is touching</li>
+    <li>Faster iteration cycles</li>
+    <li>Lower costs (fewer tokens = cheaper)</li>
+  </ul>
+
+  <hr>
+
+  <h2>The Bigger Picture</h2>
+
+  <p>Lens is part of <strong>Studio</strong>, a full IDE built for FunctionServer. But the ideas generalize:</p>
+
+  <ul>
+    <li><strong>Addressable content</strong> — Everything has coordinates (line numbers, row/col positions)</li>
+    <li><strong>Compact output</strong> — Status in one line, not JSON blobs</li>
+    <li><strong>Surgical operations</strong> — Edit the smallest possible unit</li>
+    <li><strong>Batch support</strong> — Multiple operations per call</li>
+    <li><strong>Verification built-in</strong> — Every operation confirms success</li>
+  </ul>
+
+  <p>These principles could apply to any interface. What would a Claude-first spreadsheet look like? A Claude-first design tool? A Claude-first terminal?</p>
+
+  <p>We're just getting started.</p>
+
+  <hr>
+
+  <h2>Try It</h2>
+
+  <p>Lens is built into FunctionServer Studio. To use it:</p>
+
+  <ol>
+    <li>Go to <a href="/app">functionserver.com/app</a></li>
+    <li>Open Studio from the Programs menu (or run <code>~/studio.js</code>)</li>
+    <li>Use Lens commands in the console or via <code>eye</code></li>
+  </ol>
+
+  <pre><code><span class="cm">// Via eye MCP tool</span>
+eye <span class="str">'Lens.code()'</span>
+eye <span class="str">'Lens.setLine(42, "fixed")'</span>
+eye <span class="str">'Lens.save()'</span></code></pre>
+
+  <hr>
+
+  <div class="cta-section">
+    <p><strong>Launch:</strong> <a href="/app">functionserver.com/app</a></p>
+    <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
+    <p><strong>Studio:</strong> <a href="https://github.com/williamsharkey/fs-studio">github.com/williamsharkey/fs-studio</a></p>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/">FunctionServer</a> · Open source under MIT
+</footer>
+
+</body>
+</html>

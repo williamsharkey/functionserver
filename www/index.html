@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FunctionServer</title>
-<meta name="description" content="A cloud operating system where apps are artifacts in a shared VM. AI doesn't automate—it inhabits.">
+<meta name="description" content="A cloud operating system where AI doesn't automate—it inhabits. Apps are artifacts in a shared VM.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
@@ -34,7 +34,6 @@ body {
   font-family: 'Newsreader', 'New York', Georgia, serif;
 }
 
-/* Subtle grid background */
 .grid-bg {
   position: fixed;
   inset: 0;
@@ -46,7 +45,6 @@ body {
   mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%);
 }
 
-/* Navigation */
 nav {
   position: fixed;
   top: 0;
@@ -93,11 +91,9 @@ nav a:hover { color: var(--text); }
   font-size: 13px;
 }
 
-/* Sections */
 section { padding: 120px 24px; }
 .container { max-width: 960px; margin: 0 auto; }
 
-/* Hero */
 #hero {
   min-height: 100vh;
   display: flex;
@@ -171,7 +167,6 @@ section { padding: 120px 24px; }
   border-color: var(--text-tertiary);
 }
 
-/* Main content */
 #main {
   border-top: 1px solid var(--border);
 }
@@ -230,7 +225,6 @@ section { padding: 120px 24px; }
 .code-block .kw { color: var(--accent); }
 .code-block .str { color: #86efac; }
 
-/* Divider */
 .divider {
   width: 48px;
   height: 1px;
@@ -238,7 +232,6 @@ section { padding: 120px 24px; }
   margin: 80px auto;
 }
 
-/* Cards grid */
 .cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -266,7 +259,6 @@ section { padding: 120px 24px; }
   margin: 0;
 }
 
-/* CTA */
 #cta {
   border-top: 1px solid var(--border);
   text-align: center;
@@ -307,7 +299,6 @@ section { padding: 120px 24px; }
   margin-top: 8px;
 }
 
-/* Footer */
 footer {
   padding: 48px 24px;
   border-top: 1px solid var(--border);
@@ -334,7 +325,6 @@ footer p {
   font-size: 12px;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .cards { grid-template-columns: 1fr; }
   nav .links { display: none; }
@@ -351,7 +341,8 @@ footer p {
   <a href="/" class="logo">FunctionServer</a>
   <div class="links">
     <a href="#main">About</a>
-    <a href="/door.html">Article</a>
+    <a href="/door.html">The Door</a>
+    <a href="/lens.html">Lens</a>
     <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
   </div>
   <a href="/app" class="nav-cta">Enter</a>
@@ -359,12 +350,12 @@ footer p {
 
 <section id="hero">
   <div class="container">
-    <p class="hero-eyebrow">An experiment in browser architecture</p>
-    <h1>Where AI <em>inhabits</em><br>the operating system</h1>
-    <p class="hero-desc">A cloud OS where apps are JavaScript artifacts in a shared VM. The AI doesn't automate from outside—it lives in the same address space.</p>
+    <p class="hero-eyebrow">The first Claude-native operating system</p>
+    <h1>Where AI <em>inhabits</em><br>the interface</h1>
+    <p class="hero-desc">A cloud OS where apps are JavaScript artifacts in a shared VM. Claude doesn't automate from outside—it lives in the same address space, sees the same pixels, edits the same DOM.</p>
     <div class="hero-actions">
       <a href="/app" class="btn btn-primary">Launch</a>
-      <a href="/door.html" class="btn btn-ghost">Read the story</a>
+      <a href="/lens.html" class="btn btn-ghost">Read about Lens</a>
     </div>
   </div>
 </section>
@@ -378,15 +369,36 @@ footer p {
       <p>When Claude calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>. The AI doesn't automate the OS—it <strong>inhabits</strong> it.</p>
 
       <div class="code-block">
-<span class="cm">// Claude debugging a menu via MCP</span>
-<span class="kw">const</span> menu = document.getElementById(<span class="str">'programs-menu'</span>);
-<span class="kw">const</span> rect = menu.getBoundingClientRect();
+<span class="cm">// Claude editing code via Lens - 3 calls, zero file reads</span>
+Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// → "42:async function fetchData"</span>
+Lens.setLine(42, <span class="str">'async function fetchData(url) {'</span>)  <span class="cm">// → "✓ L42"</span>
+Lens.save()                        <span class="cm">// → "✓ saved"</span>
+      </div>
+    </div>
 
-<span class="cm">// Result: bottom is 40px too high</span>
-<span class="cm">// Fix it live, no refresh:</span>
-menu.style.setProperty(<span class="str">'bottom'</span>, <span class="str">'40px'</span>, <span class="str">'important'</span>);
+    <div class="divider"></div>
 
-<span class="cm">// User watches it snap into place</span>
+    <div class="prose">
+      <h2>Studio + Lens: Claude-first development</h2>
+      <p>Studio is a full IDE built for FunctionServer. But unlike traditional IDEs, it's designed for <strong>Claude first</strong>—every feature optimized for token efficiency and rapid AI navigation.</p>
+
+      <div class="cards">
+        <div class="card">
+          <h3>Lens viewport</h3>
+          <p>Renders any DOM element to a compact text grid. Claude can "see" the UI without parsing verbose HTML.</p>
+        </div>
+        <div class="card">
+          <h3>Surgical editing</h3>
+          <p><code>Lens.setLine(42, 'code')</code> edits one line. No reading 1000-line files. No full rewrites.</p>
+        </div>
+        <div class="card">
+          <h3>Pulse awareness</h3>
+          <p>Real-time error capture, window state, modified files—all in one compact status line.</p>
+        </div>
+        <div class="card">
+          <h3>Batch operations</h3>
+          <p><code>Lens.batch([['save'], ['run']])</code> chains multiple operations in a single call.</p>
+        </div>
       </div>
     </div>
 
@@ -410,34 +422,8 @@ menu.style.setProperty(<span class="str">'bottom'</span>, <span class="str">'40p
           <p>Inspect live → measure → test fix → verify → commit. The browser becomes a REPL you can poke from anywhere.</p>
         </div>
         <div class="card">
-          <h3>Version the protocol</h3>
-          <p>You can't version a morphing system. So each app becomes its own repo. What you version is the API and conventions.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="prose">
-      <h2>The protocol defines the system</h2>
-      <p>Apps declare inputs, outputs, and file types. The OS enforces conventions. Everything else is fluid.</p>
-
-      <div class="cards">
-        <div class="card">
-          <h3>ALGO API</h3>
-          <p>Create windows, handle files, communicate via pubsub. The bridge between apps and OS.</p>
-        </div>
-        <div class="card">
-          <h3>MCP Endpoint</h3>
-          <p>Any LLM with HTTP access can execute JavaScript, query DOM, click buttons, open apps.</p>
-        </div>
-        <div class="card">
-          <h3>File Type Registry</h3>
-          <p>Apps declare what file types they handle. The OS routes, apps interpret.</p>
-        </div>
-        <div class="card">
-          <h3>Pubsub Channels</h3>
-          <p>Apps communicate via named channels. Decoupled, async, observable.</p>
+          <h3>Token-efficient workflows</h3>
+          <p>Traditional: read file → parse → edit → rewrite. Lens: grep → setLine → save. 90% fewer tokens.</p>
         </div>
       </div>
     </div>
@@ -447,15 +433,16 @@ menu.style.setProperty(<span class="str">'bottom'</span>, <span class="str">'40p
 <section id="cta">
   <div class="container">
     <h2>The door is open</h2>
-    <p>This is early. We don't know what this enables yet.</p>
+    <p>This is early. We're building the first visual interface designed for AI.</p>
     <div class="cta-actions">
       <a href="/app" class="btn btn-primary">Enter FunctionServer</a>
-      <a href="/door.html" class="btn btn-ghost">Read the article</a>
+      <a href="/lens.html" class="btn btn-ghost">Read about Lens</a>
+      <a href="/door.html" class="btn btn-ghost">The original story</a>
       <a href="https://github.com/williamsharkey/functionserver" class="btn btn-ghost">View source</a>
     </div>
     <p class="install-line">
       Or self-host:<br>
-      <code>curl -fsSL https://functionserver.com/install | bash</code>
+      <code>git clone https://github.com/williamsharkey/functionserver && cd functionserver/go && go run .</code>
     </p>
   </div>
 </section>
@@ -464,7 +451,8 @@ menu.style.setProperty(<span class="str">'bottom'</span>, <span class="str">'40p
   <div class="container">
     <div class="links">
       <a href="/app">Launch</a>
-      <a href="/door.html">Article</a>
+      <a href="/door.html">The Door</a>
+      <a href="/lens.html">Lens</a>
       <a href="https://github.com/williamsharkey/functionserver">GitHub</a>
     </div>
     <p>Open source under MIT</p>
