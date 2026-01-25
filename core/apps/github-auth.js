@@ -51,7 +51,7 @@ window.GitHubAuth = {
 // Device Flow state
 let pollInterval = null;
 
-async function startDeviceFlow() {
+window.startDeviceFlow = async function() {
   output("Starting GitHub sign-in...");
 
   // Step 1: Request device code
@@ -131,7 +131,7 @@ async function startDeviceFlow() {
   }, pollMs);
 }
 
-function cancelDeviceFlow() {
+window.cancelDeviceFlow = function() {
   if (pollInterval) {
     clearInterval(pollInterval);
     pollInterval = null;
