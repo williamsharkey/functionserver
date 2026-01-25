@@ -1285,11 +1285,13 @@ func handleFileList(w http.ResponseWriter, r *http.Request) {
 	for _, entry := range entries {
 		info, _ := entry.Info()
 		fileType := "file"
-		if entry.IsDir() {
+		// Check if it's a directory (or symlink to directory)
+		fullPath := filepath.Join(resolved, entry.Name())
+		if stat, err := os.Stat(fullPath); err == nil && stat.IsDir() {
 			fileType = "directory"
 		}
 		size := int64(0)
-		if !entry.IsDir() {
+		if fileType != "directory" {
 			size = info.Size()
 		}
 		files = append(files, map[string]interface{}{
