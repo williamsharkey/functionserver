@@ -1151,6 +1151,42 @@ body {
   50% { transform: scaleY(0.2); }
 }
 
+/* Shadow Bridge tray icon */
+.tray-icon.shadow-tray {
+  position: relative;
+  opacity: 0.4;
+  filter: grayscale(1);
+  transition: opacity 0.3s, filter 0.3s;
+}
+.tray-icon.shadow-tray.connected {
+  opacity: 1;
+  filter: none;
+}
+.tray-icon.shadow-tray .shadow-indicator {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #888;
+  border: 1px solid #666;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.tray-icon.shadow-tray.connected .shadow-indicator {
+  background: #4a4;
+  border-color: #2a2;
+  opacity: 1;
+}
+.tray-icon.shadow-tray.active {
+  animation: shadow-pulse 0.5s ease-in-out;
+}
+@keyframes shadow-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
 #clock {
   background: #c0c0c0;
   border: 2px inset #808080;

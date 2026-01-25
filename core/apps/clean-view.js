@@ -5,9 +5,7 @@ ALGO.app.name = 'Clean View';
 ALGO.app.icon = '🧹';
 
 const _cv_instances = {};
-let _cv_bridge = null;
-let _cv_bridgeReady = false;
-let _cv_bridgeTabs = [];
+// Clean View now uses the global ShadowBridge service instead of its own connection
 
 const _cv_PRESETS = {
   'Twitter/X - Clean Feed': {
@@ -93,96 +91,12 @@ API.register('getImages', () => {
   }
 };
 
-// Content bridge connection
-function _cv_connectBridge() {
-  if (_cv_bridge && _cv_bridge.readyState === WebSocket.OPEN) return;
-
-  // Connect to current server (works for localhost OR remote like functionserver.com)
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${location.host}/api/content-bridge`;
-
-  try {
-    _cv_bridge = new WebSocket(wsUrl);
-
-    _cv_bridge.onopen = () => {
-      console.log('[CleanView] Bridge connected');
-      _cv_bridgeReady = true;
-      _cv_updateBridgeStatus();
-      _cv_bridgeSend({ action: 'listTabs' });
-    };
-
-    _cv_bridge.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        _cv_handleBridgeMessage(msg);
-      } catch (e) {}
-    };
-
-    _cv_bridge.onclose = () => {
-      _cv_bridgeReady = false;
-      _cv_updateBridgeStatus();
-      // Reconnect after delay
-      setTimeout(_cv_connectBridge, 5000);
-    };
-
-    _cv_bridge.onerror = () => {
-      console.log('[CleanView] Bridge error - extension may not be running');
-    };
-  } catch (e) {
-    console.error('[CleanView] Bridge connect failed:', e);
-  }
-}
-
-let _cv_pendingRequests = {};
-
-function _cv_bridgeSend(msg) {
-  if (!_cv_bridge || _cv_bridge.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error('Bridge not connected'));
-  }
-
-  return new Promise((resolve, reject) => {
-    const id = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    msg.id = id;
-
-    _cv_pendingRequests[id] = { resolve, reject };
-
-    // Timeout after 30s
-    setTimeout(() => {
-      if (_cv_pendingRequests[id]) {
-        delete _cv_pendingRequests[id];
-        reject(new Error('Request timeout'));
-      }
-    }, 30000);
-
-    _cv_bridge.send(JSON.stringify(msg));
-  });
-}
-
-function _cv_handleBridgeMessage(msg) {
-  // Handle responses
-  if (msg.id && _cv_pendingRequests[msg.id]) {
-    const { resolve, reject } = _cv_pendingRequests[msg.id];
-    delete _cv_pendingRequests[msg.id];
-
-    if (msg.error) {
-      reject(new Error(msg.error));
-    } else {
-      resolve(msg.result);
-    }
-    return;
-  }
-
-  // Handle tab list updates
-  if (msg.action === 'tabList') {
-    _cv_bridgeTabs = msg.tabs || [];
-    _cv_updateBridgeStatus();
-  }
-}
-
+// Bridge status uses global ShadowBridge service
 function _cv_updateBridgeStatus() {
+  const available = window.ShadowBridge?.available;
   document.querySelectorAll('.cv-bridge-status').forEach(el => {
-    el.textContent = _cv_bridgeReady ? '🔗 Extension' : '⚠️ No Extension';
-    el.style.color = _cv_bridgeReady ? '#4a4' : '#a44';
+    el.textContent = available ? '👻 Shadow Bridge' : '⚠️ No Extension';
+    el.style.color = available ? '#4a4' : '#a44';
   });
 }
 
@@ -283,8 +197,7 @@ function _cv_open() {
   // Always update instances reference to current _cv_instances
   window.CleanView.instances = _cv_instances;
 
-  // Connect to bridge
-  _cv_connectBridge();
+  // Update bridge status display (uses global ShadowBridge service)
   _cv_updateBridgeStatus();
 }
 
@@ -365,24 +278,22 @@ async function _cv_loadProxy(id, url) {
 async function _cv_loadShadow(id, url) {
   const inst = _cv_instances[id];
 
-  if (!_cv_bridgeReady) {
-    throw new Error('Extension not connected. Install FS Bridge extension and run FunctionServer locally.');
+  if (!window.ShadowBridge?.available) {
+    ShadowBridge.promptInstall();
+    throw new Error('Shadow Bridge not available. Click 👻 in taskbar for instructions.');
   }
 
   // Close existing shadow tab if any
   if (inst.shadowTabId) {
     try {
-      await _cv_bridgeSend({ action: 'closeShadow', data: { tabId: inst.shadowTabId } });
+      await ShadowBridge.close(inst.shadowTabId);
     } catch (e) {}
   }
 
   _cv_log(id, 'Opening shadow tab...');
 
-  // Open shadow tab
-  const shadowResult = await _cv_bridgeSend({
-    action: 'openShadow',
-    data: { url, shadowId: `cv_${id}` }
-  });
+  // Open shadow tab via ShadowBridge service
+  const shadowResult = await ShadowBridge.open(url, { shadowId: `cv_${id}` });
 
   inst.shadowTabId = shadowResult.tabId;
   document.getElementById('cv-shadow-info-' + id).textContent = `👻 Tab #${inst.shadowTabId}`;
@@ -394,10 +305,7 @@ async function _cv_loadShadow(id, url) {
   await new Promise(resolve => setTimeout(resolve, 3000));
 
   // Get content from shadow tab
-  const content = await _cv_bridgeSend({
-    action: 'getContent',
-    tabId: inst.shadowTabId
-  });
+  const content = await ShadowBridge.getContent(inst.shadowTabId);
 
   inst.html = content.html;
   inst.url = content.url || url;
@@ -445,27 +353,19 @@ async function _cv_runTransform(id) {
   const transform = document.getElementById('cv-transform-' + id).value;
   inst.transform = transform;
 
-  // If using shadow mode, run transform on the actual shadow tab too
-  if (inst.mode === 'shadow' && inst.shadowTabId && _cv_bridgeReady) {
+  // If using shadow mode, transforms can't run on CSP-restricted sites
+  // Just refresh the content preview
+  if (inst.mode === 'shadow' && inst.shadowTabId && ShadowBridge?.available) {
     try {
-      await _cv_bridgeSend({
-        action: 'eval',
-        tabId: inst.shadowTabId,
-        data: { expression: transform }
-      });
-      _cv_log(id, 'Transform applied to shadow tab');
-
-      // Refresh content from shadow
-      const content = await _cv_bridgeSend({
-        action: 'getContent',
-        tabId: inst.shadowTabId
-      });
+      // Refresh content from shadow tab
+      const content = await ShadowBridge.getContent(inst.shadowTabId);
       inst.html = content.html;
       _cv_setIframeContent(id, 'transformed', inst.html, inst.url, true);
-      _cv_status(id, 'Transform applied (shadow)');
+      _cv_log(id, 'Content refreshed from shadow tab (transforms run on preview only)');
+      _cv_status(id, 'Shadow content refreshed');
       return;
     } catch (e) {
-      _cv_log(id, `Shadow transform error: ${e.message}`, 'warn');
+      _cv_log(id, `Shadow refresh error: ${e.message}`, 'warn');
     }
   }
 
@@ -502,32 +402,18 @@ function _cv_registerAPI(id) {
   try {
     const API = {
       register: (name, fn) => {
-        // For shadow mode, execute in shadow tab
-        if (inst.mode === 'shadow' && inst.shadowTabId && _cv_bridgeReady) {
-          inst.endpoints[name] = async (...args) => {
-            const result = await _cv_bridgeSend({
-              action: 'eval',
-              tabId: inst.shadowTabId,
-              data: { expression: `(${fn.toString()})(...${JSON.stringify(args)})` }
-            });
-            return result;
-          };
-        } else {
-          inst.endpoints[name] = async (...args) => {
-            return iframe.contentWindow.eval(`(${fn.toString()})(...${JSON.stringify(args)})`);
-          };
-        }
-        _cv_log(id, `Registered API: ${name}`);
+        // For shadow mode, eval doesn't work on CSP-restricted sites
+        // Falls back to iframe
+        inst.endpoints[name] = async (...args) => {
+          return iframe.contentWindow.eval(`(${fn.toString()})(...${JSON.stringify(args)})`);
+        };
+        _cv_log(id, `Registered API: ${name} (iframe mode)`);
       },
-      // Query-based registration (works on CSP-restricted sites)
+      // Query-based registration (works on CSP-restricted sites via ShadowBridge)
       registerQuery: (name, selector, mapper) => {
-        if (inst.mode === 'shadow' && inst.shadowTabId && _cv_bridgeReady) {
+        if (inst.mode === 'shadow' && inst.shadowTabId && ShadowBridge?.available) {
           inst.endpoints[name] = async () => {
-            const result = await _cv_bridgeSend({
-              action: 'query',
-              tabId: inst.shadowTabId,
-              data: { selector, all: true }
-            });
+            const result = await ShadowBridge.query(inst.shadowTabId, selector, true);
             // Apply optional mapper function to results
             return mapper ? result.map(mapper) : result;
           };
@@ -593,13 +479,13 @@ async function _cv_savePreset(id) {
 window.addEventListener('beforeunload', () => {
   for (const id in _cv_instances) {
     const inst = _cv_instances[id];
-    if (inst.shadowTabId && _cv_bridgeReady) {
-      _cv_bridgeSend({ action: 'closeShadow', data: { tabId: inst.shadowTabId } });
+    if (inst.shadowTabId && ShadowBridge?.available) {
+      ShadowBridge.close(inst.shadowTabId);
     }
   }
 });
 
-// Export functions and debug objects
+// Export functions
 window._cv_instances = _cv_instances;
 window._cv_open = _cv_open;
 window._cv_load = _cv_load;
@@ -609,11 +495,6 @@ window._cv_loadPreset = _cv_loadPreset;
 window._cv_savePreset = _cv_savePreset;
 window._cv_showTab = _cv_showTab;
 window._cv_PRESETS = _cv_PRESETS;
-window._cv_connectBridge = _cv_connectBridge;
-// Debug exports
-window._cv_getBridge = () => _cv_bridge;
-window._cv_getPendingRequests = () => _cv_pendingRequests;
-window._cv_getBridgeReady = () => _cv_bridgeReady;
 
 // Run the app
 _cv_open();

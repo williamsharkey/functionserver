@@ -640,6 +640,9 @@ async function init() {
   // Connect eye bridge for Claude integration
   connectEyeBridge();
   updateEyeTray();
+
+  // Initialize shadow bridge for browser extension support
+  ShadowBridge.init();
 }
 
 function restoreShaderBackground() {
@@ -1652,8 +1655,282 @@ logout = function() {
     eyeBridgeWs = null;
   }
   eyeBridgeConnected = false;
+  ShadowBridge.disconnect();
   originalLogout();
 };
+
+// ==================== SHADOW BRIDGE SERVICE ====================
+const ShadowBridge = {
+  ws: null,
+  connected: false,
+  ready: false,
+  tabs: [],
+  shadowTabs: new Map(), // tabId -> { url, shadowId }
+  pendingRequests: {},
+  trayVisible: false,
+  MAX_SHADOW_TABS: 10,
+
+  // Check if browser supports the extension (Chrome/Edge)
+  isSupported() {
+    const ua = navigator.userAgent;
+    return /Chrome|Edg/.test(ua) && !/OPR|Opera/.test(ua);
+  },
+
+  // Initialize - only shows tray if supported
+  init() {
+    if (!this.isSupported()) return;
+    this.connect();
+  },
+
+  connect() {
+    if (!sessionToken) return;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/api/content-bridge`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('[ShadowBridge] Connected to server');
+        this.send({ action: 'listTabs' });
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this.handleMessage(msg);
+        } catch (e) {
+          console.error('[ShadowBridge] Parse error:', e);
+        }
+      };
+
+      this.ws.onclose = () => {
+        console.log('[ShadowBridge] Disconnected');
+        this.connected = false;
+        this.ready = false;
+        this.updateTray();
+        // Reconnect after delay
+        setTimeout(() => this.connect(), 5000);
+      };
+
+      this.ws.onerror = () => {
+        console.error('[ShadowBridge] WebSocket error');
+      };
+    } catch (e) {
+      console.error('[ShadowBridge] Connect failed:', e);
+    }
+  },
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.connected = false;
+    this.ready = false;
+  },
+
+  handleMessage(msg) {
+    // Handle tab list (extension is connected) - check this FIRST
+    // because tabList responses also have an id for request routing
+    if (msg.action === 'tabList') {
+      this.tabs = msg.tabs || [];
+      if (!this.connected) {
+        this.connected = true;
+        this.ready = true;
+        console.log('[ShadowBridge] Extension connected');
+        this.showTray();
+        this.updateTray();
+      }
+    }
+
+    // Handle responses to pending requests
+    if (msg.id && this.pendingRequests[msg.id]) {
+      const { resolve, reject } = this.pendingRequests[msg.id];
+      delete this.pendingRequests[msg.id];
+
+      if (msg.error) {
+        // Check for auth required
+        if (msg.error === 'AUTH_REQUIRED') {
+          reject(new Error('AUTH_REQUIRED'));
+        } else {
+          reject(new Error(msg.error));
+        }
+      } else {
+        resolve(msg.result);
+      }
+    }
+  },
+
+  send(msg) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error('Not connected'));
+    }
+
+    return new Promise((resolve, reject) => {
+      const id = 'sb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      msg.id = id;
+      this.pendingRequests[id] = { resolve, reject };
+
+      // Timeout after 30s
+      setTimeout(() => {
+        if (this.pendingRequests[id]) {
+          delete this.pendingRequests[id];
+          reject(new Error('Request timeout'));
+        }
+      }, 30000);
+
+      this.ws.send(JSON.stringify(msg));
+    });
+  },
+
+  // Public API for apps
+  get available() {
+    return this.ready && this.connected;
+  },
+
+  async open(url, options = {}) {
+    if (!this.available) {
+      this.promptInstall();
+      throw new Error('Shadow Bridge not available');
+    }
+
+    if (this.shadowTabs.size >= this.MAX_SHADOW_TABS) {
+      throw new Error(`Maximum ${this.MAX_SHADOW_TABS} shadow tabs allowed`);
+    }
+
+    const shadowId = options.shadowId || 'shadow_' + Date.now();
+    const result = await this.send({
+      action: 'openShadow',
+      data: { url, shadowId }
+    });
+
+    this.shadowTabs.set(result.tabId, { url, shadowId });
+    this.pulseIcon();
+    this.updateTray();
+    return result;
+  },
+
+  async close(tabId) {
+    if (!this.available) return;
+
+    await this.send({
+      action: 'closeShadow',
+      data: { tabId }
+    });
+    this.shadowTabs.delete(tabId);
+    this.updateTray();
+  },
+
+  async query(tabId, selector, all = true) {
+    if (!this.available) throw new Error('Shadow Bridge not available');
+
+    this.pulseIcon();
+    return await this.send({
+      action: 'query',
+      tabId,
+      data: { selector, all }
+    });
+  },
+
+  async getContent(tabId) {
+    if (!this.available) throw new Error('Shadow Bridge not available');
+
+    this.pulseIcon();
+    return await this.send({
+      action: 'getContent',
+      tabId
+    });
+  },
+
+  async click(tabId, selector) {
+    if (!this.available) throw new Error('Shadow Bridge not available');
+
+    return await this.send({
+      action: 'click',
+      tabId,
+      data: { selector }
+    });
+  },
+
+  // Convenience method: open, wait, query, close
+  async fetch(url, options = {}) {
+    const { selector, waitFor = 3000 } = options;
+
+    const tab = await this.open(url);
+    await new Promise(r => setTimeout(r, waitFor));
+
+    let result;
+    if (selector) {
+      result = await this.query(tab.tabId, selector);
+    } else {
+      result = await this.getContent(tab.tabId);
+    }
+
+    if (!options.keepOpen) {
+      await this.close(tab.tabId);
+    }
+
+    return result;
+  },
+
+  // Tray management
+  showTray() {
+    if (this.trayVisible) return;
+    this.trayVisible = true;
+
+    systemTray.add('shadow', '👻<span class="shadow-indicator"></span>', {
+      className: 'shadow-tray',
+      title: 'Shadow Bridge',
+      onClick: () => this.showPanel()
+    });
+  },
+
+  updateTray() {
+    const el = systemTray.get('shadow');
+    if (!el) return;
+
+    el.classList.toggle('connected', this.connected);
+    el.title = this.connected
+      ? `Shadow Bridge (${this.shadowTabs.size} tabs)`
+      : 'Shadow Bridge (disconnected)';
+  },
+
+  pulseIcon() {
+    const el = systemTray.get('shadow');
+    if (!el) return;
+    el.classList.remove('active');
+    void el.offsetWidth;
+    el.classList.add('active');
+  },
+
+  showPanel() {
+    // Show status and instructions
+    const tabs = Array.from(this.shadowTabs.entries()).map(([id, info]) =>
+      `• ${info.url.slice(0, 40)}... (${id})`
+    ).join('\n') || 'No active shadow tabs';
+
+    const status = this.connected
+      ? `✅ Connected\n\nActive Shadow Tabs:\n${tabs}`
+      : `❌ Extension not connected\n\n📋 To install:\n1. Open chrome://extensions\n2. Enable Developer mode\n3. Load unpacked: functionserver/extension\n4. Click the extension, set server URL\n5. Refresh this page`;
+
+    algoSpeak(status);
+  },
+
+  promptInstall() {
+    if (!this.isSupported()) return;
+    if (this.connected) return;
+
+    algoSpeak('Shadow Bridge extension needed. Click 👻 in taskbar for instructions.');
+    this.showTray();
+    this.updateTray();
+  }
+};
+
+// Export for apps
+window.ShadowBridge = ShadowBridge;
 
 // ==================== BOOT ====================
 checkSession();
