@@ -901,7 +901,18 @@ function handleKeyDown(e) {
 
 function handleContextMenu(e) {
   const desktop = document.getElementById('desktop');
-  if (e.target === desktop || desktop.contains(e.target)) {
+
+  // Check if click is inside a window - if so, don't show desktop menu
+  const windowEl = e.target.closest('.window');
+  if (windowEl) {
+    // Apps can define their own contextmenu handler on their content
+    // If they don't, we just prevent the default browser menu
+    e.preventDefault();
+    return;
+  }
+
+  // Only show desktop context menu when clicking on desktop itself
+  if (e.target === desktop || (desktop.contains(e.target) && !e.target.closest('.window'))) {
     e.preventDefault();
     showDesktopContextMenu(e);
   }
