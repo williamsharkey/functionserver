@@ -66,15 +66,15 @@ function render() {
   html += "<div style=\"margin-bottom:12px;\">";
   html += "<label style=\"display:block;margin-bottom:4px;color:#aaa;\">GitHub Username:</label>";
   html += "<input type=\"text\" id=\"gh-username\" value=\"" + username + "\" ";
-  html += "style=\"width:100%;padding:8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#fff;\">";
+  html += "style=\"width:100%;padding:8px;background:#fff;border:1px solid #ccc;border-radius:4px;color:#000;\">";
   html += "</div>";
 
   html += "<div style=\"margin-bottom:12px;\">";
   html += "<label style=\"display:block;margin-bottom:4px;color:#aaa;\">Personal Access Token:</label>";
   html += "<input type=\"password\" id=\"gh-token\" value=\"" + token + "\" ";
-  html += "style=\"width:100%;padding:8px;background:#1a1a2e;border:1px solid #444;border-radius:4px;color:#fff;\">";
+  html += "style=\"width:100%;padding:8px;background:#fff;border:1px solid #ccc;border-radius:4px;color:#000;\">";
   html += "<div style=\"font-size:11px;color:#888;margin-top:4px;\">";
-  html += "Create at: <a href=\"https://github.com/settings/tokens/new\" target=\"_blank\" style=\"color:#88f;\">github.com/settings/tokens</a> (needs repo scope)";
+  html += "Create at: <a href=\"https://github.com/settings/tokens/new?scopes=repo&description=FunctionServer\" target=\"_blank\" style=\"color:#88f;\">github.com/settings/tokens</a> (needs repo scope)";
   html += "</div></div>";
 
   html += "<div style=\"display:flex;gap:8px;margin-top:15px;\">";
