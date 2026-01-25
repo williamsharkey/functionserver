@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teaching a Small AI to Write GPU Code</title>
+    <style>
+        :root {
+            --bg: #fefefe;
+            --text: #1a1a1a;
+            --accent: #c41230;
+            --code-bg: #f5f5f5;
+            --border: #e0e0e0;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            line-height: 1.7;
+            color: var(--text);
+            background: var(--bg);
+        }
+        h1 {
+            font-size: 2.5rem;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
+            font-weight: normal;
+        }
+        .subtitle {
+            font-size: 1.3rem;
+            color: #666;
+            margin-bottom: 2rem;
+            font-style: italic;
+        }
+        .byline {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+        h2 {
+            font-size: 1.5rem;
+            margin-top: 3rem;
+            color: var(--accent);
+            font-weight: normal;
+        }
+        p { margin: 1.2rem 0; }
+        .pullquote {
+            font-size: 1.4rem;
+            font-style: italic;
+            color: var(--accent);
+            border-left: 3px solid var(--accent);
+            padding-left: 1.5rem;
+            margin: 2rem 0;
+        }
+        code {
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 0.85em;
+            background: var(--code-bg);
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+        }
+        pre {
+            background: var(--code-bg);
+            padding: 1rem;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            border: 1px solid var(--border);
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .result {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th { font-weight: bold; }
+        .caption {
+            font-size: 0.85rem;
+            color: #666;
+            text-align: center;
+            margin-top: -0.5rem;
+            margin-bottom: 2rem;
+        }
+        .insight-box {
+            background: #fff8e6;
+            border: 1px solid #ffd966;
+            padding: 1rem 1.5rem;
+            border-radius: 5px;
+            margin: 2rem 0;
+        }
+        .insight-box h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+            color: #996600;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teaching a Small AI to Write GPU Code</h1>
+    <p class="subtitle">How a 3-billion parameter language model learned to program a GPU virtual machine, and what it taught us about the limits of machine learning</p>
+    <p class="byline">January 2026 | Ruffian Project</p>
+
+    <p>The challenge seemed almost absurd: take Qwen 2.5 Coder, a language model small enough to run on a laptop, and teach it to write code for Ruffian, an experimental GPU virtual machine that compiles C directly to Metal shaders. The output format was unusual. The VM had quirks. And we had no training data&mdash;just a 2-gigabyte model and a lot of curiosity.</p>
+
+    <p>What we discovered was both encouraging and strange. The model learned almost immediately. But its failures revealed something deeper&mdash;not just about how small language models think, but about bugs in the very system we were testing.</p>
+
+    <h2>The Setup</h2>
+
+    <p>Ruffian is a research project that compiles simple C code directly to GPU shaders. It runs on Apple Silicon, takes a C function as input, and returns the computed result. The catch: it uses an unusual output format that no model has ever seen before.</p>
+
+    <pre><code>int add(int a, int b) { return a + b; }|add(3,5)|8</code></pre>
+
+    <p>That's it. Code, followed by a pipe, then the function call, another pipe, and the expected result. All on one line, no markdown, no explanation. We wanted to see if Qwen could learn this format through pure in-context learning&mdash;no fine-tuning, no special training. Just a prompt with examples.</p>
+
+    <h2>The First Surprise: Instant Learning</h2>
+
+    <p>Our first prompt was minimal:</p>
+
+    <pre><code>You write C code for the Ruffian GPU VM.
+Output format: code|call(args)|expected
+
+Example:
+int add(int a,int b){return a+b;}|add(3,5)|8
+
+Write a function that returns 42:</code></pre>
+
+    <p>Qwen responded immediately:</p>
+
+    <pre><code>int fortyTwo(){return 42;}|fortyTwo()|42</code></pre>
+
+    <p class="pullquote">"It learned the format in one shot. That wasn't surprising. What was surprising was what it got wrong."</p>
+
+    <p>The format was perfect. But when we tried harder problems, things got interesting. We asked for factorial:</p>
+
+    <pre><code>int factorial(int n){for(int i=1;i<=n;i++){n*=i;}return n;}|factorial(5)|120</code></pre>
+
+    <p>Syntactically fine. Algorithmically reasonable. But it failed. Ruffian doesn't support <code>for</code> loops. It also doesn't support <code>*=</code>. The model was writing standard C99, but Ruffian only understands a strict subset.</p>
+
+    <h2>Teaching the Rules</h2>
+
+    <p>We evolved the prompt, adding explicit constraints:</p>
+
+    <pre><code>RULES:
+- Use while (not for)
+- Use if/else (not ?:)
+- Use i = i + 1 (not i++)
+- One line, no markdown</code></pre>
+
+    <p>With these rules, success rate jumped from 60% to 85%. The model adapted instantly. Given examples of <code>while</code> loops, it stopped using <code>for</code>. Given examples of explicit assignment, it stopped using <code>++</code>. The pattern-matching was almost too good.</p>
+
+    <table>
+        <tr><th>Phase</th><th>Prompt Size</th><th>Success Rate</th></tr>
+        <tr><td>Minimal (1 example)</td><td>~100 tokens</td><td>60%</td></tr>
+        <tr><td>Extended (10 examples)</td><td>~400 tokens</td><td>85%</td></tr>
+        <tr><td>With patterns</td><td>~600 tokens</td><td>90%+</td></tr>
+    </table>
+    <p class="caption">Success rate increased dramatically with more examples and explicit rules</p>
+
+    <h2>The GCD Bug</h2>
+
+    <p>Things got strange when we asked for the greatest common divisor algorithm. Qwen produced textbook-perfect code:</p>
+
+    <pre><code>int gcd(int a, int b) { while(b != 0) { int t = b; b = a % b; a = t; } return a; }</code></pre>
+
+    <p>It should have worked. The algorithm was correct. But Ruffian returned 0 for every input.</p>
+
+    <p>After hours of debugging, we found it: <code>while(b != 0)</code> was the problem. The Ruffian VM had a bug where the <code>!=</code> operator in while conditions didn't work correctly. The loop never executed.</p>
+
+    <p>We filed Bug #42. Then we updated the prompt:</p>
+
+    <pre><code>RULES:
+...
+- Use > 0 (not != 0)</code></pre>
+
+    <p>Qwen immediately adapted:</p>
+
+    <pre><code>int gcd(int a, int b) { while(b > 0) { int t = b; b = a % b; a = t; } return a; }</code></pre>
+
+    <div class="insight-box">
+        <h3>Unexpected Discovery</h3>
+        <p>The AI didn't find the bug. But by systematically testing its outputs, we discovered compiler issues that would have taken weeks to find through normal testing. The model became an accidental fuzzer.</p>
+    </div>
+
+    <h2>Project Euler: Pushing the Limits</h2>
+
+    <p>To find Qwen's ceiling, we tried Project Euler problems&mdash;classic programming challenges that require both algorithmic thinking and implementation skill.</p>
+
+    <p><strong>PE001</strong> (sum of multiples of 3 or 5 below 1000): Initially, Qwen used <code>if</code> inside <code>while</code>, which triggered another Ruffian bug. We taught it a workaround using step-based loops:</p>
+
+    <pre><code>int pe001() {
+    int r=0; int i=3;
+    while(i<1000) { r=r+i; i=i+3; }   // multiples of 3
+    i=5;
+    while(i<1000) { r=r+i; i=i+5; }   // multiples of 5
+    i=15;
+    while(i<1000) { r=r-i; i=i+15; }  // subtract double-counted
+    return r;
+}|pe001()|233168</code></pre>
+
+    <p><span class="result pass">PASS</span> Qwen learned the inclusion-exclusion pattern from one example.</p>
+
+    <p><strong>PE002</strong> (sum of even Fibonacci numbers below 4 million): Qwen produced working code on the first try:</p>
+
+    <pre><code>int pe002(){int a=0;int b=1;int sum=0;while(a<4000000){if(a%2==0){sum=sum+a;}int t=a+b;a=b;b=t;}return sum;}|pe002()|4613732</code></pre>
+
+    <p><span class="result pass">PASS</span> Interestingly, this used <code>if</code> inside <code>while</code>&mdash;which we thought was broken. The bug was more subtle than we realized.</p>
+
+    <p><strong>PE005</strong> (smallest number divisible by 1-20): This required computing LCM iteratively using inline GCD. Qwen copied the pattern perfectly:</p>
+
+    <pre><code>int pe005(){int r=1;int i=2;while(i<=20){int a=r;int b=i;while(b>0){int t=b;b=a%b;a=t;}r=r/a*i;i=i+1;}return r;}|pe005()|232792560</code></pre>
+
+    <p><span class="result fail">FAIL</span> Returns 20, not 232792560.</p>
+
+    <h2>The Nested Loop Mystery</h2>
+
+    <p>PE005's failure led us down a rabbit hole. The code was algorithmically correct. We tested it in regular C&mdash;it worked. But in Ruffian, something was corrupting state when the outer loop ran more than once.</p>
+
+    <p>We isolated the bug systematically:</p>
+
+    <table>
+        <tr><th>Test</th><th>Result</th></tr>
+        <tr><td>Simple nested while (counting)</td><td><span class="result pass">PASS</span></td></tr>
+        <tr><td>Nested while with assignment after inner loop</td><td><span class="result pass">PASS</span></td></tr>
+        <tr><td>Nested while with inline GCD (1 iteration)</td><td><span class="result pass">PASS</span></td></tr>
+        <tr><td>Nested while with inline GCD (2 iterations)</td><td><span class="result fail">FAIL</span></td></tr>
+    </table>
+
+    <p>The pattern was specific: when the outer loop ran twice, with an inner loop that modified multiple local variables, the second iteration's values were corrupted.</p>
+
+    <p>Bug #43 filed. But it got worse.</p>
+
+    <p>We tried to solve PE004 (largest palindrome product). Qwen generated perfect code with triple-nested loops: outer loop for first number, middle loop for second number, inner loop for reversing digits. The algorithm was correct. It crashed.</p>
+
+    <table>
+        <tr><th>Pattern</th><th>Result</th></tr>
+        <tr><td>while { while { simple } }</td><td><span class="result pass">PASS</span></td></tr>
+        <tr><td>while { while { while { simple } } }</td><td><span class="result fail">STACK OVERFLOW</span></td></tr>
+    </table>
+
+    <p>The VM's stack pointer jumped to 2.1 million&mdash;clearly corrupted. This wasn't a Qwen problem. This was a hard limit in the compiler. No amount of prompt engineering could work around a system that crashes on triple-nested loops.</p>
+
+    <p class="pullquote">"We set out to test a language model. We ended up debugging a compiler."</p>
+
+    <h2>What We Learned</h2>
+
+    <p><strong>About small language models:</strong> A 3B parameter model, running locally on a laptop, can learn unusual output formats and programming constraints through pure in-context learning. It doesn't need fine-tuning. It needs good examples.</p>
+
+    <p><strong>About prompt engineering:</strong> Explicit rules work. "Use while, not for" is more effective than hoping the model infers patterns. Negative examples help less than positive ones.</p>
+
+    <p><strong>About testing:</strong> AI-generated code is an excellent fuzzer. The model's "mistakes" often reveal edge cases that humans miss. When code that should work doesn't, look at the compiler before blaming the model.</p>
+
+    <p><strong>About the future:</strong> There's something poetic about using AI to program AI-adjacent systems. Ruffian runs on GPUs. Qwen runs on GPUs. One day, they might run on the same chip, the model generating code that executes alongside its own inference.</p>
+
+    <h2>Try It Yourself</h2>
+
+    <p>The prompt that worked best:</p>
+
+    <pre><code>You write C code for the Ruffian GPU VM. Output: code|call(args)|expected
+
+RULES:
+- Use while (not for)
+- Use if/else (not ?:)
+- Use > 0 (not != 0)
+- Use i = i + 1 (not i++)
+- ONLY use int type
+- One line, no markdown
+
+EXAMPLES:
+int factorial(int n){int r=1;int i=1;while(i<=n){r=r*i;i=i+1;}return r;}|factorial(5)|120
+int fib(int n){int a=0;int b=1;int i=0;while(i<n){int t=a+b;a=b;b=t;i=i+1;}return a;}|fib(10)|55
+int gcd(int a,int b){while(b>0){int t=b;b=a%b;a=t;}return a;}|gcd(48,18)|6
+
+[YOUR TASK HERE]</code></pre>
+
+    <p>Works with Qwen 2.5 Coder 3B Instruct (Q4_K quantization, ~2GB). Runs locally. No API required.</p>
+
+    <hr style="margin: 3rem 0;">
+    <p style="font-size: 0.85rem; color: #666;">This experiment is part of the <a href="https://github.com/ruffian-project">Ruffian Project</a>&mdash;exploring GPU-native computing and AI introspection. Code and detailed results available at <a href="https://github.com/ruffian-project/ruffian-coder">ruffian-coder</a>.</p>
+</body>
+</html>
