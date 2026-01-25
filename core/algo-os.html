@@ -104,6 +104,11 @@ let contextTarget = null;
 let submenuCloseTimeout = null;
 let topZIndex = 100;  // Track highest z-index for window stacking
 
+// Expose key state on window for dynamically loaded apps (Studio, etc.)
+Object.defineProperty(window, 'savedFiles', { get: () => savedFiles, set: v => savedFiles = v });
+Object.defineProperty(window, 'windows', { get: () => windows });
+Object.defineProperty(window, 'systemApps', { get: () => systemApps });
+
 // ==================== FILE API ====================
 // Desktop files now live on disk at ~/
 
