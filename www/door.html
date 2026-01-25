@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>I Let Claude Debug My Browser From the Command Line</title>
+<title>I Let AI Debug My Browser From the Command Line</title>
 <meta name="description" content="An AI that can see, inspect, and manipulate a web browser in real-time via MCP.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -276,7 +276,7 @@ footer a { color: var(--accent); text-decoration: none; }
 </nav>
 
 <article>
-  <h1>I Let Claude Debug My Browser From the Command Line</h1>
+  <h1>I Let AI Debug My Browser From the Command Line</h1>
 
   <p class="lead">Today I built something that felt like crossing a threshold: an AI that can see, inspect, and manipulate a web browser in real-time from completely outside it. Not Puppeteer. Not Selenium. An LLM with authenticated API access to your DOM.</p>
 
@@ -290,7 +290,7 @@ footer a { color: var(--accent); text-decoration: none; }
     <li><strong>Browser Tools</strong> - <code>algo_eval</code>, <code>algo_getState</code>, <code>algo_query</code>, <code>algo_click</code>, <code>algo_openApp</code>, etc.</li>
   </ol>
 
-  <p>The result: Claude (or any LLM with HTTP access) can execute JavaScript in your browser, query the DOM, click buttons, and open apps - all via curl.</p>
+  <p>The result: any LLM with HTTP access can execute JavaScript in your browser, query the DOM, click buttons, and open apps - all via curl.</p>
 
   <pre><code>curl -X POST https://functionserver.com/api/mcp \
   -H "Authorization: Bearer $TOKEN" \
@@ -388,11 +388,11 @@ render();</code></pre>
   <p>We ended up with two personas:</p>
 
   <ul>
-    <li><strong>Neo</strong> - Claude running inside FunctionServer's terminal (has shell access, runs on server)</li>
-    <li><strong>Morpheus</strong> - Claude running anywhere else (laptop, cloud, phone), controlling the browser via MCP</li>
+    <li><strong>Neo</strong> - AI running inside FunctionServer's terminal (has shell access, runs on server)</li>
+    <li><strong>Morpheus</strong> - AI running anywhere else (laptop, cloud, phone), controlling the browser via MCP</li>
   </ul>
 
-  <p>For users without shell access, there's Claude Eyes - a window that shows an ASCII Claude face watching you, logging MCP activity as it happens:</p>
+  <p>For users without shell access, there's AI Eyes - a window that shows an ASCII face watching you, logging MCP activity as it happens:</p>
 
   <div class="ascii-art">+-----------------------------+
 |      o            o        |  <- blinks when commands arrive
@@ -410,7 +410,7 @@ render();</code></pre>
     <strong>A note on architecture</strong>
     <p>Live patching exists. Browser automation exists. MITM injection exists. So what's actually new here?</p>
     <p>In a traditional setup, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client, the app is a server.</p>
-    <p>In FunctionServer, apps <em>are</em> JavaScript artifacts running in the same VM that MCP accesses. When Claude calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the real running function. The AI doesn't automate the OS—it inhabits it.</p>
+    <p>In FunctionServer, apps <em>are</em> JavaScript artifacts running in the same VM that MCP accesses. When an AI calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the real running function. The AI doesn't automate the OS—it inhabits it.</p>
     <p>This creates an interesting question: how do you version control a system that's constantly being reshaped?</p>
     <p>You don't. Each app becomes its own repository. What you version is the <em>protocol</em>—the ALGO API, the conventions for file type registration, the pubsub message format. The OS defines the rules. Users and AI agents shape whatever they want within them.</p>
     <p>We're not sure yet what this topology enables. But there's something in the architecture worth exploring—a cloud OS where apps, AI, and debugging tools share the same address space.</p>
@@ -425,7 +425,7 @@ render();</code></pre>
   <p>New way: inspect live -> measure -> test fix -> verify -> commit</p>
 
   <p><strong>2. AI assistants can have eyes.</strong></p>
-  <p>Most AI coding assistants are blind. They read your code, guess what it does, and hope. With MCP, Claude can query element positions, check computed styles, inject test fixes, and verify they worked - all before touching your source files.</p>
+  <p>Most AI coding assistants are blind. They read your code, guess what it does, and hope. With MCP, AI can query element positions, check computed styles, inject test fixes, and verify they worked - all before touching your source files.</p>
 
   <p><strong>3. It's surprisingly precise.</strong></p>
   <p>When I needed to align two menus, I didn't guess. I measured:</p>
@@ -455,7 +455,7 @@ programsMenu.bottom: 383.3px  <span class="cm">// Aligned!</span></code></pre>
 
   <p>The upside: an AI can now help you in ways that weren't possible before. It can see what you see. It can try things and check if they worked. It can debug CSS without asking you to "open DevTools and tell me what you see."</p>
 
-  <p>Is that worth the tradeoff? For me, watching Claude inject a WebGL shader as my desktop background from a terminal on my laptop - yeah, it's worth it.</p>
+  <p>Is that worth the tradeoff? For me, watching AI inject a WebGL shader as my desktop background from a terminal on my laptop - yeah, it's worth it.</p>
 
   <hr>
 
@@ -467,9 +467,9 @@ programsMenu.bottom: 383.3px  <span class="cm">// Aligned!</span></code></pre>
 
   <h2>What Came Next: Lens</h2>
 
-  <p>After months of using MCP to debug the browser, we noticed patterns. Claude was wasting tokens reading entire files to make one-line changes. It couldn't "see" UI state without verbose DOM dumps. Every edit was expensive.</p>
+  <p>After months of using MCP to debug the browser, we noticed patterns. AI was wasting tokens reading entire files to make one-line changes. It couldn't "see" UI state without verbose DOM dumps. Every edit was expensive.</p>
 
-  <p>So we built <strong>Lens</strong>—a token-efficient viewport designed for AI. Instead of reading a 1000-line file, Claude can:</p>
+  <p>So we built <strong>Lens</strong>—a token-efficient viewport designed for AI. Instead of reading a 1000-line file, AI can:</p>
 
   <pre><code>Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// → "42:async function fetchData"</span>
 Lens.setLine(<span class="num">42</span>, <span class="str">'new code'</span>)    <span class="cm">// → "✓ L42"</span>
@@ -485,7 +485,7 @@ Lens.save()                      <span class="cm">// → "✓ saved"</span></cod
 
   <div class="cta-section">
     <p><strong>Try it:</strong> <a href="/app">functionserver.com/app</a></p>
-    <p><strong>Lens:</strong> <a href="/lens.html">Read about Claude-first UI design</a></p>
+    <p><strong>Lens:</strong> <a href="/lens.html">Read about AI-first UI design</a></p>
     <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
   </div>
 

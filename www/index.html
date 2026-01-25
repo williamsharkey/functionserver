@@ -350,9 +350,9 @@ footer p {
 
 <section id="hero">
   <div class="container">
-    <p class="hero-eyebrow">The first Claude-native operating system</p>
+    <p class="hero-eyebrow">The first AI-native operating system</p>
     <h1>Where AI <em>inhabits</em><br>the interface</h1>
-    <p class="hero-desc">A cloud OS where apps are JavaScript artifacts in a shared VM. Claude doesn't automate from outside—it lives in the same address space, sees the same pixels, edits the same DOM.</p>
+    <p class="hero-desc">A cloud OS where apps are JavaScript artifacts in a shared VM. AI doesn't automate from outside—it lives in the same address space, sees the same pixels, edits the same DOM.</p>
     <div class="hero-actions">
       <a href="/app" class="btn btn-primary">Launch</a>
       <a href="/lens.html" class="btn btn-ghost">Read about Lens</a>
@@ -365,11 +365,11 @@ footer p {
     <div class="prose">
       <h2>Apps are artifacts in a shared VM</h2>
       <p>In most systems, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client; the app is a server.</p>
-      <p>In FunctionServer, apps <em>are</em> the JavaScript. They're functions and objects living in the same VM that an AI agent can access via MCP.</p>
-      <p>When Claude calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>. The AI doesn't automate the OS—it <strong>inhabits</strong> it.</p>
+      <p>In FunctionServer, apps <em>are</em> the JavaScript. They're functions and objects living in the same VM that any AI agent can access via MCP.</p>
+      <p>When an AI calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>. The AI doesn't automate the OS—it <strong>inhabits</strong> it.</p>
 
       <div class="code-block">
-<span class="cm">// Claude editing code via Lens - 3 calls, zero file reads</span>
+<span class="cm">// AI editing code via Lens - 3 calls, zero file reads</span>
 Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// → "42:async function fetchData"</span>
 Lens.setLine(42, <span class="str">'async function fetchData(url) {'</span>)  <span class="cm">// → "✓ L42"</span>
 Lens.save()                        <span class="cm">// → "✓ saved"</span>
@@ -379,13 +379,13 @@ Lens.save()                        <span class="cm">// → "✓ saved"</span>
     <div class="divider"></div>
 
     <div class="prose">
-      <h2>Studio + Lens: Claude-first development</h2>
-      <p>Studio is a full IDE built for FunctionServer. But unlike traditional IDEs, it's designed for <strong>Claude first</strong>—every feature optimized for token efficiency and rapid AI navigation.</p>
+      <h2>Studio + Lens: AI-first development</h2>
+      <p>Studio is a full IDE built for FunctionServer. But unlike traditional IDEs, it's designed for <strong>AI first</strong>—every feature optimized for token efficiency and rapid navigation.</p>
 
       <div class="cards">
         <div class="card">
           <h3>Lens viewport</h3>
-          <p>Renders any DOM element to a compact text grid. Claude can "see" the UI without parsing verbose HTML.</p>
+          <p>Renders any DOM element to a compact text grid. AI can "see" the UI without parsing verbose HTML.</p>
         </div>
         <div class="card">
           <h3>Surgical editing</h3>
@@ -411,7 +411,7 @@ Lens.save()                        <span class="cm">// → "✓ saved"</span>
       <div class="cards">
         <div class="card">
           <h3>AI with eyes</h3>
-          <p>Claude can query element positions, check computed styles, inject test fixes, and verify they worked—before touching source files.</p>
+          <p>AI can query element positions, check computed styles, inject test fixes, and verify they worked—before touching source files.</p>
         </div>
         <div class="card">
           <h3>Morphing artifacts</h3>

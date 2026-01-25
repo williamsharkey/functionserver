@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lens: A Visual Interface Designed for Claude</title>
-<meta name="description" content="What if we designed a UI for AI first? Lens is a token-efficient viewport that lets Claude see, navigate, and edit code faster than traditional file operations.">
+<title>Lens: A Visual Interface Designed for AI</title>
+<meta name="description" content="What if we designed a UI for AI first? Lens is a token-efficient viewport that lets LLMs see, navigate, and edit code faster than traditional file operations.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
@@ -400,13 +400,13 @@ footer a { color: var(--accent); text-decoration: none; }
 </nav>
 
 <article>
-  <h1>Lens: A Visual Interface Designed for Claude</h1>
+  <h1>Lens: A Visual Interface Designed for AI</h1>
 
-  <p class="lead">What if we designed a UI for AI first? Not "AI-assisted" or "AI-compatible"—but <em>AI-native</em>. An interface where Claude can see, navigate, and edit faster than traditional file operations. That's Lens.</p>
+  <p class="lead">What if we designed a UI for AI first? Not "AI-assisted" or "AI-compatible"—but <em>AI-native</em>. An interface where LLMs can see, navigate, and edit faster than traditional file operations. That's Lens.</p>
 
-  <h2>How Claude Sees</h2>
+  <h2>How AI Sees</h2>
 
-  <p>When you look at FunctionServer, you see a desktop with windows, icons, and buttons. When Claude looks through Lens, it sees something different:</p>
+  <p>When you look at FunctionServer, you see a desktop with windows, icons, and buttons. When an AI looks through Lens, it sees something different:</p>
 
   <div class="vision-compare">
     <div class="human-view">
@@ -432,7 +432,7 @@ footer a { color: var(--accent); text-decoration: none; }
       <p class="caption">Pixels, colors, spatial layout</p>
     </div>
     <div class="claude-view">
-      <h4>What Claude Sees</h4>
+      <h4>What AI Sees</h4>
       <pre><code>Lens.look(<span class="str">'body'</span>)
 <span class="result"> 0123456789012345678901234
 0│Studio - app.js
@@ -448,13 +448,13 @@ Lens.at(<span class="num">1</span>, <span class="num">16</span>)
     </div>
   </div>
 
-  <p>Claude doesn't parse pixels or decode screenshots. It receives a <strong>text grid with coordinates</strong>—every element addressable by row and column. Want to click "Run"? <code>Lens.click(1, 16)</code>. Want to know what's there first? <code>Lens.at(1, 16)</code>.</p>
+  <p>The AI doesn't parse pixels or decode screenshots. It receives a <strong>text grid with coordinates</strong>—every element addressable by row and column. Want to click "Run"? <code>Lens.click(1, 16)</code>. Want to know what's there first? <code>Lens.at(1, 16)</code>.</p>
 
   <p>This isn't OCR or computer vision. It's a <strong>native text representation</strong> designed for how language models actually work.</p>
 
   <h2>The Problem: Tokens Are Expensive</h2>
 
-  <p>When Claude edits code through traditional tools, the workflow looks like this:</p>
+  <p>When an AI edits code through traditional tools, the workflow looks like this:</p>
 
   <ol>
     <li>Read entire file (1000+ tokens)</li>
@@ -464,7 +464,7 @@ Lens.at(<span class="num">1</span>, <span class="num">16</span>)
     <li>Repeat for every change</li>
   </ol>
 
-  <p>A simple one-line fix costs thousands of tokens. And Claude is blind—it can't see if the edit worked without reading the file again.</p>
+  <p>A simple one-line fix costs thousands of tokens. And the AI is blind—it can't see if the edit worked without reading the file again.</p>
 
   <h2>The Solution: Surgical Operations</h2>
 
@@ -533,7 +533,7 @@ Lens.save()
 //  3│📄 utils.js        Create a new window History
 // ..."</span></code></pre>
 
-  <p>Claude can "see" the UI without parsing verbose HTML. Then target elements by position:</p>
+  <p>The AI can "see" the UI without parsing verbose HTML. Then target elements by position:</p>
 
   <pre><code>Lens.click(<span class="num">2</span>, <span class="num">3</span>)   <span class="cm">// Click "app.js" at row 2, col 3</span>
 <span class="result">// → "✓ clicked"</span></code></pre>
@@ -556,7 +556,7 @@ Lens.save()
 Lens.do(<span class="str">'#toolbar'</span>, <span class="num">0</span>)  <span class="cm">// Click "Run" button</span>
 <span class="result">// → "✓ clicked"</span></code></pre>
 
-  <p><strong>Why this matters:</strong> Instead of guessing what elements exist or parsing HTML, Claude can inspect a location and see exactly what actions are available. This enables exploration of unfamiliar UIs.</p>
+  <p><strong>Why this matters:</strong> Instead of guessing what elements exist or parsing HTML, the AI can inspect a location and see exactly what actions are available. This enables exploration of unfamiliar UIs.</p>
 
   <h3>State & Helpers</h3>
 
@@ -624,7 +624,7 @@ Lens.dash()
 
   <p>Lens inverts the traditional assumption. Instead of adapting AI to human interfaces, we built an interface for AI that humans can also use.</p>
 
-  <h3>For Claude:</h3>
+  <h3>For AI:</h3>
   <ul>
     <li>See code with line numbers for addressing</li>
     <li>Edit surgically without reading/rewriting entire files</li>
@@ -635,17 +635,17 @@ Lens.dash()
 
   <h3>For Humans:</h3>
   <ul>
-    <li>Watch Claude navigate code in real-time</li>
-    <li>See exactly which lines Claude is touching</li>
+    <li>Watch AI navigate code in real-time</li>
+    <li>See exactly which lines are being touched</li>
     <li>Faster iteration cycles</li>
     <li>Lower costs (fewer tokens = cheaper)</li>
   </ul>
 
   <h3>Live Collaboration</h3>
 
-  <p>When Claude uses Lens, you see everything happen in real-time. Buttons click. Text appears. Windows open. It's not a transcript of what happened—it's happening right now, in your browser.</p>
+  <p>When AI uses Lens, you see everything happen in real-time. Buttons click. Text appears. Windows open. It's not a transcript of what happened—it's happening right now, in your browser.</p>
 
-  <p>Ask Claude to "open Studio and fix the bug in app.js" and watch as it:</p>
+  <p>Ask the AI to "open Studio and fix the bug in app.js" and watch as it:</p>
   <ol>
     <li>Opens the Studio window</li>
     <li>Navigates to app.js</li>
@@ -660,9 +660,9 @@ Lens.dash()
 
   <h2>The Bridge: Real-Time Connection</h2>
 
-  <p>Lens is powered by <strong>eye</strong>—a WebSocket bridge that gives Claude direct access to the browser's JavaScript VM. No HTTP overhead. No JSON wrapping. Just raw JavaScript execution in ~25ms.</p>
+  <p>Lens is powered by <strong>eye</strong>—a WebSocket bridge that gives AI direct access to the browser's JavaScript VM. No HTTP overhead. No JSON wrapping. Just raw JavaScript execution in ~25ms.</p>
 
-  <pre><code><span class="cm">// From Claude's terminal, execute JS in your browser</span>
+  <pre><code><span class="cm">// From the terminal, execute JS in your browser</span>
 eye <span class="str">'document.title'</span>
 <span class="result">→ "FunctionServer"</span>
 
@@ -677,7 +677,7 @@ eye <span class="str">'Lens.look("#desktop")'</span>
 eye <span class="str">'Lens.click(2, 0)'</span>
 <span class="result">→ "✓ clicked \"game.js\""</span></code></pre>
 
-  <p>The connection is bidirectional. Claude can:</p>
+  <p>The connection is bidirectional. The AI can:</p>
   <ul>
     <li><strong>Read</strong> — Query DOM, check state, inspect elements</li>
     <li><strong>Write</strong> — Click buttons, fill forms, modify content</li>
@@ -685,7 +685,7 @@ eye <span class="str">'Lens.click(2, 0)'</span>
     <li><strong>Watch</strong> — See changes instantly as they happen</li>
   </ul>
 
-  <p>This isn't remote control through an API. Claude is <em>inside</em> the browser, with the same access as code running in the console.</p>
+  <p>This isn't remote control through an API. The AI is <em>inside</em> the browser, with the same access as code running in the console.</p>
 
   <hr>
 
@@ -701,7 +701,7 @@ eye <span class="str">'Lens.click(2, 0)'</span>
     <li><strong>Verification built-in</strong> — Every operation confirms success</li>
   </ul>
 
-  <p>These principles could apply to any interface. What would a Claude-first spreadsheet look like? A Claude-first design tool? A Claude-first terminal?</p>
+  <p>These principles could apply to any interface. What would an AI-first spreadsheet look like? An AI-first design tool? An AI-first terminal?</p>
 
   <p>We're just getting started.</p>
 
