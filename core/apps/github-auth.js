@@ -92,11 +92,14 @@ window.startDeviceFlow = async function() {
   showCodeUI(user_code, verification_uri);
   window.open(verification_uri, '_blank');
 
-  // Step 3: Poll for token
+  // Step 3: Poll for token using setTimeout (not setInterval) to respect rate limits
   window.ghPollCount = 0;
-  const pollMs = Math.max((interval || 5) * 1000, 5000);
+  window.ghPollDelay = Math.max((interval || 5) * 1000, 5000); // Start with GitHub's recommended interval
+  window.ghPolling = true;
 
-  window.ghPollInterval = setInterval(async () => {
+  async function pollForToken() {
+    if (!window.ghPolling) return;
+
     window.ghPollCount++;
     updatePollStatus(window.ghPollCount);
 
@@ -109,7 +112,8 @@ window.startDeviceFlow = async function() {
       );
     } catch(e) {
       console.log("Poll error:", e);
-      return; // Keep polling
+      window.ghPollInterval = setTimeout(pollForToken, window.ghPollDelay);
+      return;
     }
 
     let tokenData;
@@ -117,33 +121,40 @@ window.startDeviceFlow = async function() {
       tokenData = JSON.parse(tokenResult);
     } catch(e) {
       console.log("Parse error:", tokenResult);
-      return; // Keep polling
+      window.ghPollInterval = setTimeout(pollForToken, window.ghPollDelay);
+      return;
     }
 
     console.log("Poll response:", tokenData);
 
     if (tokenData.error === 'authorization_pending') {
-      return; // Keep polling - user hasn't approved yet
+      // Keep polling at current rate
+      window.ghPollInterval = setTimeout(pollForToken, window.ghPollDelay);
+      return;
     }
 
     if (tokenData.error === 'slow_down') {
-      return; // Keep polling
+      // GitHub wants us to slow down - use their suggested interval + 1 second buffer
+      window.ghPollDelay = ((tokenData.interval || 10) + 1) * 1000;
+      console.log("Slowing down to", window.ghPollDelay, "ms");
+      window.ghPollInterval = setTimeout(pollForToken, window.ghPollDelay);
+      return;
     }
 
     if (tokenData.error === 'expired_token') {
-      clearInterval(window.ghPollInterval);
+      window.ghPolling = false;
       output("Code expired. Please try again.");
       return;
     }
 
     if (tokenData.error) {
-      clearInterval(window.ghPollInterval);
+      window.ghPolling = false;
       output("Error: " + (tokenData.error_description || tokenData.error));
       return;
     }
 
     if (tokenData.access_token) {
-      clearInterval(window.ghPollInterval);
+      window.ghPolling = false;
       output("Got token! Fetching user info...");
 
       // Get username
@@ -169,12 +180,16 @@ window.startDeviceFlow = async function() {
         setTimeout(render, 1000);
       }
     }
-  }, pollMs);
+  }
+
+  // Start polling
+  window.ghPollInterval = setTimeout(pollForToken, window.ghPollDelay);
 
   // Timeout after 10 minutes
   setTimeout(() => {
-    if (window.ghPollInterval) {
-      clearInterval(window.ghPollInterval);
+    if (window.ghPolling) {
+      window.ghPolling = false;
+      clearTimeout(window.ghPollInterval);
       output("Timed out waiting for approval. Please try again.");
     }
   }, 600000);
@@ -203,8 +218,9 @@ function updatePollStatus(count) {
 }
 
 window.cancelDeviceFlow = function() {
-  if (window.ghPollInterval) {
-    clearInterval(window.ghPollInterval);
+  if (window.ghPolling) {
+    window.ghPolling = false;
+    clearTimeout(window.ghPollInterval);
     window.ghPollInterval = null;
     output("Sign-in cancelled.");
   }
