@@ -229,7 +229,7 @@ ALGO.createWindow({
   icon: "🔐",
   width: W,
   height: H,
-  content: "<div id=\"gh-auth-content\" style=\"width:100%;height:100%;overflow:auto;\"></div>"
+  content: "<div id=\"gh-auth-content\" style=\"width:100%;height:100%;overflow:auto;background:#1a1a2e;color:#fff;\"></div>"
 });
 
 render();
