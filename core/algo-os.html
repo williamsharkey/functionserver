@@ -274,9 +274,10 @@ async function fetchDesktopFiles(path = '~/') {
     if (!res.ok) return [];
     const data = await res.json();
     // Return both files and directories, sorted: folders first, then files
+    const basePath = path.endsWith('/') ? path : path + '/';
     const items = (data.files || []).map(f => ({
       name: f.name,
-      path: (path === '~/' ? '~/' : path + '/') + f.name,
+      path: basePath + f.name,
       size: f.size,
       modified: f.modified,
       isDir: f.type === 'directory',
@@ -1620,20 +1621,45 @@ function updateBreadcrumbs() {
   }
 
   // Build breadcrumb trail
-  const parts = desktopPath.split('/').filter(p => p);
   let html = '<span class="breadcrumb" onclick="navigateToPath(\'~\')">🏠 Desktop</span>';
-  let path = '';
 
-  parts.forEach((part, i) => {
-    path += '/' + part;
-    const isLast = i === parts.length - 1;
+  if (desktopPath === '~/' || desktopPath.startsWith('~/')) {
+    // Home folder path
     html += '<span class="breadcrumb-sep">›</span>';
-    if (isLast) {
-      html += '<span class="breadcrumb active">' + escapeHtml(part) + '</span>';
+    const subPath = desktopPath.slice(2); // Remove ~/
+    if (!subPath) {
+      html += '<span class="breadcrumb active">Home</span>';
     } else {
-      html += '<span class="breadcrumb" onclick="navigateToPath(\'' + escapeHtml(path) + '\')">' + escapeHtml(part) + '</span>';
+      html += '<span class="breadcrumb" onclick="navigateToPath(\'~/\')">Home</span>';
+      const parts = subPath.split('/').filter(p => p);
+      let path = '~/';
+      parts.forEach((part, i) => {
+        path += part;
+        const isLast = i === parts.length - 1;
+        html += '<span class="breadcrumb-sep">›</span>';
+        if (isLast) {
+          html += '<span class="breadcrumb active">' + escapeHtml(part) + '</span>';
+        } else {
+          html += '<span class="breadcrumb" onclick="navigateToPath(\'' + escapeHtml(path) + '\')">' + escapeHtml(part) + '</span>';
+          path += '/';
+        }
+      });
     }
-  });
+  } else {
+    // Absolute path (shouldn't normally happen)
+    const parts = desktopPath.split('/').filter(p => p);
+    let path = '';
+    parts.forEach((part, i) => {
+      path += '/' + part;
+      const isLast = i === parts.length - 1;
+      html += '<span class="breadcrumb-sep">›</span>';
+      if (isLast) {
+        html += '<span class="breadcrumb active">' + escapeHtml(part) + '</span>';
+      } else {
+        html += '<span class="breadcrumb" onclick="navigateToPath(\'' + escapeHtml(path) + '\')">' + escapeHtml(part) + '</span>';
+      }
+    });
+  }
 
   breadcrumbs.innerHTML = html;
 }
@@ -1652,14 +1678,8 @@ function navigateToPath(path) {
 }
 
 function openHomeFolder() {
-  // Navigate to user's home directory
-  const homePath = '/home/' + (currentUser || 'guest');
-  // For root user, use /root
-  if (currentUser === 'root') {
-    navigateToPath('/root');
-  } else {
-    navigateToPath(homePath);
-  }
+  // Navigate to user's home directory (~ is resolved by backend)
+  navigateToPath('~/');
 }
 
 function openFolder(path) {
