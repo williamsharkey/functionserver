@@ -1452,6 +1452,9 @@ function handleKeyDown(e) {
 }
 
 function handleContextMenu(e) {
+  // Shift+right-click passes through to browser's native context menu (for DevTools)
+  if (e.shiftKey) return;
+
   const desktop = document.getElementById('desktop');
 
   // Check if click is inside a window - if so, don't show desktop menu
@@ -1466,6 +1469,7 @@ function handleContextMenu(e) {
   // Only show desktop context menu when clicking on desktop itself
   if (e.target === desktop || (desktop.contains(e.target) && !e.target.closest('.window'))) {
     e.preventDefault();
+    contextTarget = e.target; // Store for inspect
     showDesktopContextMenu(e);
   }
 }
@@ -2008,10 +2012,27 @@ function showDesktopContextMenu(e) {
     '<div class="ctx-item" onclick="openNotepad()">📝 New Text File</div>' +
     '<div class="ctx-item" onclick="openJSIDE()">📜 New App</div>' +
     '<div class="ctx-separator"></div>' +
-    '<div class="ctx-item" onclick="refreshDesktop()">🔄 Refresh</div>';
+    '<div class="ctx-item" onclick="refreshDesktop()">🔄 Refresh</div>' +
+    '<div class="ctx-separator"></div>' +
+    '<div class="ctx-item" onclick="inspectElement()">🔍 Inspect Element</div>';
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   menu.classList.add('visible');
+}
+
+function inspectElement() {
+  hideContextMenu();
+  // Chrome DevTools inspect() function - only works when DevTools is open
+  if (typeof inspect === 'function' && contextTarget) {
+    inspect(contextTarget);
+  } else {
+    // Fallback: show element info in console and open DevTools hint
+    console.log('Inspect target:', contextTarget);
+    console.log('Tag:', contextTarget?.tagName);
+    console.log('Classes:', contextTarget?.className);
+    console.log('ID:', contextTarget?.id);
+    showToast('Open DevTools (F12) then right-click again, or use Shift+right-click for native menu');
+  }
 }
 
 async function refreshDesktop() {
