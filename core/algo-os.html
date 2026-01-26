@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Function Server</title>
+<script>
+// Early theme loading - runs before CSS to prevent flash
+(function() {
+  var theme = localStorage.getItem('fs-theme');
+  if (theme) {
+    var style = document.createElement('style');
+    style.id = 'fs-theme-override';
+    style.textContent = theme;
+    document.head.appendChild(style);
+  }
+})();
+</script>
 <link rel="stylesheet" href="algo-os.css">
 </head>
 <body>
