@@ -1978,7 +1978,8 @@ function createDesktopIcon(ic) {
   icon.dataset.id = ic.id;
   icon.style.left = ic.x + 'px';
   icon.style.top = ic.y + 'px';
-  icon.innerHTML = '<div class="icon-img">' + ic.icon + '</div><div class="icon-label">' + escapeHtml(ic.name) + '</div>';
+  const iconHtml = typeof ic.icon === 'object' ? renderIcon(ic.icon) : ic.icon;
+  icon.innerHTML = '<div class="icon-img">' + iconHtml + '</div><div class="icon-label">' + escapeHtml(ic.name) + '</div>';
 
   icon.ondblclick = async () => {
     if (ic.action === 'openFolder') {
@@ -2707,15 +2708,19 @@ function inspectElement() {
   } else {
     // Fallback: trigger native context menu by setting passthrough flag
     _inspectPassthrough = true;
-    // Create and dispatch a new contextmenu event at the stored position
-    const evt = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: _lastContextPos.x,
-      clientY: _lastContextPos.y,
-      button: 2
-    });
-    (contextTarget || document.elementFromPoint(_lastContextPos.x, _lastContextPos.y) || document.body).dispatchEvent(evt);
+    // Small delay to ensure context menu is fully hidden before triggering native menu
+    setTimeout(() => {
+      const target = contextTarget || document.elementFromPoint(_lastContextPos.x, _lastContextPos.y) || document.body;
+      const evt = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: _lastContextPos.x,
+        clientY: _lastContextPos.y,
+        button: 2,
+        view: window
+      });
+      target.dispatchEvent(evt);
+    }, 50);
   }
 }
 
