@@ -184,16 +184,82 @@ function getIcon(iconKey, fallback) {
   // If it's already an emoji/character, check if it's a known key
   if (ICON_DEFS[iconKey]) {
     const custom = customIcons[iconKey];
-    if (custom) return wrapIconWithColor(custom);
+    if (custom) return renderIcon(custom);
     return ICON_DEFS[iconKey].default;
   }
   // Otherwise return the passed icon directly
   return fallback || iconKey;
 }
 
+// Render icon - supports simple string or complex object format
+// Simple: "📁" or "λ"
+// Complex: { main: "📁", sub: "🔒", blend: "normal", scale: 0.5, pos: "br", skewX: 0, skewY: 0 }
+// Dynamic: { main: "📄", text: "Hello\nWorld", mono: true, dynamic: true }
+function renderIcon(icon, fileContent) {
+  if (typeof icon === 'string') {
+    return wrapIconWithColor(icon);
+  }
+
+  if (typeof icon !== 'object') return icon;
+
+  const main = icon.main || '📄';
+  const sub = icon.sub || icon.text || '';
+  const blend = icon.blend || 'normal';
+  const scale = icon.scale || (icon.text ? 0.3 : 0.5);
+  const pos = icon.pos || 'br'; // tl, tr, bl, br, c (center)
+  const mono = icon.mono || false;
+  const skewX = icon.skewX || 0;
+  const skewY = icon.skewY || 0;
+  const offsetX = icon.offsetX || 0;
+  const offsetY = icon.offsetY || 0;
+
+  // If dynamic icon with file content
+  let displaySub = sub;
+  if (icon.dynamic && fileContent) {
+    displaySub = formatIconPreview(fileContent, icon.lines || 4, icon.chars || 12);
+  }
+
+  if (!displaySub) {
+    return wrapIconWithColor(main);
+  }
+
+  // Build layered icon HTML
+  const posStyles = {
+    tl: 'top:0;left:0;',
+    tr: 'top:0;right:0;',
+    bl: 'bottom:0;left:0;',
+    br: 'bottom:0;right:0;',
+    c: 'top:50%;left:50%;'
+  };
+
+  // Build transform string
+  let transform = '';
+  if (pos === 'c') transform += 'translate(-50%,-50%) ';
+  if (skewX || skewY) transform += `skew(${skewX}deg, ${skewY}deg) `;
+  if (offsetX || offsetY) transform += `translate(${offsetX}px, ${offsetY}px)`;
+
+  const subStyle = `position:absolute;${posStyles[pos] || posStyles.br}font-size:${scale * 100}%;mix-blend-mode:${blend};${mono ? 'font-family:monospace;' : ''}${transform ? 'transform:' + transform.trim() + ';' : ''}`;
+
+  // Handle multiline text
+  const subHtml = displaySub.includes('\n')
+    ? '<pre style="margin:0;line-height:1.1;font-size:inherit;">' + escapeHtml(displaySub) + '</pre>'
+    : escapeHtml(displaySub);
+
+  return `<span class="layered-icon"><span class="icon-main">${wrapIconWithColor(main)}</span><span class="icon-sub" style="${subStyle}">${subHtml}</span></span>`;
+}
+
+// Format file content for icon preview
+function formatIconPreview(content, maxLines = 4, maxChars = 12) {
+  const lines = content.split('\n').slice(0, maxLines);
+  return lines.map(line => {
+    const trimmed = line.trimStart();
+    return trimmed.substring(0, maxChars);
+  }).join('\n');
+}
+
 function wrapIconWithColor(icon) {
   // Check if it's a unicode character (not emoji) that needs color
-  if (icon.length <= 2 && !/\p{Emoji}/u.test(icon)) {
+  if (typeof icon === 'string' && icon.length <= 2 && !/\p{Emoji}/u.test(icon)) {
     return '<span style="color:var(--text)">' + icon + '</span>';
   }
   return icon;
