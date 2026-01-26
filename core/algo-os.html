@@ -680,6 +680,34 @@ ALGO.lens = {
     const root = this._projectRoot(path) || (typeof Studio !== 'undefined' && Studio.getTabs?.()[0] ? this._projectRoot(Studio.getTabs()[0]) : null);
     if (!root) return '✗ no project detected';
     return await ALGO.exec('git -C ' + root + ' log --oneline -' + n);
+  },
+
+  // Create new project (wraps setupHappyPath)
+  project: async function(name) {
+    if (!name) return '✗ provide project name';
+    const result = await setupHappyPath(name);
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return ALGO.github.isConfigured() ? '✓ ' + slug + ' → github' : '✓ ' + slug;
+  },
+
+  // Help - list available Lens commands
+  help: function() {
+    return [
+      'Lens.grep(pattern)     - Find in code',
+      'Lens.code()            - View with line numbers',
+      'Lens.line(n, count)    - Get line(s)',
+      'Lens.setLine(n, code)  - Replace line',
+      'Lens.insertLine(n, code) - Insert at line',
+      'Lens.deleteLine(n)     - Delete line',
+      'Lens.save()            - Save file',
+      'Lens.run()             - Run code',
+      'Lens.commit(msg)       - Git commit',
+      'Lens.push()            - Push to GitHub',
+      'Lens.diff()            - Show changes',
+      'Lens.gitStatus()       - Git status',
+      'Lens.log(n)            - Recent commits',
+      'Lens.project(name)     - Create new project'
+    ].join('\n');
   }
 };
 window.Lens = ALGO.lens;
