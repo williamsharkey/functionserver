@@ -2073,24 +2073,39 @@ function openSubmenu(el) {
     clearTimeout(submenuCloseTimeout);
     submenuCloseTimeout = null;
   }
-  document.querySelectorAll('.start-item.has-sub').forEach(item => {
-    if (item !== el) item.classList.remove('submenu-open');
-  });
+  // Only close sibling submenus, not all submenus
+  const parent = el.parentElement;
+  if (parent) {
+    parent.querySelectorAll(':scope > .start-item.has-sub').forEach(item => {
+      if (item !== el) item.classList.remove('submenu-open');
+    });
+  }
   el.classList.add('submenu-open');
 
-  // Fix submenu position to align with start menu bottom
-  const submenu = el.querySelector('.start-submenu');
+  // Fix submenu position
+  const submenu = el.querySelector(':scope > .start-submenu');
   if (submenu) {
-    const startMenu = document.getElementById('start-menu');
-    const startRect = startMenu.getBoundingClientRect();
+    const isNested = el.closest('.start-submenu') !== null;
     const taskbarHeight = window.innerHeight - document.getElementById('taskbar').getBoundingClientRect().top;
 
-    // Use setProperty with !important to override CSS
-    submenu.style.setProperty('position', 'fixed', 'important');
-    submenu.style.setProperty('left', (startRect.right - 2) + 'px', 'important');
-    submenu.style.setProperty('bottom', taskbarHeight + 'px', 'important');
-    submenu.style.setProperty('top', 'auto', 'important');
-    submenu.style.setProperty('max-height', (window.innerHeight - taskbarHeight - 20) + 'px', 'important');
+    if (isNested) {
+      // Nested submenu: position relative to parent item
+      const parentRect = el.getBoundingClientRect();
+      submenu.style.setProperty('position', 'fixed', 'important');
+      submenu.style.setProperty('left', parentRect.right + 'px', 'important');
+      submenu.style.setProperty('top', parentRect.top + 'px', 'important');
+      submenu.style.setProperty('bottom', 'auto', 'important');
+      submenu.style.setProperty('max-height', (window.innerHeight - taskbarHeight - 20) + 'px', 'important');
+    } else {
+      // Top-level submenu: align with start menu
+      const startMenu = document.getElementById('start-menu');
+      const startRect = startMenu.getBoundingClientRect();
+      submenu.style.setProperty('position', 'fixed', 'important');
+      submenu.style.setProperty('left', (startRect.right - 2) + 'px', 'important');
+      submenu.style.setProperty('bottom', taskbarHeight + 'px', 'important');
+      submenu.style.setProperty('top', 'auto', 'important');
+      submenu.style.setProperty('max-height', (window.innerHeight - taskbarHeight - 20) + 'px', 'important');
+    }
   }
 }
 
