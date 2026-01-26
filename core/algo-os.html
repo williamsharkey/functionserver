@@ -64,16 +64,23 @@
 <div id="menubar">
   <div id="menubar-left">
     <div id="system-icon" onclick="toggleStartMenu()">ƒ</div>
-    <div id="active-app-name">Finder</div>
+    <div id="active-app-name">Desktop</div>
     <div id="app-menus"></div>
   </div>
   <div id="menubar-right">
     <div id="menubar-status">
-      <span class="status-icon" id="status-eye" title="Eye Bridge">👁</span>
-      <span class="status-icon" id="status-shadow" style="display:none;" title="Shadow Tabs">👻</span>
+      <span class="status-icon" id="status-eye" title="Eye Bridge" onclick="algoSpeak(eyeBridgeConnected ? 'Eye Bridge connected' : 'Eye Bridge disconnected')">👁</span>
+      <span class="status-icon" id="status-shadow" title="Shadow Tabs">👻</span>
     </div>
+    <div id="menubar-user" onclick="toggleUserMenu()"></div>
     <div id="menubar-clock"></div>
   </div>
+</div>
+<div id="user-menu">
+  <div class="user-menu-item" onclick="copyAuthInfo();hideUserMenu();">Copy Claude Auth</div>
+  <div class="user-menu-item" onclick="openSettings();hideUserMenu();">Account Settings</div>
+  <div class="user-menu-separator"></div>
+  <div class="user-menu-item" onclick="logout();hideUserMenu();">Log Out</div>
 </div>
 
 <!-- Legacy taskbar (Classic theme) -->
@@ -1281,6 +1288,8 @@ function loginSuccess(username, token, systemUser) {
   sessionToken = token;
   isSystemUser = systemUser || false;
   localStorage.setItem('algo-session', JSON.stringify({ username, token, isSystemUser }));
+  if (isSystemUser) localStorage.setItem('fs_system_user', 'true');
+  else localStorage.removeItem('fs_system_user');
   hideLogin();
   const icon = isSystemUser ? getIcon('login') : getIcon('user');
   document.getElementById('user-indicator').innerHTML = icon + ' ' + username + (isSystemUser ? ' (system)' : '') +
@@ -1290,10 +1299,11 @@ function loginSuccess(username, token, systemUser) {
   loadSystemApps();
   init();
   refreshAllIcons();
+  updateMenubarUser();
 }
 
 function copyAuthInfo(event) {
-  event.stopPropagation();
+  if (event) event.stopPropagation();
   const server = window.location.origin.replace('https://', 'wss://').replace('http://', 'ws://') + '/api/eye';
   const config = JSON.stringify({ token: sessionToken, server: server }, null, 2);
 
@@ -1392,6 +1402,7 @@ async function init() {
   updateClock();
   setInterval(updateClock, 1000);
   refreshAllIcons();
+  updateMenubarUser();
 
   // Global event listeners
   document.addEventListener('click', globalClick);
@@ -2308,8 +2319,11 @@ function runApp(appOrCode, name) {
 
 // ==================== UTILITIES ====================
 function globalClick(e) {
-  if (!e.target.closest('#start-menu') && !e.target.closest('#start-btn')) {
+  if (!e.target.closest('#start-menu') && !e.target.closest('#start-btn') && !e.target.closest('#system-icon')) {
     hideStartMenu();
+  }
+  if (!e.target.closest('#user-menu') && !e.target.closest('#menubar-user')) {
+    hideUserMenu();
   }
   if (!e.target.closest('#context-menu')) {
     hideContextMenu();
@@ -2346,8 +2360,30 @@ function updateMenubarAppName() {
   if (activeWindow) {
     appNameEl.textContent = activeWindow.title || activeWindow.appName || 'Window';
   } else {
-    appNameEl.textContent = 'Finder';
+    appNameEl.textContent = 'Desktop';
   }
+}
+
+function updateMenubarUser() {
+  const userEl = document.getElementById('menubar-user');
+  if (!userEl) return;
+  if (currentUser) {
+    const isSystem = sessionToken && localStorage.getItem('fs_system_user') === 'true';
+    userEl.textContent = currentUser + (isSystem ? ' (system)' : '');
+    userEl.style.display = '';
+  } else {
+    userEl.style.display = 'none';
+  }
+}
+
+function toggleUserMenu() {
+  const menu = document.getElementById('user-menu');
+  if (menu) menu.classList.toggle('visible');
+}
+
+function hideUserMenu() {
+  const menu = document.getElementById('user-menu');
+  if (menu) menu.classList.remove('visible');
 }
 
 function escapeHtml(s) {
@@ -2618,6 +2654,7 @@ function sendEyeResponse(id, result, isError) {
 }
 
 function updateEyeTray() {
+  // Legacy taskbar tray
   let el = systemTray.get('eye');
   if (!el) {
     el = systemTray.add('eye', '👁️<span class="eye-indicator"></span>', {
@@ -2638,6 +2675,13 @@ function updateEyeTray() {
   if (el) {
     el.classList.toggle('connected', eyeBridgeConnected);
     el.title = eyeBridgeConnected ? 'Claude Eye Bridge (connected)' : 'Claude Eye Bridge (disconnected)';
+  }
+
+  // Menubar status icon
+  const menubarEye = document.getElementById('status-eye');
+  if (menubarEye) {
+    menubarEye.classList.toggle('connected', eyeBridgeConnected);
+    menubarEye.title = eyeBridgeConnected ? 'Eye Bridge (connected)' : 'Eye Bridge (disconnected)';
   }
 }
 
@@ -2884,29 +2928,57 @@ const ShadowBridge = {
     if (this.trayVisible) return;
     this.trayVisible = true;
 
+    // Legacy taskbar tray
     systemTray.add('shadow', '👻<span class="shadow-indicator"></span>', {
       className: 'shadow-tray',
       title: 'Shadow Bridge',
       onClick: () => this.showPanel()
     });
+
+    // Menubar status icon
+    const menubarShadow = document.getElementById('status-shadow');
+    if (menubarShadow) {
+      menubarShadow.style.display = '';
+      menubarShadow.onclick = () => this.showPanel();
+    }
   },
 
   updateTray() {
+    // Legacy taskbar tray
     const el = systemTray.get('shadow');
-    if (!el) return;
+    if (el) {
+      el.classList.toggle('connected', this.connected);
+      el.title = this.connected
+        ? `Shadow Bridge (${this.shadowTabs.size} tabs)`
+        : 'Shadow Bridge (disconnected)';
+    }
 
-    el.classList.toggle('connected', this.connected);
-    el.title = this.connected
-      ? `Shadow Bridge (${this.shadowTabs.size} tabs)`
-      : 'Shadow Bridge (disconnected)';
+    // Menubar status icon
+    const menubarShadow = document.getElementById('status-shadow');
+    if (menubarShadow) {
+      menubarShadow.classList.toggle('active', this.connected && this.shadowTabs.size > 0);
+      menubarShadow.title = this.connected
+        ? `Shadow Tabs (${this.shadowTabs.size} active)`
+        : 'Shadow Tabs (disconnected)';
+    }
   },
 
   pulseIcon() {
+    // Legacy taskbar tray
     const el = systemTray.get('shadow');
-    if (!el) return;
-    el.classList.remove('active');
-    void el.offsetWidth;
-    el.classList.add('active');
+    if (el) {
+      el.classList.remove('active');
+      void el.offsetWidth;
+      el.classList.add('active');
+    }
+
+    // Menubar status icon
+    const menubarShadow = document.getElementById('status-shadow');
+    if (menubarShadow) {
+      menubarShadow.classList.remove('pulse');
+      void menubarShadow.offsetWidth;
+      menubarShadow.classList.add('pulse');
+    }
   },
 
   showPanel() {

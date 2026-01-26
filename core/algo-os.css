@@ -326,6 +326,62 @@ body {
   white-space: nowrap;
 }
 
+#status-eye { color: var(--text-secondary); }
+#status-eye.connected { color: var(--green); }
+#status-shadow { color: var(--text-secondary); display: none; }
+#status-shadow.active { color: var(--purple); }
+#status-shadow.pulse {
+  animation: statusPulse 0.3s ease-out;
+}
+@keyframes statusPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+#menubar-user {
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: background 0.1s;
+}
+#menubar-user:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+#user-menu {
+  position: fixed;
+  top: var(--menubar-height);
+  right: 80px;
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  display: none;
+  z-index: 99998;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+#user-menu.visible { display: block; }
+
+.user-menu-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.user-menu-item:hover { background: var(--menu-hover); }
+.user-menu-item:last-child { border-radius: 0 0 6px 6px; }
+
+.user-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 /* Legacy taskbar (hidden in Veil, shown in Classic) */
 #taskbar {
   display: none;
