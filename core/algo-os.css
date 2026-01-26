@@ -181,18 +181,19 @@ body {
 .layered-icon {
   position: relative;
   display: inline-block;
+  line-height: 1;
 }
 .layered-icon .icon-main {
   display: block;
 }
 .layered-icon .icon-sub {
   position: absolute;
-  background: var(--surface);
+  background: transparent;
   border-radius: 2px;
   padding: 0 2px;
   line-height: 1;
-  text-shadow: none;
   white-space: pre;
+  font-weight: bold;
 }
 .layered-icon .icon-sub pre {
   font-size: 0.25em;
