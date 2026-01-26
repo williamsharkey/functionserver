@@ -1705,19 +1705,24 @@ func main() {
 			// Extract metadata from code comments/ALGO.app assignments
 			name := id
 			icon := "📱"
+			category := ""
 			if m := regexp.MustCompile(`ALGO\.app\.name\s*=\s*['"]([^'"]+)['"]`).FindStringSubmatch(code); len(m) > 1 {
 				name = m[1]
 			}
 			if m := regexp.MustCompile(`ALGO\.app\.icon\s*=\s*['"]([^'"]+)['"]`).FindStringSubmatch(code); len(m) > 1 {
 				icon = m[1]
 			}
+			if m := regexp.MustCompile(`ALGO\.app\.category\s*=\s*['"]([^'"]+)['"]`).FindStringSubmatch(code); len(m) > 1 {
+				category = m[1]
+			}
 
 			apps = append(apps, map[string]interface{}{
-				"id":     id,
-				"name":   name,
-				"icon":   icon,
-				"code":   code,
-				"system": true,
+				"id":       id,
+				"name":     name,
+				"icon":     icon,
+				"category": category,
+				"code":     code,
+				"system":   true,
 			})
 		}
 

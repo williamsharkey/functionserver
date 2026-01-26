@@ -1,6 +1,7 @@
 // System App: AI Agents
 ALGO.app.name = 'Agents';
 ALGO.app.icon = '⚡';
+ALGO.app.category = 'development';
 
 let _agents_running = false;
 let _agents_winId = null;

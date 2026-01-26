@@ -2,6 +2,7 @@
 // YouTube/Vimeo video player with playlist
 ALGO.app.name = 'Video Player';
 ALGO.app.icon = '📺';
+ALGO.app.category = 'media';
 
 const _vp_state = { videos: [], currentVideo: -1, winId: null };
 

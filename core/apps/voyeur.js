@@ -1,6 +1,7 @@
 // System App: VOYEUR.JS - Webcam Chat
 ALGO.app.name = 'VOYEUR.JS';
 ALGO.app.icon = '👁️';
+ALGO.app.category = 'development';
 
 const _voyeur_state = {
   instances: {},

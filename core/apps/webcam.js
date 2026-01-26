@@ -1,6 +1,7 @@
 // System App: Webcam
 ALGO.app.name = 'Webcam';
 ALGO.app.icon = '📹';
+ALGO.app.category = 'media';
 
 let _webcam_stream = null;
 

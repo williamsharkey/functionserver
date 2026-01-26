@@ -2,6 +2,7 @@
 // Contains the classic Windows 95-style theme for FunctionServer
 ALGO.app.name = 'Nostalgia';
 ALGO.app.icon = '🎨';
+ALGO.app.category = 'graphics';
 
 (function() {
   const CLASSIC_THEME = `

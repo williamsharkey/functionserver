@@ -3,6 +3,7 @@
 // Works for all users (no shell required)
 ALGO.app.name = "Claude Eyes";
 ALGO.app.icon = "👁️";
+ALGO.app.category = 'development';
 
 (function() {
   if (!sessionToken) {

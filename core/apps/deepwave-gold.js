@@ -1,6 +1,7 @@
 // System App: Deepwave Dolphin Editor Gold - Multi-lane MIDI Editor
 ALGO.app.name = 'Deepwave Gold';
 ALGO.app.icon = '🐬';
+ALGO.app.category = 'media';
 
 const _dw_state = {
   instances: {},

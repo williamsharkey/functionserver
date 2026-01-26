@@ -1,6 +1,7 @@
 // System App: Distribution Manager
 ALGO.app.name = 'Dist Manager';
 ALGO.app.icon = '📦';
+ALGO.app.category = 'system';
 
 let _dist_winId = null;
 

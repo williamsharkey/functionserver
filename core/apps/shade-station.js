@@ -2,6 +2,7 @@
 // WebGL Shader Editor
 ALGO.app.name = 'Shade Station';
 ALGO.app.icon = '🎨';
+ALGO.app.category = 'graphics';
 
 // App state
 const _ss_instances = {}; // winId -> { gl, program, canvas, animFrame, time, mouse }

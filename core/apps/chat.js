@@ -1,6 +1,7 @@
 // System App: Chat (P2P)
 ALGO.app.name = 'Chat';
 ALGO.app.icon = '💬';
+ALGO.app.category = 'productivity';
 
 let _chat_peerId = 'p' + Math.random().toString(36).substr(2, 9);
 let _chat_peers = {};

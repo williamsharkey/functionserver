@@ -2,6 +2,7 @@
 // Wraps shell.js with Claude Code integration and pubsub IPC
 ALGO.app.name = "Claude";
 ALGO.app.icon = "🤖";
+ALGO.app.category = 'development';
 
 (function() {
   // Check if user is logged in as system user

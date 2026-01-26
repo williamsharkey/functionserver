@@ -1,6 +1,7 @@
 // System App: Music Player
 ALGO.app.name = 'Music Player';
 ALGO.app.icon = '🎵';
+ALGO.app.category = 'media';
 
 let _mp_state = { tracks: [], currentTrack: -1, isPlaying: false, audio: null, winId: null };
 

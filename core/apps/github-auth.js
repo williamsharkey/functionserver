@@ -1,5 +1,8 @@
 // GitHub Auth - Manage GitHub credentials for FunctionServer
 // Supports GitHub Device Flow for easy sign-in
+ALGO.app.name = 'GitHub Auth';
+ALGO.app.icon = '🔐';
+ALGO.app.category = 'system';
 
 const W = 480, H = 520;
 const STORAGE_KEY = "fs_github_auth";

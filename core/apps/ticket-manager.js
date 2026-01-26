@@ -2,6 +2,7 @@
 // Manage tickets for the ALGO community
 ALGO.app.name = 'Ticket Manager';
 ALGO.app.icon = '🎫';
+ALGO.app.category = 'productivity';
 
 // App state
 let _tm_winId = null;

@@ -1,6 +1,7 @@
 // System App: Todo Manager
 ALGO.app.name = 'Todo Manager';
 ALGO.app.icon = '📋';
+ALGO.app.category = 'productivity';
 
 let _todo_lists = [];
 let _todo_selectedList = null;

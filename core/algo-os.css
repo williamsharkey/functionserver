@@ -448,6 +448,17 @@ body {
 .start-item:hover > .start-submenu { display: block; }
 .start-item.has-sub.submenu-open > .start-submenu { display: block; }
 
+/* Nested submenus (category menus inside Programs) */
+.start-submenu .start-submenu {
+  left: 100%;
+  top: 0;
+  bottom: auto;
+  position: absolute;
+}
+.start-submenu .start-item.has-sub:hover > .start-submenu {
+  display: block;
+}
+
 /* Scroll indicator for long menus */
 .scroll-indicator {
   position: sticky;

@@ -1,6 +1,7 @@
 // Icons - FunctionServer Icon Customizer
 ALGO.app.name = 'Icons';
 ALGO.app.icon = '🎭';
+ALGO.app.category = 'graphics';
 
 (function() {
   // Icon categories with friendly names

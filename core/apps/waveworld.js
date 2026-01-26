@@ -1,6 +1,7 @@
 // System App: waveWORLD - WAV Player with Waveform Visualization
 ALGO.app.name = 'waveWORLD';
 ALGO.app.icon = '🌊';
+ALGO.app.category = 'media';
 
 const _ww_state = {
   instances: {},

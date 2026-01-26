@@ -2,6 +2,7 @@
 // Load this first in fresh sessions
 ALGO.app.name = 'Launcher';
 ALGO.app.icon = '🚀';
+ALGO.app.category = 'system';
 
 const W = 350, H = 320;
 

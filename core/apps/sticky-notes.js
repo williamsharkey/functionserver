@@ -1,6 +1,7 @@
 // System App: Sticky Notes
 ALGO.app.name = 'Sticky Notes';
 ALGO.app.icon = '📌';
+ALGO.app.category = 'productivity';
 
 let _sticky_notes = [];
 let _sticky_nextId = 0;

@@ -1,6 +1,7 @@
 // System App: Designer (Layout Editor)
 ALGO.app.name = 'Designer';
 ALGO.app.icon = '📐';
+ALGO.app.category = 'graphics';
 
 let _designer_winId = null;
 let _designer_screens = [];

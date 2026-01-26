@@ -1,6 +1,7 @@
 // System App: Angelwave VOX - Choir Synthesizer
 ALGO.app.name = 'Angelwave VOX';
 ALGO.app.icon = '👼';
+ALGO.app.category = 'media';
 
 const _aw_state = {
   instances: {},

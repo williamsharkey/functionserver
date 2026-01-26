@@ -1,6 +1,7 @@
 // System App: Craft (UI Component Builder)
 ALGO.app.name = 'Craft';
 ALGO.app.icon = '🔧';
+ALGO.app.category = 'system';
 
 let _craft_winId = null;
 

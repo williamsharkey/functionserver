@@ -2,6 +2,7 @@
 // ASCII/Unicode box drawing editor
 ALGO.app.name = 'Box Editor';
 ALGO.app.icon = '📦';
+ALGO.app.category = 'graphics';
 
 // App state
 const _be_instances = {}; // winId -> { grid, cursorX, cursorY, width, height, filename, currentChar }

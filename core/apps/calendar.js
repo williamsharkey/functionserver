@@ -1,6 +1,7 @@
 // System App: Calendar
 ALGO.app.name = 'Calendar';
 ALGO.app.icon = '📅';
+ALGO.app.category = 'productivity';
 
 let _cal_events = [];
 let _cal_month = new Date().getMonth();

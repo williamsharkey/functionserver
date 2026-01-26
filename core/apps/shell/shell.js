@@ -2,6 +2,7 @@
 // Provides full terminal emulation with xterm.js
 ALGO.app.name = "Shell";
 ALGO.app.icon = "🐚";
+ALGO.app.category = 'development';
 
 (function() {
   // Check if user is logged in

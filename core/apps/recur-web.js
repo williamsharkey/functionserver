@@ -3,6 +3,7 @@
 // https://github.com/williamsharkey/recur-web
 ALGO.app.name = 'recur-web';
 ALGO.app.icon = '🔄';
+ALGO.app.category = 'system';
 
 const _rw_state = {
   instances: {},

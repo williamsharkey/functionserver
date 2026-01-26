@@ -2,6 +2,7 @@
 // Three.js 3D Glass Renderer
 ALGO.app.name = 'Glass Studio';
 ALGO.app.icon = '💎';
+ALGO.app.category = 'development';
 
 const _gs_instances = {};
 

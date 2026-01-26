@@ -1,6 +1,7 @@
 // System App: Markdown Viewer
 ALGO.app.name = 'Markdown Viewer';
 ALGO.app.icon = '📑';
+ALGO.app.category = 'productivity';
 
 function _md_parseMarkdown(text) {
   // Parse tables first (before other replacements mess with pipes)

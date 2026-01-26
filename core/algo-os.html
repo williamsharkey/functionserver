@@ -1452,8 +1452,14 @@ function handleKeyDown(e) {
 }
 
 function handleContextMenu(e) {
-  // Shift+right-click passes through to browser's native context menu (for DevTools)
-  if (e.shiftKey) return;
+  // Shift+right-click or inspect passthrough: let native menu through
+  if (e.shiftKey || _inspectPassthrough) {
+    _inspectPassthrough = false;
+    return;
+  }
+
+  // Store position for inspect fallback
+  _lastContextPos = { x: e.clientX, y: e.clientY };
 
   const desktop = document.getElementById('desktop');
 
@@ -2020,18 +2026,26 @@ function showDesktopContextMenu(e) {
   menu.classList.add('visible');
 }
 
+let _inspectPassthrough = false;
+let _lastContextPos = { x: 0, y: 0 };
+
 function inspectElement() {
   hideContextMenu();
   // Chrome DevTools inspect() function - only works when DevTools is open
   if (typeof inspect === 'function' && contextTarget) {
     inspect(contextTarget);
   } else {
-    // Fallback: show element info in console and open DevTools hint
-    console.log('Inspect target:', contextTarget);
-    console.log('Tag:', contextTarget?.tagName);
-    console.log('Classes:', contextTarget?.className);
-    console.log('ID:', contextTarget?.id);
-    algoSpeak('Open DevTools (F12) then right-click again, or Shift+right-click for native menu');
+    // Fallback: trigger native context menu by setting passthrough flag
+    _inspectPassthrough = true;
+    // Create and dispatch a new contextmenu event at the stored position
+    const evt = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: _lastContextPos.x,
+      clientY: _lastContextPos.y,
+      button: 2
+    });
+    (contextTarget || document.elementFromPoint(_lastContextPos.x, _lastContextPos.y) || document.body).dispatchEvent(evt);
   }
 }
 
@@ -2094,25 +2108,64 @@ function toggleSubmenu(e, el) {
 }
 
 // ==================== PROGRAMS MENU ====================
+const CATEGORY_INFO = {
+  media:        { name: 'Media',        icon: '🎵' },
+  graphics:     { name: 'Graphics',     icon: '🎨' },
+  development:  { name: 'Development',  icon: '💻' },
+  productivity: { name: 'Productivity', icon: '📋' },
+  system:       { name: 'System',       icon: '⚙️' }
+};
+
 function updateProgramsMenu() {
   const el = document.getElementById('installed-programs-menu');
   if (!el) return;
 
   let html = '';
-
-  // System apps
   const visibleSystemApps = systemApps.filter(a => !uninstalledSystemApps.includes(a.id));
-  if (visibleSystemApps.length > 0) {
-    html += '<div class="start-separator-label">System Apps</div>';
-    html += visibleSystemApps.map(a =>
-      '<div class="start-item" onclick="runSystemApp(\'' + a.id + '\')">' +
-      '<span class="menu-icon">' + getIcon(a.icon || '📱') + '</span> ' + escapeHtml(a.name) + '</div>'
-    ).join('');
+
+  // Group apps by category
+  const categories = {};
+  const uncategorized = [];
+
+  visibleSystemApps.forEach(a => {
+    const cat = a.category || '';
+    if (cat && CATEGORY_INFO[cat]) {
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(a);
+    } else {
+      uncategorized.push(a);
+    }
+  });
+
+  // Render category submenus
+  const categoryOrder = ['media', 'graphics', 'development', 'productivity', 'system'];
+  categoryOrder.forEach(cat => {
+    const apps = categories[cat];
+    if (!apps || apps.length === 0) return;
+    const info = CATEGORY_INFO[cat];
+
+    html += '<div class="start-item has-sub" onmouseenter="openSubmenu(this)" onmouseleave="closeSubmenuDelay(this)">';
+    html += '<span>' + info.icon + '</span> ' + info.name;
+    html += '<div class="start-submenu">';
+    apps.sort((a, b) => a.name.localeCompare(b.name)).forEach(a => {
+      html += '<div class="start-item" onclick="runSystemApp(\'' + a.id + '\')">' +
+        '<span class="menu-icon">' + (a.icon || '📱') + '</span> ' + escapeHtml(a.name) + '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  // Uncategorized apps (if any)
+  if (uncategorized.length > 0) {
+    html += '<div class="start-separator"></div>';
+    uncategorized.forEach(a => {
+      html += '<div class="start-item" onclick="runSystemApp(\'' + a.id + '\')">' +
+        '<span class="menu-icon">' + (a.icon || '📱') + '</span> ' + escapeHtml(a.name) + '</div>';
+    });
   }
 
   // User apps
   if (installedPrograms.length > 0) {
-    if (visibleSystemApps.length > 0) html += '<div class="start-separator"></div>';
+    html += '<div class="start-separator"></div>';
     html += '<div class="start-separator-label">My Apps</div>';
     html += installedPrograms.map(p =>
       '<div class="start-item" onclick="runUserApp(\'' + p.id + '\')">' +

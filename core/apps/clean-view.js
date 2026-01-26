@@ -3,6 +3,7 @@
 // Supports proxy mode (public pages) and shadow mode (authenticated via extension)
 ALGO.app.name = 'Clean View';
 ALGO.app.icon = '🧹';
+ALGO.app.category = 'system';
 
 const _cv_instances = {};
 // Clean View now uses the global ShadowBridge service instead of its own connection

@@ -2,6 +2,7 @@
 // Camera snapshot with word art effects
 ALGO.app.name = 'Photobooth';
 ALGO.app.icon = '📸';
+ALGO.app.category = 'graphics';
 
 let _pb_stream = null;
 
