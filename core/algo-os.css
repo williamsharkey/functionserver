@@ -167,7 +167,6 @@ body {
   object-fit: contain;
   border-radius: 4px;
 }
-.desktop-icon span,
 .desktop-icon .icon-label {
   display: block;
   font-size: 11px;
@@ -181,10 +180,16 @@ body {
 .layered-icon {
   position: relative;
   display: inline-block;
-  line-height: 1;
+  vertical-align: middle;
 }
 .layered-icon .icon-main {
-  display: block;
+  display: inline-block;
+  font-size: inherit;
+  line-height: 1;
+}
+.desktop-icon .icon-img .layered-icon,
+.desktop-icon .icon-img .layered-icon span {
+  font-size: inherit;
 }
 .layered-icon .icon-sub {
   position: absolute;
@@ -1581,7 +1586,7 @@ body {
   #desktop { bottom: 44px; }
   .desktop-icon { width: 90px; padding: 10px; }
   .desktop-icon .icon-img { font-size: 44px; }
-  .desktop-icon span { font-size: 13px; }
+  .desktop-icon .icon-label { font-size: 13px; }
   #taskbar { height: 44px; }
   #start-btn { font-size: 14px; padding: 8px 14px; }
   .taskbar-item { font-size: 13px; padding: 6px 12px; }
