@@ -464,15 +464,19 @@ ALGO.app.category = 'graphics';
     return icon;
   }
 
-  // Register with FunctionServer
-  if (typeof registerApp === 'function') {
-    registerApp({
-      id: 'icons',
-      name: 'Icons',
-      icon: '🎭',
-      init: createIconsApp,
-      defaultWidth: 600,
-      defaultHeight: 520
-    });
-  }
+  // Create window and initialize app
+  const winId = Date.now();
+  ALGO.createWindow({
+    title: 'Icons',
+    icon: '🎭',
+    width: 600,
+    height: 520,
+    content: '<div id="icons-app-' + winId + '" style="width:100%;height:100%;overflow:auto;"></div>'
+  });
+
+  // Initialize after window is created
+  setTimeout(() => {
+    const container = document.getElementById('icons-app-' + winId);
+    if (container) createIconsApp(container);
+  }, 0);
 })();
