@@ -27,42 +27,27 @@ eye 'ALGO.bridge.openApp("studio")'       // Open an app
 eye 'Lens.grep("fetchData")'              // Search code
 ```
 
-### Lens: Surgical Code Editing
-Token-efficient operations designed for AI. Edit one line instead of rewriting entire files.
+### Lens: The Unified AI Interface
+One API for the complete development workflow. Edit, run, commit, push—all through Lens.
 
 ```javascript
-Lens.grep('fetchData')                    // → "42:async function fetchData"
-Lens.setLine(42, 'async function fetchData(url) {')  // → "✓ L42"
-Lens.save()                               // → "✓ saved"
+Lens.project("my app")     // Create project → GitHub, open in Studio
+Lens.grep("fetchData")     // → "42:async function fetchData"
+Lens.setLine(42, "fixed")  // → "✓ L42"
+Lens.save()                // → "✓ saved"
+Lens.run()                 // Execute and see result
+Lens.commit("Fix bug")     // → "✓ committed"
+Lens.push()                // → "✓ pushed"
+Lens.help()                // Show all commands
 ```
 
-Three calls. Zero file reads. 60x fewer tokens than traditional file operations.
+From idea to deployed code. One namespace. 60x fewer tokens than file operations.
 
 ### Guardian: Error Awareness
-Console monitoring that wakes up AI when errors occur.
-
-```javascript
-ALGO.guardian.watch(callback)             // Start monitoring
-// User hits an error...
-// Toast appears: "Error detected - Get AI help"
-// AI receives the error context automatically
-```
+Console monitoring that wakes up AI when errors occur. Toast appears offering AI help. AI receives error context automatically.
 
 ### AI Eyes: Visual Feedback
 When AI looks at or edits something, humans see it happen. Purple highlights for inspection, green flashes for edits.
-
-### GitHub Integration
-OAuth Device Flow sign-in, one-command project creation:
-
-```javascript
-setupHappyPath("particle simulator")
-// Creates ~/repos/particle-simulator/
-// Initializes git, creates skeleton
-// Creates GitHub repo, pushes
-// Opens in Studio, ready to edit
-```
-
-From idea to GitHub repository in one command.
 
 ## Quick Start
 
@@ -86,14 +71,14 @@ If you're Claude running inside FunctionServer's terminal, see [CLAUDE.md](CLAUD
 
 Quick start:
 ```javascript
-// Load tools
-getFileFromDisk('~/studio.js').then(code => runApp(code, 'studio.js'))
+// Create a new project (loads Studio, creates repo, pushes to GitHub)
+Lens.project("my app")
+
+// Or open an existing file
+getFileFromDisk('~/repos/my-app/main.js')
 
 // Get command reference
 Lens.help()
-
-// Create a project
-setupHappyPath("my app")
 ```
 
 ## Architecture

@@ -401,7 +401,7 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
 <span class="fn">Lens.help</span>()
 
 <span class="cm">// Create a new project (auto-creates GitHub repo if signed in)</span>
-<span class="fn">setupHappyPath</span>(<span class="str">"my cool app"</span>)
+<span class="fn">Lens.project</span>(<span class="str">"my cool app"</span>)
       </div>
 
       <p>That last command does everything: creates the folder, initializes git, creates skeleton files, creates a GitHub repo (if you've signed in), commits and pushes, and opens the project in Studio ready to edit.</p>
@@ -476,7 +476,7 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
         <p>Paste the code, authorize FunctionServer for repo access. Done.</p>
       </div>
 
-      <p>Now <code>setupHappyPath()</code> automatically creates repos on your GitHub account. Push and pull work without any configuration.</p>
+      <p>Now <code>Lens.project()</code> automatically creates repos on your GitHub account. Push and pull work without any configuration.</p>
 
       <div class="divider"></div>
 
@@ -552,7 +552,7 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
         <span class="step-num">1</span>
         <h4>Create the project</h4>
         <div class="code-block">
-<span class="fn">setupHappyPath</span>(<span class="str">"particle simulator"</span>)
+<span class="fn">Lens.project</span>(<span class="str">"particle simulator"</span>)
 <span class="cm">// → Creates folder, git init, skeleton, GitHub repo, opens in Studio</span>
         </div>
       </div>

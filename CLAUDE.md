@@ -9,19 +9,25 @@ This isn't automation from outside. When you call `eye 'document.title'`, you're
 ## Quick Start
 
 ```javascript
-// Load Studio (the IDE)
-eye 'getFileFromDisk("~/studio.js").then(code => runApp(code, "studio.js"))'
+// Create a new project (loads Studio, creates repo, pushes to GitHub)
+eye 'Lens.project("my cool app")'
+
+// Or open an existing file
+eye 'getFileFromDisk("~/repos/my-app/main.js")'
 
 // Get the command cheat sheet
 eye 'Lens.help()'
-
-// Create a new project (with GitHub integration)
-eye 'setupHappyPath("my cool app")'
 ```
 
 ## The Lens API
 
-Lens is your primary interface for code editing. It's designed for token efficiency—edit surgically, not wholesale.
+Lens is your unified interface for the complete development workflow. One namespace for everything.
+
+### Project Management
+```javascript
+Lens.project("my app")    // Create project → GitHub, open in Studio
+Lens.help()               // Show all commands
+```
 
 ### Navigation
 ```javascript
@@ -51,10 +57,10 @@ Lens.save()               // Save current file
 Lens.run()                // Execute as app
 ```
 
-### Git Shortcuts
+### Git Operations
 ```javascript
 Lens.commit('message')    // Stage all + commit
-Lens.push()               // Push to GitHub (uses stored OAuth token)
+Lens.push()               // Push to GitHub
 Lens.diff()               // Show uncommitted changes
 Lens.gitStatus()          // Git status
 Lens.log(5)               // Last 5 commits
@@ -139,19 +145,19 @@ eye 'ALGO.github.getUsername()'      // → "williamsharkey"
 ### Create a Project
 ```javascript
 // One command does everything:
-eye 'setupHappyPath("particle simulator")'
-// - Creates ~/repos/particle-simulator/
-// - Initializes git
-// - Creates skeleton files
-// - Creates GitHub repo (if auth configured)
-// - Pushes initial commit
-// - Opens in Studio
+eye 'Lens.project("particle simulator")'
+// → "✓ particle-simulator → github"
+// Creates repo, pushes, opens in Studio
 ```
 
-### Push Changes
+### Full Workflow
 ```javascript
-eye 'Lens.commit("Add feature X")'
-eye 'Lens.push()'
+eye 'Lens.project("my app")'         // Create and open
+eye 'Lens.setLine(5, "new code")'    // Edit
+eye 'Lens.save()'                    // Save
+eye 'Lens.run()'                     // Test
+eye 'Lens.commit("Add feature")'     // Commit
+eye 'Lens.push()'                    // Deploy
 ```
 
 ## Common Workflows

@@ -699,13 +699,13 @@ eye <span class="str">'Lens.setLine(42, "fixed")'</span>
 
   <h3>GitHub: Ship, Don't Just Generate</h3>
 
-  <p>After editing with Lens, AI can commit and push:</p>
+  <p>After editing with Lens, AI can commit and push—all through the same API:</p>
 
-  <pre><code>Lens.save()                              <span class="cm">// Save changes</span>
-Studio.github.commit(<span class="str">"Fix fetchData"</span>)    <span class="cm">// Commit</span>
-GitHubAuth.push(projectPath)             <span class="cm">// Push to origin</span></code></pre>
+  <pre><code>Lens.save()                    <span class="cm">// Save changes</span>
+Lens.commit(<span class="str">"Fix fetchData"</span>)   <span class="cm">// Commit</span>
+Lens.push()                    <span class="cm">// Push to GitHub</span></code></pre>
 
-  <p>From edit to deployed in three calls.</p>
+  <p>From edit to deployed. One namespace. Three calls.</p>
 
   <hr>
 
@@ -714,13 +714,13 @@ GitHubAuth.push(projectPath)             <span class="cm">// Push to origin</spa
   <p>Here's what AI-first development looks like:</p>
 
   <ol>
-    <li><strong>Open project</strong> — <code>getFileFromDisk("~/repos/myapp/app.js")</code></li>
+    <li><strong>Create or open project</strong> — <code>Lens.project("myapp")</code> or <code>getFileFromDisk("~/repos/myapp/app.js")</code></li>
     <li><strong>Find the code</strong> — <code>Lens.grep("handleSubmit")</code></li>
     <li><strong>Understand context</strong> — <code>Lens.line(42, 10)</code></li>
     <li><strong>Edit surgically</strong> — <code>Lens.setLine(45, "fixed code")</code></li>
     <li><strong>Run and verify</strong> — <code>Lens.run()</code></li>
     <li><strong>Save</strong> — <code>Lens.save()</code></li>
-    <li><strong>Commit and push</strong> — <code>Studio.github.commit("message")</code></li>
+    <li><strong>Commit and push</strong> — <code>Lens.commit("message")</code> then <code>Lens.push()</code></li>
   </ol>
 
   <p>Each step is one call. Each call returns immediate confirmation. The debugging loop collapses from minutes to seconds.</p>
