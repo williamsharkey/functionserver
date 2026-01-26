@@ -2139,7 +2139,7 @@ function openSubmenu(el) {
   const submenu = el.querySelector(':scope > .start-submenu');
   if (submenu) {
     const isNested = el.closest('.start-submenu') !== null;
-    const taskbarHeight = window.innerHeight - document.getElementById('taskbar').getBoundingClientRect().top;
+    const menubarHeight = 28; // var(--menubar-height)
 
     if (isNested) {
       // Nested submenu: position relative to parent item
@@ -2148,16 +2148,17 @@ function openSubmenu(el) {
       submenu.style.setProperty('left', parentRect.right + 'px', 'important');
       submenu.style.setProperty('top', parentRect.top + 'px', 'important');
       submenu.style.setProperty('bottom', 'auto', 'important');
-      submenu.style.setProperty('max-height', (window.innerHeight - taskbarHeight - 20) + 'px', 'important');
+      submenu.style.setProperty('max-height', (window.innerHeight - menubarHeight - 20) + 'px', 'important');
     } else {
-      // Top-level submenu: align with start menu
+      // Top-level submenu: align with start menu item (drops down from top)
       const startMenu = document.getElementById('start-menu');
       const startRect = startMenu.getBoundingClientRect();
+      const itemRect = el.getBoundingClientRect();
       submenu.style.setProperty('position', 'fixed', 'important');
       submenu.style.setProperty('left', (startRect.right - 2) + 'px', 'important');
-      submenu.style.setProperty('bottom', taskbarHeight + 'px', 'important');
-      submenu.style.setProperty('top', 'auto', 'important');
-      submenu.style.setProperty('max-height', (window.innerHeight - taskbarHeight - 20) + 'px', 'important');
+      submenu.style.setProperty('top', itemRect.top + 'px', 'important');
+      submenu.style.setProperty('bottom', 'auto', 'important');
+      submenu.style.setProperty('max-height', (window.innerHeight - menubarHeight - 20) + 'px', 'important');
     }
   }
 }
