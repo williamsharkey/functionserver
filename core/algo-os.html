@@ -116,6 +116,102 @@ let contextTarget = null;
 let submenuCloseTimeout = null;
 let topZIndex = 100;  // Track highest z-index for window stacking
 
+// ==================== ICON SYSTEM ====================
+// Customizable icons with theme-aware colors for unicode characters
+const ICON_DEFS = {
+  programs:      { default: '📁', alts: ['📂', '🗂️', '▤', '☰', '⊞', '▦', '❖', '◈', '⬡', '⎔'] },
+  documentation: { default: '📕', alts: ['📖', '📚', '📒', '📓', '📔', '🕮', '☷', '≡', '☲', '❡'] },
+  help:          { default: '📙', alts: ['📗', '📘', '❓', '❔', '?', '¿', '⁇', '⍰', '☉', '◎'] },
+  about:         { default: 'ℹ️', alts: ['ⓘ', '🛈', 'i', '𝕚', '𝒾', '⌘', '✦', '◉', '●', '◆'] },
+  settings:      { default: '⚙️', alts: ['🔧', '🛠️', '⛭', '⚡', '✧', '⁂', '※', '⌗', '☸', '⟐'] },
+  logout:        { default: '🚪', alts: ['🔓', '🚶', '➜', '⏏', '↩', '⇤', '⎋', '✕', '◁', '⬅'] },
+  login:         { default: '🔑', alts: ['🔐', '🗝️', '⚿', '➜', '⇥', '▷', '⊳', '►', '◇', '✦'] },
+  user:          { default: '👤', alts: ['👨', '👩', '🧑', '☺', '☻', '◉', '●', '○', '◯', '⬤'] },
+  shadow:        { default: '👻', alts: ['🫥', '💨', '🌫️', '◌', '◍', '◎', '○', '◯', '⬚', '▢'] },
+  notepad:       { default: '📝', alts: ['📄', '📃', '🗒️', '✎', '✏', '✐', '☰', '≡', '▤', '⊟'] },
+  ide:           { default: '💻', alts: ['🖥️', '⌨️', '🖳', '⌘', '⟨⟩', '<>', '{}', '⌥', '⎇', '⏣'] },
+  browser:       { default: '🌐', alts: ['🔍', '🌍', '🌎', '🌏', '⊕', '⊛', '◎', '☉', '✦', '◉'] },
+  toast:         { default: '🖥️', alts: ['📢', '🔔', '💬', '◈', '◆', '✦', '☆', '★', '◉', '●'] },
+  copy:          { default: '📋', alts: ['📑', '🗐', '⎘', '⧉', '❏', '▢', '⊞', '⧈', '◫', '⬚'] },
+  app:           { default: '📱', alts: ['🎮', '🔮', '💎', '◆', '◈', '✦', '★', '☆', '◉', '●'] }
+};
+
+// Load custom icons from localStorage (loaded early to prevent flash)
+let customIcons = {};
+try {
+  const stored = localStorage.getItem('fs-icons');
+  if (stored) customIcons = JSON.parse(stored);
+} catch(e) {}
+
+function getIcon(iconKey, fallback) {
+  // If it's already an emoji/character, check if it's a known key
+  if (ICON_DEFS[iconKey]) {
+    const custom = customIcons[iconKey];
+    if (custom) return wrapIconWithColor(custom);
+    return ICON_DEFS[iconKey].default;
+  }
+  // Otherwise return the passed icon directly
+  return fallback || iconKey;
+}
+
+function wrapIconWithColor(icon) {
+  // Check if it's a unicode character (not emoji) that needs color
+  if (icon.length <= 2 && !/\p{Emoji}/u.test(icon)) {
+    return '<span style="color:var(--text)">' + icon + '</span>';
+  }
+  return icon;
+}
+
+function setCustomIcon(key, icon) {
+  if (!ICON_DEFS[key]) return;
+  if (icon === ICON_DEFS[key].default) {
+    delete customIcons[key];
+  } else {
+    customIcons[key] = icon;
+  }
+  // Only store if there are custom icons
+  if (Object.keys(customIcons).length > 0) {
+    localStorage.setItem('fs-icons', JSON.stringify(customIcons));
+  } else {
+    localStorage.removeItem('fs-icons');
+  }
+  // Refresh UI
+  refreshAllIcons();
+}
+
+function refreshAllIcons() {
+  // Update start menu icons
+  const authEl = document.getElementById('start-menu-auth');
+  if (authEl && sessionToken) {
+    authEl.querySelector('span').innerHTML = getIcon('logout');
+  } else if (authEl) {
+    authEl.querySelector('span').innerHTML = getIcon('login');
+  }
+  // Update other static menu items
+  document.querySelectorAll('#start-menu .start-items > .start-item').forEach(item => {
+    const text = item.textContent.trim();
+    if (text.includes('Programs')) item.querySelector('span').innerHTML = getIcon('programs');
+    else if (text.includes('Documentation')) item.querySelector('span').innerHTML = getIcon('documentation');
+    else if (text.includes('Help')) item.querySelector('span').innerHTML = getIcon('help');
+    else if (text.includes('About')) item.querySelector('span').innerHTML = getIcon('about');
+    else if (text.includes('Settings')) item.querySelector('span').innerHTML = getIcon('settings');
+  });
+  // Update user indicator
+  const userInd = document.getElementById('user-indicator');
+  if (userInd && currentUser) {
+    const isSystem = userInd.textContent.includes('(system)');
+    const icon = isSystem ? getIcon('login') : getIcon('user');
+    userInd.innerHTML = icon + ' ' + currentUser + (isSystem ? ' (system)' : '') +
+      ' <span class="copy-auth-btn" onclick="copyAuthInfo(event)" title="Copy auth token">' + getIcon('copy') + '</span>';
+  }
+}
+
+// Expose for Icons app
+window.ICON_DEFS = ICON_DEFS;
+window.customIcons = customIcons;
+window.getIcon = getIcon;
+window.setCustomIcon = setCustomIcon;
+
 // Expose key state on window for dynamically loaded apps (Studio, etc.)
 Object.defineProperty(window, 'savedFiles', { get: () => savedFiles, set: v => savedFiles = v });
 Object.defineProperty(window, 'windows', { get: () => windows });
@@ -1126,12 +1222,13 @@ function guestLogin() {
   currentUser = 'guest';
   sessionToken = null;
   hideLogin();
-  document.getElementById('user-indicator').textContent = '👤 Guest';
-  document.getElementById('start-menu-auth').innerHTML = '<span>🔑</span> Login / Register';
+  document.getElementById('user-indicator').innerHTML = getIcon('user') + ' Guest';
+  document.getElementById('start-menu-auth').innerHTML = '<span>' + getIcon('login') + '</span> Login / Register';
   document.getElementById('start-menu-auth').onclick = showLogin;
   loadState();
   loadSystemApps();
   init();
+  refreshAllIcons();
 }
 
 function showLogin() {
@@ -1158,13 +1255,14 @@ function loginSuccess(username, token, systemUser) {
   isSystemUser = systemUser || false;
   localStorage.setItem('algo-session', JSON.stringify({ username, token, isSystemUser }));
   hideLogin();
-  const indicator = isSystemUser ? '🔑 ' + username + ' (system)' : '👤 ' + username;
-  document.getElementById('user-indicator').innerHTML = indicator +
-    ' <span class="copy-auth-btn" onclick="copyAuthInfo(event)" title="Copy auth token">📋</span>';
-  document.getElementById('start-menu-auth').innerHTML = '<span>🚪</span> Log Out (' + username + ')';
+  const icon = isSystemUser ? getIcon('login') : getIcon('user');
+  document.getElementById('user-indicator').innerHTML = icon + ' ' + username + (isSystemUser ? ' (system)' : '') +
+    ' <span class="copy-auth-btn" onclick="copyAuthInfo(event)" title="Copy auth token">' + getIcon('copy') + '</span>';
+  document.getElementById('start-menu-auth').innerHTML = '<span>' + getIcon('logout') + '</span> Log Out (' + username + ')';
   loadState();
   loadSystemApps();
   init();
+  refreshAllIcons();
 }
 
 function copyAuthInfo(event) {
@@ -1987,7 +2085,7 @@ function updateProgramsMenu() {
     html += '<div class="start-separator-label">System Apps</div>';
     html += visibleSystemApps.map(a =>
       '<div class="start-item" onclick="runSystemApp(\'' + a.id + '\')">' +
-      '<span>' + (a.icon || '📱') + '</span> ' + escapeHtml(a.name) + '</div>'
+      '<span class="menu-icon">' + getIcon(a.icon || '📱') + '</span> ' + escapeHtml(a.name) + '</div>'
     ).join('');
   }
 
@@ -1997,11 +2095,45 @@ function updateProgramsMenu() {
     html += '<div class="start-separator-label">My Apps</div>';
     html += installedPrograms.map(p =>
       '<div class="start-item" onclick="runUserApp(\'' + p.id + '\')">' +
-      '<span>' + (p.icon || '🎮') + '</span> ' + escapeHtml(p.name) + '</div>'
+      '<span class="menu-icon">' + getIcon(p.icon || '🎮') + '</span> ' + escapeHtml(p.name) + '</div>'
     ).join('');
   }
 
   el.innerHTML = html;
+
+  // Setup scroll indicator
+  setupScrollIndicator();
+}
+
+function setupScrollIndicator() {
+  const menu = document.getElementById('programs-menu');
+  if (!menu) return;
+
+  // Add scroll indicator if not present
+  let indicator = menu.querySelector('.scroll-indicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'scroll-indicator';
+    indicator.innerHTML = '<svg viewBox="0 0 20 8"><path d="M0 0 L10 8 L20 0 Z"/></svg>';
+    menu.appendChild(indicator);
+  }
+
+  const updateIndicator = () => {
+    const canScroll = menu.scrollHeight > menu.clientHeight;
+    const atBottom = menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 5;
+    indicator.classList.toggle('visible', canScroll && !atBottom);
+  };
+
+  menu.removeEventListener('scroll', updateIndicator);
+  menu.addEventListener('scroll', updateIndicator);
+
+  // Check on menu show
+  const observer = new MutationObserver(() => {
+    if (menu.offsetParent) setTimeout(updateIndicator, 10);
+  });
+  observer.observe(menu, { attributes: true, attributeFilter: ['style'] });
+
+  setTimeout(updateIndicator, 100);
 }
 
 // ==================== APP RUNNING ====================
