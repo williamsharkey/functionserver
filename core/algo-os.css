@@ -7,6 +7,7 @@
   --text: #fafafa;
   --text-secondary: #a1a1aa;
   --text-tertiary: #52525b;
+  --shadow-color: rgba(0,0,0,0.5);
   --border: #3f3f46;
   --border-subtle: #27272a;
 
@@ -306,6 +307,38 @@ body {
   overflow: auto;
   background: var(--surface);
   border-top: none;
+}
+
+/* Window Resize Handles */
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+}
+/* Edge handles (desktop) */
+.resize-n { top: -4px; left: 8px; right: 8px; height: 8px; cursor: n-resize; }
+.resize-s { bottom: -4px; left: 8px; right: 8px; height: 8px; cursor: s-resize; }
+.resize-e { right: -4px; top: 8px; bottom: 8px; width: 8px; cursor: e-resize; }
+.resize-w { left: -4px; top: 8px; bottom: 8px; width: 8px; cursor: w-resize; }
+/* Corner handles (desktop) */
+.resize-ne { top: -4px; right: -4px; width: 12px; height: 12px; cursor: ne-resize; }
+.resize-nw { top: -4px; left: -4px; width: 12px; height: 12px; cursor: nw-resize; }
+.resize-se { bottom: -4px; right: -4px; width: 12px; height: 12px; cursor: se-resize; }
+.resize-sw { bottom: -4px; left: -4px; width: 12px; height: 12px; cursor: sw-resize; }
+
+/* Mobile grippy (bottom-right corner) - Veil theme styled */
+.resize-grippy {
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--border) 50%, var(--border) 60%, transparent 60%, transparent 70%, var(--border) 70%, var(--border) 80%, transparent 80%);
+  opacity: 0.6;
+  border-radius: 0 0 var(--radius) 0;
+  touch-action: none;
+}
+.resize-grippy:active {
+  opacity: 1;
 }
 
 .window-menubar {
@@ -680,9 +713,13 @@ body {
   min-width: 200px;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
-  z-index: 10001;
+  z-index: 100000;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   padding: 4px 0;
+}
+.start-submenu .start-item {
+  position: relative;
+  z-index: 1;
 }
 .start-item:hover > .start-submenu { display: block; }
 .start-item.has-sub.submenu-open > .start-submenu { display: block; }
@@ -896,26 +933,6 @@ body {
   background: var(--surface-raised);
   color: var(--text);
 }
-
-#user-indicator {
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  font-size: 11px;
-  border-radius: 4px;
-  z-index: 9998;
-}
-#user-indicator .copy-auth-btn {
-  cursor: pointer;
-  opacity: 0.5;
-  margin-left: 6px;
-  transition: opacity 0.2s;
-}
-#user-indicator .copy-auth-btn:hover { opacity: 1; }
 
 /* ========== APP-SPECIFIC STYLES ========== */
 

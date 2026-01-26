@@ -56,14 +56,14 @@
   </div>
 </div>
 
-<div id="user-indicator"></div>
 <div id="desktop">
   <div id="desktop-toolbar">
     <div id="desktop-breadcrumbs">
-      <span class="breadcrumb" data-path="~" onclick="navigateToPath('~')">🏠 Desktop</span>
+      <span class="breadcrumb" data-path="~" onclick="navigateToPath('~')"><b style="font-size:1.2em;">~</b></span>
     </div>
     <div id="desktop-actions">
       <span class="desktop-action" title="Toggle hidden files" onclick="toggleHiddenFiles()">👁</span>
+      <span class="desktop-action" title="Toggle file extensions" onclick="toggleExtensions()">.js</span>
       <span class="desktop-action" title="New folder" onclick="createNewFolder()">📁+</span>
     </div>
   </div>
@@ -151,6 +151,74 @@ let contextTarget = null;
 let submenuCloseTimeout = null;
 let topZIndex = 100;  // Track highest z-index for window stacking
 
+// ==================== FILE ASSOCIATION REGISTRY ====================
+// Apps register handlers for file extensions. First handler is default.
+// Structure: { ext: [{ id, name, icon, handler, isDefault }] }
+const fileHandlers = {};
+
+function registerFileHandler(config) {
+  // config: { id, name, icon, extensions: ['html', 'htm'], handler: fn, isDefault: bool }
+  const { id, name, icon, extensions, handler, isDefault } = config;
+  if (!id || !extensions || !handler) return;
+
+  extensions.forEach(ext => {
+    const e = ext.toLowerCase().replace(/^\./, '');
+    if (!fileHandlers[e]) fileHandlers[e] = [];
+
+    // Remove existing handler with same id
+    fileHandlers[e] = fileHandlers[e].filter(h => h.id !== id);
+
+    const entry = { id, name: name || id, icon: icon || '📄', handler };
+
+    if (isDefault) {
+      fileHandlers[e].unshift(entry); // Default goes first
+    } else {
+      fileHandlers[e].push(entry);
+    }
+  });
+}
+
+function getFileHandlers(filename) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  return fileHandlers[ext] || [];
+}
+
+function getDefaultHandler(filename) {
+  const handlers = getFileHandlers(filename);
+  return handlers[0] || null;
+}
+
+function openFileWithHandler(handlerId, filePath, fileName, content) {
+  const handlers = getFileHandlers(fileName);
+  const handler = handlers.find(h => h.id === handlerId);
+  if (handler) {
+    handler.handler(filePath, fileName, content);
+  } else {
+    algoSpeak('No handler found: ' + handlerId);
+  }
+}
+
+async function openFileWithDefaultHandler(filePath, fileName) {
+  const handler = getDefaultHandler(fileName);
+  if (handler) {
+    const content = await getFileFromDisk(filePath);
+    if (content !== null) {
+      handler.handler(filePath, fileName, content);
+    } else {
+      algoSpeak('Failed to open file');
+    }
+  } else {
+    // Fallback to notepad for unknown types
+    const content = await getFileFromDisk(filePath);
+    if (content !== null) {
+      openNotepad(content, fileName);
+    }
+  }
+}
+
+// Expose registration API globally
+window.registerFileHandler = registerFileHandler;
+
 // ==================== ICON SYSTEM ====================
 // Customizable icons with theme-aware colors for unicode characters
 const ICON_DEFS = {
@@ -194,7 +262,7 @@ function getIcon(iconKey, fallback) {
 // Render icon - supports simple string or complex object format
 // Simple: "📁" or "λ"
 // Complex: { main: "📁", sub: "🔒", blend: "normal", scale: 0.5, pos: "br", skewX: 0, skewY: 0 }
-// Dynamic: { main: "📄", text: "Hello\nWorld", mono: true, dynamic: true }
+// Dynamic: { main: "📄", sub: "code here", dynamic: true, rows: 4, cols: 12, trimStart: true }
 function renderIcon(icon, fileContent) {
   if (typeof icon === 'string') {
     return wrapIconWithColor(icon);
@@ -205,18 +273,29 @@ function renderIcon(icon, fileContent) {
   const main = icon.main || '📄';
   const sub = icon.sub || icon.text || '';
   const blend = icon.blend || 'normal';
-  const scale = icon.scale || (icon.text ? 0.3 : 0.5);
+  const scale = icon.scale || 0.5;
   const pos = icon.pos || 'br'; // tl, tr, bl, br, c (center)
   const mono = icon.mono || false;
   const skewX = icon.skewX || 0;
   const skewY = icon.skewY || 0;
   const offsetX = icon.offsetX || 0;
   const offsetY = icon.offsetY || 0;
+  const fontSize = icon.fontSize || 100;
+  const rows = icon.rows || 4;
+  const cols = icon.cols || 12;
+  const trimStart = icon.trimStart !== false;
+  const showBounds = icon.showBounds || false;
+  // New: drop shadow and theme color support
+  const shadow = icon.shadow || null; // e.g., "1px 1px 2px rgba(0,0,0,0.5)" or true for default
+  const subColor = icon.subColor || null; // explicit color or null for theme
+  const useThemeColors = icon.useThemeColors || false; // use CSS variables
 
-  // If dynamic icon with file content
+  // Process sub content - apply rows/cols/trim if multiline or dynamic
   let displaySub = sub;
   if (icon.dynamic && fileContent) {
-    displaySub = formatIconPreview(fileContent, icon.lines || 4, icon.chars || 12);
+    displaySub = formatIconPreview(fileContent, rows, cols, trimStart);
+  } else if (sub && (sub.includes('\n') || sub.length > cols)) {
+    displaySub = formatIconPreview(sub, rows, cols, trimStart);
   }
 
   if (!displaySub) {
@@ -238,14 +317,47 @@ function renderIcon(icon, fileContent) {
   if (skewX || skewY) transform += `skew(${skewX}deg, ${skewY}deg) `;
   if (offsetX || offsetY) transform += `translate(${offsetX}px, ${offsetY}px)`;
 
-  const subStyle = `position:absolute;${posStyles[pos] || posStyles.br}font-size:${scale * 100}%;mix-blend-mode:${blend};${mono ? 'font-family:monospace;' : ''}${transform ? 'transform:' + transform.trim() + ';' : ''}`;
+  // Calculate effective font size: scale * fontSize%
+  const effectiveSize = scale * fontSize;
+
+  // Build shadow style
+  let shadowStyle = '';
+  if (shadow === true) {
+    shadowStyle = useThemeColors
+      ? 'text-shadow:1px 1px 2px var(--shadow-color, rgba(0,0,0,0.5));'
+      : 'text-shadow:1px 1px 2px rgba(0,0,0,0.5);';
+  } else if (shadow) {
+    shadowStyle = `text-shadow:${shadow};`;
+  }
+
+  // Build color style
+  let colorStyle = '';
+  if (subColor) {
+    colorStyle = `color:${subColor};`;
+  } else if (useThemeColors) {
+    colorStyle = 'color:var(--text);';
+  }
+
+  const boundsStyle = showBounds ? 'outline:1px solid rgba(100,180,255,0.8);outline-offset:-1px;' : '';
+  const subStyle = `position:absolute;${posStyles[pos] || posStyles.br}font-size:${effectiveSize}%;mix-blend-mode:${blend};${mono ? 'font-family:monospace;' : ''}${transform ? 'transform:' + transform.trim() + ';' : ''}${shadowStyle}${colorStyle}${boundsStyle}`;
 
   // Handle multiline text
-  const subHtml = displaySub.includes('\n')
-    ? '<pre style="margin:0;line-height:1.1;font-size:inherit;">' + escapeHtml(displaySub) + '</pre>'
+  const isMultiline = displaySub.includes('\n');
+  const subHtml = isMultiline
+    ? '<pre style="margin:0;line-height:1.1;font-size:inherit;background:inherit;padding:1px 2px;">' + escapeHtml(displaySub) + '</pre>'
     : escapeHtml(displaySub);
 
   return `<span class="layered-icon"><span class="icon-main">${wrapIconWithColor(main)}</span><span class="icon-sub" style="${subStyle}">${subHtml}</span></span>`;
+}
+
+// Format content for icon preview - efficient extraction of first n chars per line
+function formatIconPreview(content, maxLines = 4, maxChars = 12, trimStart = true) {
+  if (!content) return '';
+  const lines = content.split('\n').slice(0, maxLines);
+  return lines.map(line => {
+    const processed = trimStart ? line.trimStart() : line;
+    return processed.substring(0, maxChars);
+  }).join('\n');
 }
 
 // Format file content for icon preview
@@ -307,14 +419,6 @@ function refreshAllIcons() {
     else if (text.includes('About')) item.querySelector('span').innerHTML = getIcon('about');
     else if (text.includes('Settings')) item.querySelector('span').innerHTML = getIcon('settings');
   });
-  // Update user indicator
-  const userInd = document.getElementById('user-indicator');
-  if (userInd && currentUser) {
-    const isSystem = userInd.textContent.includes('(system)');
-    const icon = isSystem ? getIcon('login') : getIcon('user');
-    userInd.innerHTML = icon + ' ' + currentUser + (isSystem ? ' (system)' : '') +
-      ' <span class="copy-auth-btn" onclick="copyAuthInfo(event)" title="Copy auth token">' + getIcon('copy') + '</span>';
-  }
 }
 
 // Expose for Icons app
@@ -1340,7 +1444,6 @@ function guestLogin() {
   currentUser = 'guest';
   sessionToken = null;
   hideLogin();
-  document.getElementById('user-indicator').innerHTML = getIcon('user') + ' Guest';
   document.getElementById('start-menu-auth').innerHTML = '<span>' + getIcon('login') + '</span> Login / Register';
   document.getElementById('start-menu-auth').onclick = showLogin;
   loadState();
@@ -1375,9 +1478,6 @@ function loginSuccess(username, token, systemUser) {
   if (isSystemUser) localStorage.setItem('fs_system_user', 'true');
   else localStorage.removeItem('fs_system_user');
   hideLogin();
-  const icon = isSystemUser ? getIcon('login') : getIcon('user');
-  document.getElementById('user-indicator').innerHTML = icon + ' ' + username + (isSystemUser ? ' (system)' : '') +
-    ' <span class="copy-auth-btn" onclick="copyAuthInfo(event)" title="Copy auth token">' + getIcon('copy') + '</span>';
   document.getElementById('start-menu-auth').innerHTML = '<span>' + getIcon('logout') + '</span> Log Out (' + username + ')';
   loadState();
   loadSystemApps();
@@ -1492,6 +1592,8 @@ async function init() {
   document.addEventListener('click', globalClick);
   document.addEventListener('mousemove', onDrag);
   document.addEventListener('mouseup', endDrag);
+  document.addEventListener('touchmove', onDrag, { passive: false });
+  document.addEventListener('touchend', endDrag);
   document.addEventListener('contextmenu', handleContextMenu);
   document.addEventListener('keydown', handleKeyDown);
 
@@ -1609,6 +1711,7 @@ function handleContextMenu(e) {
 let desktopFiles = []; // Cache of files from disk
 let desktopPath = '~'; // Current path (~ = desktop view, other = folder view)
 let showHiddenFiles = false;
+let showExtensions = false; // Default: hide file extensions
 const ICON_GRID_SIZE = 80; // Grid cell size for icons
 const ICON_COLS = 10; // Icons per row
 const TOOLBAR_HEIGHT = 36; // Height of desktop toolbar
@@ -1619,7 +1722,22 @@ const defaultDesktopIcons = [
   { id: 'jside', name: 'javascript.ide', icon: '💻', action: 'openJSIDE' },
   { id: 'browser', name: 'Web Browser', icon: '🌐', action: 'openBrowser' },
   { id: 'docs', name: 'Documentation', icon: '📕', action: 'openDocumentation' },
-  { id: 'home', name: 'Home', icon: '🏠', action: 'openHomeFolder', isFolder: true },
+  {
+    id: 'home',
+    name: 'User Directory',
+    icon: {
+      main: '📁',
+      sub: '~',
+      pos: 'c',
+      scale: 0.9,
+      skewX: -8,
+      offsetY: 2,
+      subColor: '#fff',
+      shadow: '1px 1px 3px rgba(0,0,0,0.7)'
+    },
+    action: 'openHomeFolder',
+    isFolder: true
+  },
 ];
 
 function getIconPosition(index) {
@@ -1662,7 +1780,7 @@ async function createDesktopIcons() {
       const pos = getIconPosition(idx);
       createDesktopIcon({
         id: 'file-' + idx,
-        name: file.name,
+        name: getDisplayName(file.name, file.isDir),
         icon: file.isDir ? '📁' : getFileIcon(file.name),
         x: pos.x,
         y: pos.y,
@@ -1682,12 +1800,12 @@ function updateBreadcrumbs() {
   if (!breadcrumbs) return;
 
   if (desktopPath === '~') {
-    breadcrumbs.innerHTML = '<span class="breadcrumb active">🏠 Desktop</span>';
+    breadcrumbs.innerHTML = '<span class="breadcrumb active"><b style="font-size:1.2em;">~</b></span>';
     return;
   }
 
   // Build breadcrumb trail
-  let html = '<span class="breadcrumb" onclick="navigateToPath(\'~\')">🏠 Desktop</span>';
+  let html = '<span class="breadcrumb" onclick="navigateToPath(\'~\')"><b style="font-size:1.2em;">~</b></span>';
 
   if (desktopPath === '~/' || desktopPath.startsWith('~/')) {
     // Home folder path
@@ -1736,6 +1854,11 @@ function updateDesktopActions() {
     hiddenBtn.classList.toggle('active', showHiddenFiles);
     hiddenBtn.innerHTML = showHiddenFiles ? '👁' : '👁‍🗨';
   }
+  const extBtn = document.querySelector('#desktop-actions .desktop-action[title="Toggle file extensions"]');
+  if (extBtn) {
+    extBtn.classList.toggle('active', showExtensions);
+    extBtn.style.opacity = showExtensions ? '1' : '0.5';
+  }
 }
 
 function navigateToPath(path) {
@@ -1756,6 +1879,23 @@ function toggleHiddenFiles() {
   showHiddenFiles = !showHiddenFiles;
   createDesktopIcons();
   algoSpeak(showHiddenFiles ? 'Showing hidden files' : 'Hiding hidden files');
+}
+
+function toggleExtensions() {
+  showExtensions = !showExtensions;
+  createDesktopIcons();
+  algoSpeak(showExtensions ? 'Showing extensions' : 'Hiding extensions');
+}
+
+function getDisplayName(fileName, isDir) {
+  // Directories always show full name
+  if (isDir) return fileName;
+  // If showing extensions, return full name
+  if (showExtensions) return fileName;
+  // Strip extension for display
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot > 0) return fileName.substring(0, lastDot);
+  return fileName;
 }
 
 async function createNewFolder() {
@@ -1844,12 +1984,8 @@ function createDesktopIcon(ic) {
     if (ic.action === 'openFolder') {
       navigateToPath(ic.filePath);
     } else if (ic.action === 'openDiskFile') {
-      const content = await getFileFromDisk(ic.filePath);
-      if (content !== null) {
-        openSavedFile({ name: ic.fileName, content: content }, ic.filePath);
-      } else {
-        algoSpeak('Failed to open file');
-      }
+      // Use registered file handlers
+      await openFileWithDefaultHandler(ic.filePath, ic.fileName);
     } else if (typeof window[ic.action] === 'function') {
       window[ic.action](ic.filePath);
     }
@@ -1878,16 +2014,51 @@ function showFileContextMenu(e, filePath, fileName, isFolder) {
       '<div class="ctx-separator"></div>' +
       '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + escapeHtml(filePath) + '\')">🗑️ Delete</div>';
   } else {
-    menu.innerHTML =
-      (isJS ? '<div class="ctx-item" onclick="runDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">▶ Run</div>' : '') +
-      '<div class="ctx-item" onclick="openDiskFileByPath(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">📂 Open</div>' +
-      '<div class="ctx-item" onclick="renameDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">✏️ Rename</div>' +
-      '<div class="ctx-separator"></div>' +
-      '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + escapeHtml(filePath) + '\')">🗑️ Delete</div>';
+    // Get all registered handlers for this file type
+    const handlers = getFileHandlers(fileName);
+    let html = '';
+
+    // Run option for JS files
+    if (isJS) {
+      html += '<div class="ctx-item" onclick="runDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">▶ Run</div>';
+    }
+
+    // "Open" uses default handler
+    if (handlers.length > 0) {
+      const defaultHandler = handlers[0];
+      html += '<div class="ctx-item" onclick="openFileWithApp(\'' + escapeHtml(defaultHandler.id) + '\', \'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">' + defaultHandler.icon + ' Open</div>';
+    } else {
+      html += '<div class="ctx-item" onclick="openDiskFileByPath(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">📂 Open</div>';
+    }
+
+    // "Open With" submenu if multiple handlers
+    if (handlers.length > 1) {
+      html += '<div class="ctx-item has-submenu">📂 Open With...<div class="ctx-submenu">';
+      handlers.forEach(h => {
+        html += '<div class="ctx-item" onclick="openFileWithApp(\'' + escapeHtml(h.id) + '\', \'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">' + h.icon + ' ' + escapeHtml(h.name) + '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    html += '<div class="ctx-item" onclick="renameDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">✏️ Rename</div>';
+    html += '<div class="ctx-separator"></div>';
+    html += '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + escapeHtml(filePath) + '\')">🗑️ Delete</div>';
+
+    menu.innerHTML = html;
   }
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   menu.classList.add('visible');
+}
+
+async function openFileWithApp(handlerId, filePath, fileName) {
+  hideContextMenu();
+  const content = await getFileFromDisk(filePath);
+  if (content !== null) {
+    openFileWithHandler(handlerId, filePath, fileName, content);
+  } else {
+    algoSpeak('Failed to open file');
+  }
 }
 
 async function runDiskFile(path, name) {
@@ -1976,8 +2147,20 @@ function renderWindow(win) {
   el.id = 'win-' + win.id;
   el.style.cssText = 'left:' + win.x + 'px;top:' + win.y + 'px;width:' + win.width + 'px;height:' + win.height + 'px;';
 
+  // Build resize handles HTML
+  const resizeHandles = isMobile
+    ? '<div class="resize-handle resize-grippy" onmousedown="startResize(event,' + win.id + ',\'se\')" ontouchstart="startResize(event,' + win.id + ',\'se\')"></div>'
+    : '<div class="resize-handle resize-n" onmousedown="startResize(event,' + win.id + ',\'n\')"></div>' +
+      '<div class="resize-handle resize-s" onmousedown="startResize(event,' + win.id + ',\'s\')"></div>' +
+      '<div class="resize-handle resize-e" onmousedown="startResize(event,' + win.id + ',\'e\')"></div>' +
+      '<div class="resize-handle resize-w" onmousedown="startResize(event,' + win.id + ',\'w\')"></div>' +
+      '<div class="resize-handle resize-ne" onmousedown="startResize(event,' + win.id + ',\'ne\')"></div>' +
+      '<div class="resize-handle resize-nw" onmousedown="startResize(event,' + win.id + ',\'nw\')"></div>' +
+      '<div class="resize-handle resize-se" onmousedown="startResize(event,' + win.id + ',\'se\')"></div>' +
+      '<div class="resize-handle resize-sw" onmousedown="startResize(event,' + win.id + ',\'sw\')"></div>';
+
   el.innerHTML =
-    '<div class="window-titlebar" onmousedown="startDrag(event,' + win.id + ')">' +
+    '<div class="window-titlebar" onmousedown="startDrag(event,' + win.id + ')" ontouchstart="startDrag(event,' + win.id + ')">' +
       '<div class="window-controls">' +
         '<button class="window-btn close" onclick="event.stopPropagation();closeWindow(' + win.id + ')"></button>' +
         '<button class="window-btn minimize" onclick="event.stopPropagation();minimizeWindow(' + win.id + ')"></button>' +
@@ -1985,9 +2168,11 @@ function renderWindow(win) {
       '</div>' +
       '<span class="window-title">' + escapeHtml(win.title) + '</span>' +
     '</div>' +
-    '<div class="window-content">' + win.content + '</div>';
+    '<div class="window-content">' + win.content + '</div>' +
+    resizeHandles;
 
   el.onmousedown = () => focusWindow(win.id);
+  el.ontouchstart = () => focusWindow(win.id);
   desktop.appendChild(el);
 }
 
@@ -2078,24 +2263,87 @@ function updateTaskbar() {
   ).join('');
 }
 
-// ==================== DRAG ====================
+// ==================== DRAG & RESIZE ====================
+let resizeWin = null;
+let resizeDir = null;
+let resizeStart = { x: 0, y: 0, w: 0, h: 0, left: 0, top: 0 };
+const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+function getEventPos(e) {
+  if (e.touches && e.touches.length > 0) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  return { x: e.clientX, y: e.clientY };
+}
+
 function startDrag(e, id) {
-  if (e.target.classList.contains('win-btn')) return;
+  if (e.target.classList.contains('window-btn') || e.target.classList.contains('win-btn')) return;
+  e.preventDefault();
   const el = document.getElementById('win-' + id);
   if (!el) return;
+  const pos = getEventPos(e);
   dragWin = { id, el };
-  dragOffset = { x: e.clientX - el.offsetLeft, y: e.clientY - el.offsetTop };
+  dragOffset = { x: pos.x - el.offsetLeft, y: pos.y - el.offsetTop };
   focusWindow(id);
 }
 
 function onDrag(e) {
-  if (!dragWin) return;
-  dragWin.el.style.left = (e.clientX - dragOffset.x) + 'px';
-  dragWin.el.style.top = (e.clientY - dragOffset.y) + 'px';
+  if (!dragWin && !resizeWin) return;
+  const pos = getEventPos(e);
+
+  if (dragWin) {
+    dragWin.el.style.left = (pos.x - dragOffset.x) + 'px';
+    dragWin.el.style.top = (pos.y - dragOffset.y) + 'px';
+  }
+
+  if (resizeWin) {
+    e.preventDefault();
+    const dx = pos.x - resizeStart.x;
+    const dy = pos.y - resizeStart.y;
+    const minW = 200, minH = 150;
+
+    if (resizeDir.includes('e')) {
+      resizeWin.el.style.width = Math.max(minW, resizeStart.w + dx) + 'px';
+    }
+    if (resizeDir.includes('w')) {
+      const newW = Math.max(minW, resizeStart.w - dx);
+      resizeWin.el.style.width = newW + 'px';
+      resizeWin.el.style.left = (resizeStart.left + resizeStart.w - newW) + 'px';
+    }
+    if (resizeDir.includes('s')) {
+      resizeWin.el.style.height = Math.max(minH, resizeStart.h + dy) + 'px';
+    }
+    if (resizeDir.includes('n')) {
+      const newH = Math.max(minH, resizeStart.h - dy);
+      resizeWin.el.style.height = newH + 'px';
+      resizeWin.el.style.top = (resizeStart.top + resizeStart.h - newH) + 'px';
+    }
+  }
 }
 
 function endDrag() {
   dragWin = null;
+  resizeWin = null;
+  resizeDir = null;
+}
+
+function startResize(e, id, dir) {
+  e.preventDefault();
+  e.stopPropagation();
+  const el = document.getElementById('win-' + id);
+  if (!el) return;
+  const pos = getEventPos(e);
+  resizeWin = { id, el };
+  resizeDir = dir;
+  resizeStart = {
+    x: pos.x,
+    y: pos.y,
+    w: el.offsetWidth,
+    h: el.offsetHeight,
+    left: el.offsetLeft,
+    top: el.offsetTop
+  };
+  focusWindow(id);
 }
 
 // ==================== NOTEPAD ====================
@@ -2267,6 +2515,90 @@ function browserBack(id) {
 function browserFwd(id) {
   try { document.getElementById('browser-frame-' + id).contentWindow.history.forward(); } catch(e) {}
 }
+
+// Open HTML content in browser using data URL
+function openBrowserWithContent(filePath, fileName, content) {
+  hideStartMenu();
+  const id = winId;
+  // Create a blob URL for the HTML content
+  const blob = new Blob([content], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  createWindow({
+    title: 'Web Browser - ' + fileName,
+    icon: '🌐',
+    width: 800,
+    height: 600,
+    content:
+      '<div class="browser-container">' +
+        '<div class="browser-toolbar">' +
+          '<button onclick="browserBack(' + id + ')">◀</button>' +
+          '<button onclick="browserFwd(' + id + ')">▶</button>' +
+          '<input type="text" id="browser-url-' + id + '" value="' + escapeHtml(filePath) + '" readonly style="background:#333;">' +
+          '<button onclick="browserGo(' + id + ')">Go</button>' +
+        '</div>' +
+        '<iframe id="browser-frame-' + id + '" src="' + blobUrl + '" class="browser-frame"></iframe>' +
+      '</div>'
+  });
+}
+
+// ==================== FILE HANDLER REGISTRATIONS ====================
+// Register built-in apps as file handlers
+// Order matters: first registered with isDefault=true becomes default
+//
+// External apps can also register handlers by calling registerFileHandler()
+// when they initialize. Notable external app repos:
+//   - Studio (IDE): https://github.com/williamsharkey/fs-studio
+//
+// To add a new file handler from an external app:
+//   registerFileHandler({
+//     id: 'myapp',
+//     name: 'My App',
+//     icon: '📱',
+//     extensions: ['ext1', 'ext2'],
+//     handler: (filePath, fileName, content) => myApp.open(content, fileName),
+//     isDefault: false  // true to become default for these extensions
+//   });
+
+// Web Browser: default for HTML files
+registerFileHandler({
+  id: 'browser',
+  name: 'Web Browser',
+  icon: '🌐',
+  extensions: ['html', 'htm'],
+  handler: openBrowserWithContent,
+  isDefault: true
+});
+
+// Notepad: handles many text formats
+registerFileHandler({
+  id: 'notepad',
+  name: 'Notepad',
+  icon: '📝',
+  extensions: ['txt', 'html', 'htm', 'css', 'json', 'md', 'xml', 'csv', 'log', 'ini', 'cfg', 'conf', 'yaml', 'yml'],
+  handler: (filePath, fileName, content) => openNotepad(content, fileName),
+  isDefault: false
+});
+
+// JavaScript IDE: default for JS files
+registerFileHandler({
+  id: 'jside',
+  name: 'javascript.ide',
+  icon: '💻',
+  extensions: ['js'],
+  handler: (filePath, fileName, content) => openJSIDE(content, fileName),
+  isDefault: true
+});
+
+// Notepad also handles JS as secondary
+registerFileHandler({
+  id: 'notepad',
+  name: 'Notepad',
+  icon: '📝',
+  extensions: ['js'],
+  handler: (filePath, fileName, content) => openNotepad(content, fileName),
+  isDefault: false
+});
 
 // ==================== DOCUMENTATION ====================
 const DOCS = {

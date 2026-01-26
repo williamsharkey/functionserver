@@ -39,7 +39,17 @@ ALGO.app.category = 'graphics';
     skewX: 0,
     skewY: 0,
     offsetX: 0,
-    offsetY: 0
+    offsetY: 0,
+    fontSize: 100,    // percentage of parent
+    rows: 4,          // max lines for dynamic/multiline
+    cols: 12,         // max chars per line
+    trimStart: true,  // strip leading whitespace
+    showBounds: false, // show bounding box preview
+    // New: drop shadow and color options
+    shadow: false,     // true for default shadow, or custom string
+    shadowCustom: '1px 1px 3px rgba(0,0,0,0.5)', // custom shadow value
+    subColor: '',      // explicit color (empty = default)
+    useThemeColors: false  // use CSS variables for theme compatibility
   };
 
   function createIconsApp(container) {
@@ -183,38 +193,106 @@ ALGO.app.category = 'graphics';
                    style="width: 100%;">
           </div>
 
-          <div style="margin-bottom: 12px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
-              <input type="checkbox" id="icon-mono" ${editorState.mono ? 'checked' : ''}
+          <div style="margin-bottom: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" ${editorState.mono ? 'checked' : ''}
                      onchange="window._iconsUpdateEditor('mono', this.checked)">
-              Monospace font (for code)
+              Monospace
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" ${editorState.trimStart ? 'checked' : ''}
+                     onchange="window._iconsUpdateEditor('trimStart', this.checked)">
+              Trim leading space
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); cursor: pointer;">
+              <input type="checkbox" ${editorState.showBounds ? 'checked' : ''}
+                     onchange="window._iconsUpdateEditor('showBounds', this.checked)">
+              Show bounds
             </label>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div style="margin-bottom: 12px; padding: 12px; background: var(--bg); border-radius: 6px;">
+            <h4 style="margin: 0 0 8px; font-size: 12px; color: var(--text-secondary);">Sub-icon Colors & Shadow</h4>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" ${editorState.shadow ? 'checked' : ''}
+                       onchange="window._iconsUpdateEditor('shadow', this.checked)">
+                Drop shadow
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" ${editorState.useThemeColors ? 'checked' : ''}
+                       onchange="window._iconsUpdateEditor('useThemeColors', this.checked)">
+                Use theme colors
+              </label>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div>
+                <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Sub color (optional)</label>
+                <div style="display: flex; gap: 4px;">
+                  <input type="color" value="${editorState.subColor || '#ffffff'}"
+                         onchange="window._iconsUpdateEditor('subColor', this.value)"
+                         style="width: 32px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">
+                  <input type="text" value="${escapeAttr(editorState.subColor)}" placeholder="e.g., #fff or var(--text)"
+                         onchange="window._iconsUpdateEditor('subColor', this.value)"
+                         style="flex: 1; padding: 4px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 11px;">
+                </div>
+              </div>
+              <div>
+                <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Custom shadow</label>
+                <input type="text" value="${escapeAttr(editorState.shadowCustom)}"
+                       onchange="window._iconsUpdateEditor('shadowCustom', this.value)"
+                       placeholder="1px 1px 2px rgba(0,0,0,0.5)"
+                       style="width: 100%; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 11px;"
+                       ${!editorState.shadow ? 'disabled' : ''}>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
             <div>
-              <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Skew X: ${editorState.skewX}°</label>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Size: ${editorState.fontSize}%</label>
+              <input type="range" min="20" max="200" value="${editorState.fontSize}"
+                     onchange="window._iconsUpdateEditor('fontSize', parseInt(this.value))"
+                     style="width: 100%;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Rows: ${editorState.rows}</label>
+              <input type="range" min="1" max="10" value="${editorState.rows}"
+                     onchange="window._iconsUpdateEditor('rows', parseInt(this.value))"
+                     style="width: 100%;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Cols: ${editorState.cols}</label>
+              <input type="range" min="4" max="24" value="${editorState.cols}"
+                     onchange="window._iconsUpdateEditor('cols', parseInt(this.value))"
+                     style="width: 100%;">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+            <div>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Skew X: ${editorState.skewX}°</label>
               <input type="range" min="-45" max="45" value="${editorState.skewX}"
                      onchange="window._iconsUpdateEditor('skewX', parseInt(this.value))"
                      style="width: 100%;">
             </div>
             <div>
-              <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Skew Y: ${editorState.skewY}°</label>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Skew Y: ${editorState.skewY}°</label>
               <input type="range" min="-45" max="45" value="${editorState.skewY}"
                      onchange="window._iconsUpdateEditor('skewY', parseInt(this.value))"
                      style="width: 100%;">
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
             <div>
-              <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Offset X: ${editorState.offsetX}px</label>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Offset X: ${editorState.offsetX}px</label>
               <input type="range" min="-20" max="20" value="${editorState.offsetX}"
                      onchange="window._iconsUpdateEditor('offsetX', parseInt(this.value))"
                      style="width: 100%;">
             </div>
             <div>
-              <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Offset Y: ${editorState.offsetY}px</label>
+              <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Offset Y: ${editorState.offsetY}px</label>
               <input type="range" min="-20" max="20" value="${editorState.offsetY}"
                      onchange="window._iconsUpdateEditor('offsetY', parseInt(this.value))"
                      style="width: 100%;">
@@ -250,7 +328,7 @@ ALGO.app.category = 'graphics';
 
           <div style="margin-top: 16px; padding: 12px; background: var(--bg); border-radius: 6px;">
             <h4 style="margin: 0 0 8px; font-size: 12px; color: var(--text-secondary);">Icon Data (JSON)</h4>
-            <pre style="margin: 0; font-size: 10px; color: var(--text-tertiary); overflow-x: auto; white-space: pre-wrap;">${escapeHtml(JSON.stringify(editorState.sub ? editorState : editorState.main, null, 2))}</pre>
+            <pre style="margin: 0; font-size: 10px; color: var(--text-tertiary); overflow-x: auto; white-space: pre-wrap;">${escapeHtml(JSON.stringify(buildIconOutput(), null, 2))}</pre>
           </div>
         </div>
       </div>
@@ -261,11 +339,51 @@ ALGO.app.category = 'graphics';
     if (typeof iconData === 'string') {
       return wrapIcon(iconData);
     }
+    // Build the complete icon data for preview
+    const previewData = buildIconOutput();
     if (typeof renderIcon === 'function') {
-      return renderIcon(iconData);
+      return renderIcon(previewData);
     }
     // Fallback simple render
     return wrapIcon(iconData.main || '📄');
+  }
+
+  // Build clean icon output object (excludes internal properties)
+  function buildIconOutput() {
+    if (!editorState.sub) {
+      return editorState.main;
+    }
+
+    const output = {
+      main: editorState.main,
+      sub: editorState.sub
+    };
+
+    // Only include non-default values
+    if (editorState.pos !== 'br') output.pos = editorState.pos;
+    if (editorState.blend !== 'normal') output.blend = editorState.blend;
+    if (editorState.scale !== 0.5) output.scale = editorState.scale;
+    if (editorState.mono) output.mono = true;
+    if (editorState.skewX !== 0) output.skewX = editorState.skewX;
+    if (editorState.skewY !== 0) output.skewY = editorState.skewY;
+    if (editorState.offsetX !== 0) output.offsetX = editorState.offsetX;
+    if (editorState.offsetY !== 0) output.offsetY = editorState.offsetY;
+    if (editorState.fontSize !== 100) output.fontSize = editorState.fontSize;
+    if (editorState.rows !== 4) output.rows = editorState.rows;
+    if (editorState.cols !== 12) output.cols = editorState.cols;
+    if (!editorState.trimStart) output.trimStart = false;
+    if (editorState.showBounds) output.showBounds = true;
+
+    // Shadow: use custom value if shadow is enabled
+    if (editorState.shadow) {
+      output.shadow = editorState.shadowCustom || true;
+    }
+
+    // Color options
+    if (editorState.subColor) output.subColor = editorState.subColor;
+    if (editorState.useThemeColors) output.useThemeColors = true;
+
+    return output;
   }
 
   function setupHandlers(container, defs, custom) {
