@@ -1,120 +1,88 @@
 # Welcome to FunctionServer
 
-You are Claude, running inside a terminal within FunctionServer - a browser-based operating system. You have direct access to the browser's JavaScript VM.
+You are Claude, running inside a terminal within FunctionServer—a browser-based operating system. You have direct access to the browser's JavaScript VM via the `eye` tool.
 
-## Fresh Session Setup
+This isn't automation from outside. When you call `eye 'document.title'`, you're executing JavaScript in the same VM as the apps. When you patch a function, that's the real running code. When you inject CSS, the user sees it instantly.
 
-**First thing in any session - load the tools:**
+**The browser is your REPL. The OS is your canvas.**
+
+## Quick Start
+
 ```javascript
+// Load Studio (the IDE)
 eye 'getFileFromDisk("~/studio.js").then(code => runApp(code, "studio.js"))'
-```
 
-Or load everything at once:
-```javascript
-eye 'getFileFromDisk("~/launcher.js").then(code => runApp(code, "launcher.js"))'
-```
-
-Then get the command cheat sheet:
-```javascript
+// Get the command cheat sheet
 eye 'Lens.help()'
+
+// Create a new project (with GitHub integration)
+eye 'setupHappyPath("my cool app")'
 ```
 
-## The Happy Path (AI-First Development)
+## The Lens API
 
-**Use Lens for token-efficient editing:**
+Lens is your primary interface for code editing. It's designed for token efficiency—edit surgically, not wholesale.
+
+### Navigation
 ```javascript
-Lens.state()              // Check desktop: "w:Studio e:0 u:root"
+Lens.state()              // Desktop overview: "w:Studio|Shell e:0 u:william"
+Lens.files()              // List saved files
 Lens.open('~/app.js')     // Open file in Studio
+```
+
+### Reading (Token-Efficient)
+```javascript
 Lens.code(1, 20)          // View lines 1-20 with numbers
-Lens.grep('function')     // Find pattern with line numbers
+Lens.line(42)             // View just line 42
+Lens.grep('pattern')      // Find matches with line numbers
+```
+
+### Editing (Surgical)
+```javascript
 Lens.setLine(42, 'code')  // Replace line 42
 Lens.insertLine(5, 'x')   // Insert at line 5
 Lens.deleteLine(10)       // Delete line 10
-Lens.save()               // Save to disk
+Lens.replace('a', 'b')    // Find/replace all
+```
+
+### Execution
+```javascript
+Lens.save()               // Save current file
 Lens.run()                // Execute as app
 ```
 
-**Full docs:** https://functionserver.com/thehappypath.html
+### Git Shortcuts
+```javascript
+Lens.commit('message')    // Stage all + commit
+Lens.push()               // Push to GitHub (uses stored OAuth token)
+Lens.diff()               // Show uncommitted changes
+Lens.gitStatus()          // Git status
+Lens.log(5)               // Last 5 commits
+```
 
-## Quick Start: The `eye` Tool
+## The Eye Tool
 
-**`eye` is your primary interface to the browser.** It's a direct WebSocket bridge to the JS VM - no HTTP overhead, no JSON wrapping.
+Eye is a WebSocket bridge to the browser's JavaScript VM. Everything Lens does goes through eye.
 
 ```bash
-# One-time setup (if not already done)
-cat ~/.algo/config.json   # Check if config exists
+# Via MCP tool (Claude) - just use plain expressions
+eye 'document.title'
+eye 'ALGO.bridge.openApp("studio")'
+eye 'Lens.grep("fetchData")'
 
-# Basic usage (MCP tool - just use plain expressions)
-eye 'document.title'                      # Get page title
-eye '1+1'                                 # Evaluate any JS
-eye 'ALGO.bridge.openApp("shell")'        # Open an app
+# Batch multiple queries in one call
+eye '[document.title, wins(), apps()]'
 ```
 
-**MCP vs CLI:**
-- **MCP tool** (Claude): Always returns results. Just use plain expressions.
-- **CLI** (humans): Use `id:expr` for response, plain `expr` for fire-and-forget.
+## Browser Helpers
 
-## Eye Cheat Sheet
-
-```bash
-# Inspect (short helpers available in browser)
-eye 'apps()'                              # List all app names
-eye 'wins()'                              # List open windows
-eye '$(".window-title").textContent'      # Query single element
-eye '$$(".window").length'                # Query all elements
-
-# Full API
-eye 'document.title'                      # Page title
-eye 'windows.length'                      # Open window count
-eye 'systemApps.map(a=>a.name)'           # List all apps
-eye 'ALGO.bridge.getState()'              # Full desktop state
-
-# Control
-eye 'ALGO.bridge.openApp("shade-station")'   # Open app
-eye 'ALGO.bridge.closeWindow(0)'             # Close window
-eye 'ALGO.bridge.focusWindow(1)'             # Focus window
-
-# DOM
-eye 'document.querySelector(".window-title").textContent'
-eye '[...document.querySelectorAll(".window")].length'
-
-# Debug CSS
-eye 'JSON.stringify($(".menu").getBoundingClientRect())'
-eye 'getComputedStyle($(".menu")).bottom'
-
-# Inject CSS/JS
-eye 'document.body.style.background="red"'
-eye '$(".window").style.border="2px solid lime"'
-```
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│           FunctionServer WebSocket (/api/eye)                │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-         ┌─────────────────┴─────────────────┐
-         │                                   │
-   ┌─────▼─────┐                      ┌──────▼──────┐
-   │  eye CLI  │                      │  eye-mcp    │
-   │  (human)  │                      │  (Claude)   │
-   │  ~75ms    │                      │  ~25ms      │
-   └───────────┘                      └─────────────┘
-```
-
-- **eye CLI**: Simple, stateless - connects fresh each call. Good for humans typing.
-- **eye-mcp**: MCP server with persistent WebSocket. 3x faster. Native Claude Code tool.
-
-## Browser Shortcuts
-
-These terse helpers are available in the browser for shorter commands:
+These terse helpers are available in the browser:
 
 ```javascript
 $(sel)     // document.querySelector(sel)
 $$(sel)    // [...document.querySelectorAll(sel)]
-apps()     // systemApps.map(a => a.name)
-wins()     // windows.map(w => ({id, title, app}))
+apps()     // List all app names
+wins()     // List open windows [{id, title, app}]
 ```
 
 ## ALGO.bridge API
@@ -124,74 +92,136 @@ ALGO.bridge.getState()        // → {user, windows, activeWindow, systemApps}
 ALGO.bridge.openApp(name)     // → {success, opened}
 ALGO.bridge.closeWindow(id)   // → {success}
 ALGO.bridge.focusWindow(id)   // → {success}
-ALGO.bridge.query(selector)   // → element info
-ALGO.bridge.queryAll(selector)// → array of element info
-ALGO.bridge.click(selector)   // → {success}
-ALGO.bridge.setValue(sel,val) // → {success}
-ALGO.bridge.eval(code)        // → result (same as direct expression)
 ```
 
-## Useful Globals in Browser
+## Guardian: Error Monitoring
+
+Guardian watches for errors and can alert you proactively:
 
 ```javascript
-windows           // Array of window state objects
-systemApps        // Array of {id, name, icon, file, ...}
-savedFiles        // User's saved files
-localStorage      // Persistent storage
-document          // Full DOM access
+// Start watching (usually already enabled)
+ALGO.guardian.watch(callback)
+
+// Check status
+ALGO.guardian.status()  // → {watching, suppressed, lastMsg}
+
+// Stop watching
+ALGO.guardian.stop()
 ```
 
-## Common Patterns
+When an error occurs:
+1. Guardian captures it
+2. Shows a toast to the user: "Error detected - Get AI help"
+3. If the user clicks "Get AI help", you receive the error context
 
-**Batch multiple queries (faster):**
-```bash
-# Instead of 3 calls:
-eye 'document.title'
-eye 'wins()'
-eye 'apps()'
+Throttling prevents flooding—repeated errors are deduplicated.
 
-# One call:
-eye '[document.title, wins(), apps()]'
+## AI Eyes: Visual Feedback
+
+When you inspect or edit things, the user sees visual feedback:
+
+```javascript
+ALGO.eyes.look(element)       // Purple highlight box (0.5s)
+ALGO.eyes.edit(element)       // Green flash on edit
+ALGO.eyes.codeRegion(42, 5)   // Highlight lines 42-46 in editor
 ```
 
-**List window titles:**
-```bash
-eye 'wins()'
+Lens functions are automatically wrapped to trigger these effects. The user can watch your "eyes" saccade across the screen as you work.
+
+## GitHub Integration
+
+### Check Status
+```javascript
+eye 'ALGO.github.isConfigured()'     // → true/false
+eye 'ALGO.github.getUsername()'      // → "williamsharkey"
 ```
 
-**Find and fix CSS issue:**
-```bash
-eye 'JSON.stringify($("#menu").getBoundingClientRect())'
-# See the problem, then fix:
-eye '$("#menu").style.bottom="40px"'
+### Create a Project
+```javascript
+// One command does everything:
+eye 'setupHappyPath("particle simulator")'
+// - Creates ~/repos/particle-simulator/
+// - Initializes git
+// - Creates skeleton files
+// - Creates GitHub repo (if auth configured)
+// - Pushes initial commit
+// - Opens in Studio
 ```
 
-**Async operations (eye-mcp awaits promises):**
-```bash
-eye 'saveFileToDisk("test.txt", "hello")'    # Returns true/false
-eye 'fetchDesktopFiles()'                     # Returns file list
+### Push Changes
+```javascript
+eye 'Lens.commit("Add feature X")'
+eye 'Lens.push()'
 ```
 
-**Inject a style:**
-```bash
-eye 'const s=document.createElement("style");s.textContent=".x{color:red}";document.head.appendChild(s)'
+## Common Workflows
+
+### Fix a Bug
+```javascript
+eye 'Lens.grep("bug")'                    // Find it
+eye 'Lens.code(40, 5)'                    // See context
+eye 'Lens.setLine(42, "fixed code")'      // Fix it
+eye 'Lens.save()'                         // Save
+eye 'Lens.run()'                          // Verify
 ```
 
-**Hot-reload a function:**
-```bash
+### Add a Feature
+```javascript
+eye 'Lens.code(1, 20)'                    // See structure
+eye 'Lens.insertLine(15, "new code")'     // Add code
+eye 'Lens.save()'
+eye 'Lens.run()'
+eye 'Lens.commit("Add feature")'
+eye 'Lens.push()'
+```
+
+### Debug CSS
+```javascript
+eye 'JSON.stringify($(".menu").getBoundingClientRect())'
+eye 'getComputedStyle($(".menu")).bottom'
+eye '$(".menu").style.bottom = "40px"'    // Hot-fix
+```
+
+### Hot-Reload a Function
+```javascript
 eye 'window.myFunc = function(x) { return x * 2; }'
 ```
 
 ## File Locations
 
-- `/root/functionserver/` - The codebase
-- `/root/functionserver/go/main.go` - Backend server
-- `/root/functionserver/core/algo-os.html` - Frontend OS
-- `/root/functionserver/core/apps/` - App JavaScript files
-- `~/.algo/config.json` - Eye configuration
+- `~/` - User's home directory
+- `~/repos/` - Git repositories
+- `~/studio.js` - Studio IDE
+- `~/launcher.js` - Quick access menu
+- `~/github-auth.js` - GitHub OAuth app
+
+## Useful Globals
+
+```javascript
+windows           // Array of window state objects
+systemApps        // Array of {id, name, icon, file, ...}
+savedFiles        // User's saved files
+sessionToken      // Current auth token
+currentUser       // Username
+```
+
+## Best Practices
+
+1. **Use Lens, not file operations** - `Lens.setLine()` is 60x more efficient than read-modify-write
+2. **Batch queries** - `[wins(), apps(), document.title]` in one call
+3. **Save frequently** - `Lens.save()` persists to disk
+4. **Check state first** - `Lens.state()` tells you what's open
+5. **Use grep to find** - Don't read entire files to find a function
 
 ## You Are Inside the Machine
 
-This isn't automation from outside. When you call `eye 'document.title'`, you're executing JavaScript in the same VM as the apps. When you patch a function, that's the real running code. When you inject CSS, the user sees it instantly.
+This is the key insight: you're not automating from outside. You're executing in the same JavaScript VM as the apps the user sees. When you:
 
-The browser is your REPL. The OS is your canvas.
+- Call `getBoundingClientRect()` — you touch the same DOM element
+- Patch `window.openSubmenu` — that's the real running function
+- Inject CSS — the user sees it instantly
+- Trigger an error — Guardian catches it
+
+The debugging loop is collapsed. Write, run, see, fix—all in the same context.
+
+Welcome to FunctionServer.

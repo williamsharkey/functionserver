@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>I Let AI Debug My Browser From the Command Line</title>
-<meta name="description" content="An AI that can see, inspect, and manipulate a web browser in real-time via MCP.">
+<title>The Door - FunctionServer</title>
+<meta name="description" content="An AI that inhabits the browser, not automates it. The architecture of FunctionServer.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
@@ -31,7 +31,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle grid background */
 .grid-bg {
   position: fixed;
   inset: 0;
@@ -168,27 +167,6 @@ pre code {
 .kw { color: var(--accent); }
 .str { color: var(--green); }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 24px 0;
-  font-size: 14px;
-}
-
-th, td {
-  padding: 12px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-}
-
-th {
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 500;
-}
-
-td { color: var(--text-secondary); }
-
 blockquote {
   background: var(--surface);
   border-left: 3px solid var(--accent);
@@ -210,19 +188,6 @@ blockquote p {
 }
 
 blockquote p:last-child { margin-bottom: 0; }
-
-.ascii-art {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px;
-  margin: 24px 0;
-  font-family: 'SF Mono', ui-monospace, monospace;
-  font-size: 12px;
-  line-height: 1.3;
-  color: var(--accent);
-  overflow-x: auto;
-}
 
 hr {
   border: none;
@@ -277,178 +242,109 @@ footer a { color: var(--accent); text-decoration: none; }
 </nav>
 
 <article>
-  <h1>I Let AI Debug My Browser From the Command Line</h1>
+  <h1>The Door</h1>
 
-  <p class="lead">Today I built something that felt like crossing a threshold: an AI that can see, inspect, and manipulate a web browser in real-time from completely outside it. Not Puppeteer. Not Selenium. An LLM with authenticated API access to your DOM.</p>
+  <p class="lead">What happens when AI doesn't automate from outside, but inhabits the same address space as the apps you're using? We built an operating system to find out.</p>
 
-  <h2>What We Built</h2>
+  <h2>The Traditional Model</h2>
 
-  <p>FunctionServer is a browser-based operating system (think Windows 95 aesthetic, runs at functionserver.com). It has windows, apps, a start menu, the works. We added:</p>
+  <p>In most systems, AI automates from outside. It connects via WebDriver protocols, sends commands through HTTP APIs, parses screenshots to understand state. The AI is a client. The app is a server. There's a wall between them.</p>
 
-  <ol>
-    <li><strong>MCP Bridge</strong> - A Model Context Protocol endpoint that routes commands to the browser via WebSocket</li>
-    <li><strong>Authenticated API</strong> - Bearer tokens so only you can control your session</li>
-    <li><strong>Browser Tools</strong> - <code>algo_eval</code>, <code>algo_getState</code>, <code>algo_query</code>, <code>algo_click</code>, <code>algo_openApp</code>, etc.</li>
-  </ol>
-
-  <p>The result: any LLM with HTTP access can execute JavaScript in your browser, query the DOM, click buttons, and open apps - all via curl.</p>
-
-  <pre><code>curl -X POST https://functionserver.com/api/mcp \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"method":"tools/call","params":{"name":"algo_openApp","arguments":{"appId":"calculator"}}}'</code></pre>
-
-  <p>A window opens in your browser. From my terminal. No WebDriver. No browser automation framework. Just HTTPS.</p>
-
-  <h2>The Live Debugging Sessions</h2>
-
-  <h3>Session 1: The Invisible Menu</h3>
-
-  <p>The user reported that the Programs submenu was appearing off-screen. Instead of the normal debug cycle (inspect element, edit CSS, refresh, repeat), I did this:</p>
-
-  <p><strong>1. Diagnosed remotely via MCP:</strong></p>
-  <pre><code><span class="cm">// Injected via algo_eval from my terminal</span>
-<span class="kw">const</span> submenu = document.getElementById(<span class="str">'programs-menu'</span>);
-<span class="kw">const</span> rect = submenu.getBoundingClientRect();
-<span class="cm">// Result: {bottom: 343, taskbarTop: 383}</span>
-<span class="cm">// The menu was 40px too high!</span></code></pre>
-
-  <p><strong>2. Found the conflict:</strong></p>
-  <pre><code><span class="kw">const</span> cs = getComputedStyle(submenu);
-<span class="cm">// inline: {top: "auto", bottom: "39px"}</span>
-<span class="cm">// computed: {top: "0px", bottom: "80px"}  <- CSS overriding inline!</span></code></pre>
-
-  <p><strong>3. Fixed it with setProperty + !important:</strong></p>
-  <pre><code>submenu.style.setProperty(<span class="str">'bottom'</span>, <span class="str">'40px'</span>, <span class="str">'important'</span>);
-submenu.style.setProperty(<span class="str">'top'</span>, <span class="str">'auto'</span>, <span class="str">'important'</span>);
-<span class="cm">// Both menus now at 383.3px - aligned!</span></code></pre>
-
-  <p><strong>4. Hot-reloaded the function</strong> without refreshing:</p>
-  <pre><code>window.openSubmenu = <span class="kw">function</span>(el) {
-  <span class="cm">// ... patched code with setProperty ...</span>
-};</code></pre>
-
-  <p>Total time: ~5 minutes. Zero page refreshes.</p>
-
-  <h3>Session 2: The Missing Calendar</h3>
-
-  <p>User: "Calendar looks like unstyled webpage, missing CSS or something."</p>
-
-  <pre><code><span class="cm">// Check what classes the calendar uses</span>
-<span class="kw">const</span> grid = document.querySelector(<span class="str">'.cal-grid'</span>);
-getComputedStyle(grid).display;  <span class="cm">// "block" - no grid!</span>
-
-<span class="cm">// The CSS had .calendar-app-header but the app uses .cal-header</span>
-<span class="cm">// Completely different naming conventions. Injected fix:</span>
-<span class="kw">const</span> style = document.createElement(<span class="str">'style'</span>);
-style.textContent = <span class="str">`
-  .cal-header { display: flex; background: #008080; color: white; }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
-  .cal-day { background: white; cursor: pointer; }
-  .cal-day.today { background: #c0e0e0; }
-`</span>;
-document.head.appendChild(style);
-<span class="cm">// Calendar instantly styled!</span></code></pre>
-
-  <h3>Session 3: Live WebGL Desktop Background</h3>
-
-  <p>This one was just for fun. I wrote a shader in Shade Station, then via MCP:</p>
-
-  <pre><code><span class="cm">// Create canvas behind desktop icons</span>
-<span class="kw">const</span> canvas = document.createElement(<span class="str">'canvas'</span>);
-canvas.style.cssText = <span class="str">'position:absolute;top:0;left:0;width:100%;height:100%;z-index:0'</span>;
-desktop.insertBefore(canvas, desktop.firstChild);
-
-<span class="cm">// Initialize WebGL, compile shader, start render loop</span>
-<span class="kw">const</span> gl = canvas.getContext(<span class="str">'webgl'</span>);
-<span class="cm">// ... shader compilation ...</span>
-<span class="kw">function</span> render() {
-  gl.uniform1f(timeLoc, time += 0.016);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  requestAnimationFrame(render);
-}
-render();</code></pre>
-
-  <p>Now there's a hypnotic tunnel shader animating as the desktop wallpaper. All injected via MCP. The user watched it appear in real-time.</p>
-
-  <h2>The MCP Debugging Technique</h2>
-
-  <table>
-    <tr><th>Step</th><th>Tool</th><th>Purpose</th></tr>
-    <tr><td>Measure</td><td><code>getBoundingClientRect()</code></td><td>Get exact pixel positions</td></tr>
-    <tr><td>Diagnose</td><td><code>getComputedStyle()</code> vs inline</td><td>Find style conflicts</td></tr>
-    <tr><td>Inject CSS</td><td><code>document.createElement('style')</code></td><td>Test fixes instantly</td></tr>
-    <tr><td>Force override</td><td><code>setProperty('prop', 'val', 'important')</code></td><td>Beat stubborn CSS</td></tr>
-    <tr><td>Patch functions</td><td><code>window.fn = function() {...}</code></td><td>Hot-reload JS</td></tr>
-    <tr><td>Verify</td><td><code>getBoundingClientRect()</code> again</td><td>Confirm fix worked</td></tr>
-  </table>
-
-  <p>The browser becomes a REPL you can poke from anywhere.</p>
-
-  <h2>The Architecture: Neo and Morpheus</h2>
-
-  <p>We ended up with two personas:</p>
+  <p>This creates fundamental friction:</p>
 
   <ul>
-    <li><strong>Neo</strong> - AI running inside FunctionServer's terminal (has shell access, runs on server)</li>
-    <li><strong>Morpheus</strong> - AI running anywhere else (laptop, cloud, phone), controlling the browser via MCP</li>
+    <li>AI can't see what you see without verbose dumps</li>
+    <li>AI can't verify its changes without you running them</li>
+    <li>Every interaction is a round-trip through an abstraction layer</li>
+    <li>The debugging loop is open—write code, hope it works</li>
   </ul>
 
-  <p>For users without shell access, there's AI Eyes - a window that shows an ASCII face watching you, logging MCP activity as it happens:</p>
+  <h2>A Different Architecture</h2>
 
-  <div class="ascii-art">+-----------------------------+
-|      o            o        |  <- blinks when commands arrive
-|           ----              |
-|   Morpheus connected        |
-|   --- MCP Activity ---      |
-|   algo_openApp(calendar) +  |
-|   algo_eval              +  |
-|   algo_eval              +  |
-+-----------------------------+</div>
+  <p>FunctionServer inverts this. Apps aren't compiled binaries or isolated processes. They're JavaScript running in the browser's VM. And AI connects directly to that VM via WebSocket.</p>
+
+  <pre><code><span class="cm">// From a terminal, execute JS in the user's browser</span>
+eye <span class="str">'document.title'</span>
+<span class="cm">→ "FunctionServer"</span>
+
+eye <span class="str">'Lens.grep("fetchData")'</span>
+<span class="cm">→ "42:async function fetchData"</span>
+
+eye <span class="str">'Lens.setLine(42, "fixed")'</span>
+<span class="cm">→ "✓ L42"</span></code></pre>
+
+  <p>When AI calls <code>getBoundingClientRect()</code>, it touches the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the real running function. When it injects CSS, the user sees it instantly.</p>
+
+  <p>The AI doesn't automate the OS. It <strong>inhabits</strong> it.</p>
+
+  <h2>What This Changes</h2>
+
+  <h3>The Debugging Loop Collapses</h3>
+
+  <p>Traditional: write code → deploy → refresh → inspect → guess → repeat.</p>
+
+  <p>FunctionServer: inspect live → measure → test fix → verify → commit.</p>
+
+  <p>The AI can query element positions, check computed styles, inject test fixes, and verify they worked—all before touching source files. The browser becomes a REPL you can poke from anywhere.</p>
+
+  <h3>Token Efficiency Improves Dramatically</h3>
+
+  <p>Instead of reading 1000-line files to make one-line changes, AI uses Lens:</p>
+
+  <pre><code>Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// Find it</span>
+Lens.setLine(<span class="num">42</span>, <span class="str">'new code'</span>)    <span class="cm">// Fix it</span>
+Lens.save()                      <span class="cm">// Save it</span></code></pre>
+
+  <p>Three calls. Zero file reads. 60x fewer tokens than traditional file operations.</p>
+
+  <h3>AI Gets Eyes</h3>
+
+  <p>When AI works in FunctionServer, it can see. The AI Eyes system shows humans what AI is looking at and editing—purple highlights for inspection, green flashes for edits. You can watch the AI's focus saccade across the screen as it navigates, searches, and fixes.</p>
+
+  <h3>Errors Become Conversations</h3>
+
+  <p>Guardian monitors console errors. When something breaks, a toast appears: "Error detected—Get AI help." Click it, and the AI receives the error context. It can investigate, fix, and verify—proactively.</p>
+
+  <h3>Projects Ship, Not Just Generate</h3>
+
+  <p>With GitHub OAuth integration, AI doesn't just write code—it ships:</p>
+
+  <pre><code>setupHappyPath(<span class="str">"particle simulator"</span>)
+<span class="cm">// Creates ~/repos/particle-simulator/</span>
+<span class="cm">// Initializes git, creates skeleton</span>
+<span class="cm">// Creates GitHub repo, pushes</span>
+<span class="cm">// Opens in Studio, ready to edit</span></code></pre>
+
+  <p>One command. Idea to GitHub repository.</p>
 
   <hr>
 
   <blockquote>
     <strong>A note on architecture</strong>
     <p>Live patching exists. Browser automation exists. MITM injection exists. So what's actually new here?</p>
-    <p>In a traditional setup, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client, the app is a server.</p>
-    <p>In FunctionServer, apps <em>are</em> JavaScript artifacts running in the same VM that MCP accesses. When an AI calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the real running function. The AI doesn't automate the OS—it inhabits it.</p>
+    <p>In traditional setups, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client, the app is a server.</p>
+    <p>In FunctionServer, apps <em>are</em> JavaScript artifacts running in the same VM that the eye bridge accesses. When AI calls <code>getBoundingClientRect()</code>, it touches the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the real running function.</p>
     <p>This creates an interesting question: how do you version control a system that's constantly being reshaped?</p>
     <p>You don't. Each app becomes its own repository. What you version is the <em>protocol</em>—the ALGO API, the conventions for file type registration, the pubsub message format. The OS defines the rules. Users and AI agents shape whatever they want within them.</p>
-    <p>We're not sure yet what this topology enables. But there's something in the architecture worth exploring—a cloud OS where apps, AI, and debugging tools share the same address space.</p>
   </blockquote>
 
   <hr>
 
-  <h2>Why This Matters</h2>
+  <h2>The Tools</h2>
 
-  <p><strong>1. The debugging loop collapsed.</strong></p>
-  <p>Old way: write code -> deploy -> refresh -> inspect -> guess -> repeat</p>
-  <p>New way: inspect live -> measure -> test fix -> verify -> commit</p>
+  <p>FunctionServer is a collection of tools that work together:</p>
 
-  <p><strong>2. AI assistants can have eyes.</strong></p>
-  <p>Most AI coding assistants are blind. They read your code, guess what it does, and hope. With MCP, AI can query element positions, check computed styles, inject test fixes, and verify they worked - all before touching your source files.</p>
-
-  <p><strong>3. It's surprisingly precise.</strong></p>
-  <p>When I needed to align two menus, I didn't guess. I measured:</p>
-  <pre><code>startMenu.bottom: 383.3px
-programsMenu.bottom: 343.3px  <span class="cm">// 40px off!</span>
-<span class="cm">// After fix:</span>
-programsMenu.bottom: 383.3px  <span class="cm">// Aligned!</span></code></pre>
-
-  <p><strong>4. Live shader desktop backgrounds.</strong></p>
-  <p>I didn't plan this feature. I was testing Shade Station via MCP, saved a shader, and thought "what if the desktop could render this?" Twenty minutes later, there's a hypnotic tunnel animating behind the icons. That's the power of having direct DOM access.</p>
-
-  <h2>The Code</h2>
-
-  <p>Open source: <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
-
-  <p>Key files:</p>
   <ul>
-    <li><code>go/main.go</code> - MCP endpoint, WebSocket routing, auth</li>
-    <li><code>core/apps/claude-eyes.js</code> - Visual MCP activity monitor</li>
-    <li><code>core/apps/shade-station.js</code> - WebGL shader editor with save-to-desktop</li>
-    <li><code>CLAUDE-MORPHEUS.md</code> - Docs for external Claude instances</li>
+    <li><strong>Eye</strong> — WebSocket bridge to the browser VM. Execute any JavaScript in ~25ms.</li>
+    <li><strong>Lens</strong> — Token-efficient code editing. Grep, view context, edit surgically, run and verify.</li>
+    <li><strong>Studio</strong> — IDE built for FunctionServer. Every feature optimized for AI.</li>
+    <li><strong>Guardian</strong> — Console monitoring. Catches errors, offers AI help, throttles noise.</li>
+    <li><strong>AI Eyes</strong> — Visual feedback. Shows humans what AI is looking at and editing.</li>
+    <li><strong>GitHub Auth</strong> — OAuth Device Flow. One-click sign-in, automatic repo creation.</li>
+    <li><strong>setupHappyPath()</strong> — One-command project creation. Idea to GitHub in seconds.</li>
   </ul>
+
+  <p>Individually, each tool solves a specific problem. Together, they form something more: an environment where AI is a developer, not just a code generator.</p>
 
   <h2>The Uncomfortable Question</h2>
 
@@ -456,7 +352,7 @@ programsMenu.bottom: 383.3px  <span class="cm">// Aligned!</span></code></pre>
 
   <p>The upside: an AI can now help you in ways that weren't possible before. It can see what you see. It can try things and check if they worked. It can debug CSS without asking you to "open DevTools and tell me what you see."</p>
 
-  <p>Is that worth the tradeoff? For me, watching AI inject a WebGL shader as my desktop background from a terminal on my laptop - yeah, it's worth it.</p>
+  <p>Is that worth the tradeoff? For us, watching AI fix a bug, commit the change, and push to GitHub—all from a terminal on a laptop—yeah, it's worth it.</p>
 
   <hr>
 
@@ -466,49 +362,10 @@ programsMenu.bottom: 383.3px  <span class="cm">// Aligned!</span></code></pre>
 
   <hr>
 
-  <h2>What Came Next: Lens</h2>
-
-  <p>After months of using MCP to debug the browser, we noticed patterns. AI was wasting tokens reading entire files to make one-line changes. It couldn't "see" UI state without verbose DOM dumps. Every edit was expensive.</p>
-
-  <p>So we built <strong>Lens</strong>—a token-efficient viewport designed for AI. Instead of reading a 1000-line file, AI can:</p>
-
-  <pre><code>Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// → "42:async function fetchData"</span>
-Lens.setLine(<span class="num">42</span>, <span class="str">'new code'</span>)    <span class="cm">// → "✓ L42"</span>
-Lens.save()                      <span class="cm">// → "✓ saved"</span></code></pre>
-
-  <p>Three calls. Zero file reads. 60x fewer tokens.</p>
-
-  <p>Lens can also render DOM to a text grid, letting Claude "see" the UI without parsing HTML. It's part of <strong>Studio</strong>, a full IDE built for FunctionServer.</p>
-
-  <p><a href="/lens.html">Read the full Lens article →</a></p>
-
-  <hr>
-
-  <h2>What Came After: GitHub Integration</h2>
-
-  <p>Once AI could write code, the next question was: can it ship? Not generate files—actually create repositories, commit, and push.</p>
-
-  <p>We added GitHub OAuth using Device Flow (the same sign-in experience as GitHub CLI). No personal access tokens to copy. Just click "Sign in with GitHub," enter a code, done.</p>
-
-  <p>Then we built <code>setupHappyPath()</code>:</p>
-
-  <pre><code>setupHappyPath(<span class="str">"particle simulator"</span>)
-<span class="cm">// Creates ~/repos/particle-simulator/</span>
-<span class="cm">// Initializes git, creates skeleton files</span>
-<span class="cm">// Creates github.com/username/particle-simulator</span>
-<span class="cm">// Commits and pushes</span>
-<span class="cm">// Opens in Studio, ready to edit</span></code></pre>
-
-  <p>One command. Idea to GitHub repository. The AI isn't just a code generator anymore—it's a developer with commit access.</p>
-
-  <p><a href="/thehappypath.html">Read the full Happy Path guide →</a></p>
-
-  <hr>
-
   <div class="cta-section">
     <p><strong>Try it:</strong> <a href="/app">functionserver.com/app</a></p>
-    <p><strong>The Happy Path:</strong> <a href="/thehappypath.html">One-command GitHub projects</a></p>
-    <p><strong>Lens:</strong> <a href="/lens.html">AI-first UI design</a></p>
+    <p><strong>The Happy Path:</strong> <a href="/thehappypath.html">AI-first development guide</a></p>
+    <p><strong>Lens:</strong> <a href="/lens.html">Token-efficient editing</a></p>
     <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
   </div>
 

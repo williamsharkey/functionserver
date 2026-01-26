@@ -33,8 +33,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.serif { font-family: 'Newsreader', 'New York', Georgia, serif; }
-
 .grid-bg {
   position: fixed;
   inset: 0;
@@ -283,18 +281,6 @@ section { padding: 120px 24px; }
   margin: 16px 0 0 40px;
 }
 
-.feature-list {
-  margin: 16px 0;
-  padding-left: 24px;
-}
-
-.feature-list li {
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.8;
-  margin-bottom: 8px;
-}
-
 .callout {
   background: rgba(167, 139, 250, 0.1);
   border: 1px solid rgba(167, 139, 250, 0.3);
@@ -403,118 +389,34 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
 
       <div class="divider"></div>
 
-      <h2>Fresh Session Setup</h2>
+      <h2>Quick Start</h2>
 
-      <p>Starting a new Claude session? Run these commands to load your tools.</p>
+      <p>Load the tools and create a project in three commands:</p>
 
       <div class="code-block">
-<span class="cm">// Option 1: Load launcher, then setup everything</span>
-<span class="fn">getFileFromDisk</span>(<span class="str">"~/launcher.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"launcher.js"</span>))
-<span class="fn">setupHappyPath</span>()  <span class="cm">// Loads Studio + Project Manager</span>
-
-<span class="cm">// Option 2: Create a new project in one command</span>
-<span class="fn">setupHappyPath</span>(<span class="str">"my cool app"</span>)  <span class="cm">// Creates ~/repos/my-cool-app/, git init, opens in Studio</span>
-
-<span class="cm">// Option 3: Load Studio directly</span>
+<span class="cm">// Load Studio (the IDE with Lens)</span>
 <span class="fn">getFileFromDisk</span>(<span class="str">"~/studio.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"studio.js"</span>))
 
-<span class="cm">// Get the command cheat sheet</span>
+<span class="cm">// Get the command reference</span>
 <span class="fn">Lens.help</span>()
+
+<span class="cm">// Create a new project (auto-creates GitHub repo if signed in)</span>
+<span class="fn">setupHappyPath</span>(<span class="str">"my cool app"</span>)
       </div>
 
-      <p>Once loaded, you have access to:</p>
-      <ul class="feature-list">
-        <li><code>Lens.*</code> - Surgical code editing (state, code, grep, setLine, run, etc.)</li>
-        <li><code>Studio.*</code> - IDE operations (open, save, new)</li>
-        <li><code>PM.*</code> - Project manager (projects, git operations)</li>
-        <li><code>GitHubAuth.*</code> - OAuth sign-in, push/pull with authentication</li>
-      </ul>
-
-      <div class="divider"></div>
-
-      <h2>The Happy Path: Step by Step</h2>
-
-      <p>Here's how to build a project on FunctionServer the right way. We'll create a particle simulation from scratch, entirely through the browser.</p>
-
-      <div class="step">
-        <span class="step-num">1</span>
-        <h4>Check the desktop state</h4>
-        <p>Before doing anything, see what's running. One call gives you everything.</p>
-        <div class="code-block">
-<span class="fn">Lens.state</span>()
-<span class="cm">// -> "user:root wins:2[Studio,Shell] apps:12 files:3"</span>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="step-num">2</span>
-        <h4>Open Studio and create a file</h4>
-        <p>Open the IDE and start with a new file. No file system navigation needed.</p>
-        <div class="code-block">
-<span class="fn">ALGO.bridge.openApp</span>(<span class="str">'studio'</span>)
-<span class="fn">Lens.open</span>(<span class="str">'~/particles.js'</span>)  <span class="cm">// creates if doesn't exist</span>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="step-num">3</span>
-        <h4>Write code with insertLine</h4>
-        <p>Build up the file line by line. Each insert is atomic and verified.</p>
-        <div class="code-block">
-<span class="fn">Lens.insertLine</span>(<span class="num">1</span>, <span class="str">'// Particle simulation'</span>)  <span class="cm">// -> "OK +L1"</span>
-<span class="fn">Lens.insertLine</span>(<span class="num">2</span>, <span class="str">'ALGO.app.name = "Particles";'</span>)
-<span class="fn">Lens.insertLine</span>(<span class="num">3</span>, <span class="str">'ALGO.app.icon = "o";'</span>)
-<span class="cm">// ... build up the file</span>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="step-num">4</span>
-        <h4>Run and see results instantly</h4>
-        <p>Execute the app. Errors appear immediately in the console.</p>
-        <div class="code-block">
-<span class="fn">Lens.run</span>()  <span class="cm">// -> "OK running"</span>
-<span class="cm">// If there's an error:</span>
-<span class="cm">// -> "ERROR: Unexpected token at line 42, col 15"</span>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="step-num">5</span>
-        <h4>Debug with surgical precision</h4>
-        <p>See exactly the problematic area, fix just that line.</p>
-        <div class="code-block">
-<span class="fn">Lens.code</span>(<span class="num">40</span>, <span class="num">5</span>)      <span class="cm">// see lines 40-44</span>
-<span class="fn">Lens.setLine</span>(<span class="num">42</span>, <span class="str">'const x = getValue();'</span>)  <span class="cm">// fix</span>
-<span class="fn">Lens.run</span>()              <span class="cm">// verify</span>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="step-num">6</span>
-        <h4>Save and commit</h4>
-        <p>Persist to disk and create a git commit.</p>
-        <div class="code-block">
-<span class="fn">Lens.save</span>()  <span class="cm">// -> "OK saved"</span>
-<span class="fn">Studio.github._exec</span>(<span class="str">'git -C ~/repos/particles add -A && git commit -m "Initial"'</span>)
-        </div>
-      </div>
-
-      <div class="callout">
-        <p><strong>Key insight:</strong> At no point did we read an entire file. At no point did we write an entire file. Every operation was surgical, verified, and cheap.</p>
-      </div>
+      <p>That last command does everything: creates the folder, initializes git, creates skeleton files, creates a GitHub repo (if you've signed in), commits and pushes, and opens the project in Studio ready to edit.</p>
 
       <div class="divider"></div>
 
       <h2>The Lens API</h2>
 
-      <p>Lens is the interface that makes this possible. It's designed for AI agents: terse, efficient, and feedback-rich.</p>
+      <p>Lens is the interface that makes this possible. It's designed for AI: terse, efficient, and feedback-rich.</p>
 
       <h3>Navigation</h3>
       <div class="code-block">
-<span class="fn">Lens.state</span>()              <span class="cm">// Desktop overview: windows, apps, files</span>
+<span class="fn">Lens.state</span>()              <span class="cm">// Desktop overview: "w:Studio|Shell e:0 u:william"</span>
 <span class="fn">Lens.files</span>()              <span class="cm">// List saved files</span>
-<span class="fn">Lens.open</span>(<span class="str">'path'</span>)         <span class="cm">// Open file in Studio</span>
+<span class="fn">Lens.open</span>(<span class="str">'~/app.js'</span>)     <span class="cm">// Open file in Studio</span>
       </div>
 
       <h3>Reading (Token-Efficient)</h3>
@@ -538,28 +440,76 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
 <span class="fn">Lens.run</span>()                <span class="cm">// Execute as app</span>
       </div>
 
-      <div class="divider"></div>
-
-      <h2>Eye: Direct VM Access</h2>
-
-      <p>Behind Lens is <code>eye</code>: a direct WebSocket bridge to the browser's JavaScript VM. When you need to go beyond Lens, eye lets you execute any expression.</p>
-
+      <h3>Git Shortcuts</h3>
       <div class="code-block">
-<span class="cm">// Query the DOM</span>
-<span class="fn">eye</span> <span class="str">'document.title'</span>
-<span class="fn">eye</span> <span class="str">'$$(".window").length'</span>
-
-<span class="cm">// Inspect live state</span>
-<span class="fn">eye</span> <span class="str">'JSON.stringify(windows[0])'</span>
-
-<span class="cm">// Hot-patch running code</span>
-<span class="fn">eye</span> <span class="str">'window.DEBUG = true'</span>
-
-<span class="cm">// Inject CSS fixes</span>
-<span class="fn">eye</span> <span class="str">'$(".menu").style.bottom = "40px"'</span>
+<span class="fn">Lens.commit</span>(<span class="str">'message'</span>)    <span class="cm">// Stage all + commit</span>
+<span class="fn">Lens.push</span>()               <span class="cm">// Push to GitHub</span>
+<span class="fn">Lens.diff</span>()               <span class="cm">// Show uncommitted changes</span>
+<span class="fn">Lens.gitStatus</span>()          <span class="cm">// Git status</span>
+<span class="fn">Lens.log</span>(<span class="num">5</span>)               <span class="cm">// Last 5 commits</span>
       </div>
 
-      <p>The AI isn't automating from outside. It's <em>inside</em> the same address space, touching the same objects, seeing the same pixels.</p>
+      <div class="divider"></div>
+
+      <h2>GitHub Integration</h2>
+
+      <p>FunctionServer uses GitHub's Device Flow for easy authentication. No personal access tokens to copy—just click, enter a code, done.</p>
+
+      <div class="step">
+        <span class="step-num">1</span>
+        <h4>Open GitHub Auth</h4>
+        <p>Load the authentication app:</p>
+        <div class="code-block">
+<span class="fn">getFileFromDisk</span>(<span class="str">"~/github-auth.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"github-auth.js"</span>))
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">2</span>
+        <h4>Click "Sign in with GitHub"</h4>
+        <p>You'll see a code (like <code>ABCD-1234</code>). GitHub opens in a new tab.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">3</span>
+        <h4>Enter the code on GitHub</h4>
+        <p>Paste the code, authorize FunctionServer for repo access. Done.</p>
+      </div>
+
+      <p>Now <code>setupHappyPath()</code> automatically creates repos on your GitHub account. Push and pull work without any configuration.</p>
+
+      <div class="divider"></div>
+
+      <h2>Visual Feedback: AI Eyes</h2>
+
+      <p>When AI is working, humans can watch. The AI Eyes system shows what AI is looking at and editing:</p>
+
+      <ul>
+        <li><strong>Purple highlight box</strong> — AI is inspecting this element</li>
+        <li><strong>Green flash</strong> — AI just edited here</li>
+        <li><strong>Code region glow</strong> — AI is looking at these lines</li>
+      </ul>
+
+      <p>You can watch the AI's "eyes" saccade across the screen as it navigates, searches, and edits. It's pair programming where you can see your partner's focus.</p>
+
+      <div class="divider"></div>
+
+      <h2>Error Awareness: Guardian</h2>
+
+      <p>Guardian monitors console errors and can wake up AI to help:</p>
+
+      <div class="code-block">
+<span class="cm">// Guardian watches for errors automatically</span>
+<span class="cm">// When one occurs:</span>
+<span class="cm">// 1. A toast appears: "Error detected"</span>
+<span class="cm">// 2. User clicks "Get AI help"</span>
+<span class="cm">// 3. AI receives the error context</span>
+
+<span class="cm">// Check guardian status</span>
+<span class="fn">ALGO.guardian.status</span>()  <span class="cm">// → {watching: true, suppressed: 0}</span>
+      </div>
+
+      <p>Throttling prevents flooding—repeated errors are deduplicated. The AI can offer help proactively when you hit problems.</p>
 
       <div class="divider"></div>
 
@@ -594,173 +544,86 @@ footer p { color: var(--text-tertiary); font-size: 12px; }
 
       <div class="divider"></div>
 
-      <h2>Pitfalls &amp; Best Practices</h2>
+      <h2>The Complete Workflow</h2>
 
-      <p>Lessons learned from real usage:</p>
-
-      <h3>Use ALGO.createWindow(), not ALGO.app</h3>
-      <p>The <code>ALGO.app.content</code> pattern doesn't reliably create windows. Use <code>ALGO.createWindow()</code> directly:</p>
-      <div class="code-block">
-<span class="cm">// Don't do this:</span>
-ALGO.app.content = canvas;
-
-<span class="cm">// Do this:</span>
-<span class="fn">ALGO.createWindow</span>({
-  title: <span class="str">"My App"</span>,
-  width: <span class="num">400</span>,
-  height: <span class="num">300</span>,
-  content: <span class="str">'&lt;canvas id="my-canvas"&gt;&lt;/canvas&gt;'</span>
-});
-const canvas = <span class="fn">document.getElementById</span>(<span class="str">"my-canvas"</span>);
-      </div>
-
-      <h3>Avoid long sequential async operations</h3>
-      <p>Multiple sequential <code>_exec()</code> calls can freeze the browser. Use parallel execution:</p>
-      <div class="code-block">
-<span class="cm">// Don't do this:</span>
-<span class="kw">for</span> (const dir of dirs) {
-  <span class="kw">await</span> _exec(<span class="str">"git status "</span> + dir);  <span class="cm">// Sequential = slow + freezes</span>
-}
-
-<span class="cm">// Do this:</span>
-<span class="kw">await</span> Promise.all(dirs.map(dir => _exec(<span class="str">"git status "</span> + dir)));
-      </div>
-
-      <h3>Save frequently</h3>
-      <p><code>Lens.save()</code> persists to disk. If the browser freezes, unsaved work is lost. Save after significant edits.</p>
-
-      <h3>Use Lens.help() in fresh sessions</h3>
-      <p>Call <code>Lens.help()</code> to get a cheat sheet of all available commands. Great for fresh Claude sessions.</p>
-
-      <h3>Recovery from frozen browser</h3>
-      <p>If eye commands timeout:</p>
-      <ol>
-        <li>Refresh the browser (F5/Cmd+R)</li>
-        <li>Reload Studio: <code>getFileFromDisk('~/studio.js').then(code => runApp(code, 'studio.js'))</code></li>
-        <li>Your saved files are safe on disk</li>
-      </ol>
-
-      <div class="divider"></div>
-
-      <h2>Project &amp; Folder Management</h2>
-
-      <p>FunctionServer uses <code>~/repos/</code> for project folders. Each project is a git repository.</p>
-
-      <h3>Project Structure</h3>
-      <div class="code-block">
-~/
-├── studio.js           <span class="cm"># Studio IDE</span>
-├── code-metrics.js     <span class="cm"># Utility apps</span>
-├── project-manager.js  <span class="cm"># Project browser</span>
-└── repos/
-    ├── my-app/         <span class="cm"># Project folder (git repo)</span>
-    │   ├── app.js
-    │   └── .git/
-    └── another-project/
-      </div>
-
-      <h3>Git Workflow via Shell</h3>
-      <div class="code-block">
-<span class="cm">// All git commands use -C flag (stateless shell)</span>
-Studio.github._exec(<span class="str">"git -C ~/repos/my-app status"</span>)
-Studio.github._exec(<span class="str">"git -C ~/repos/my-app add -A"</span>)
-Studio.github._exec(<span class="str">"git -C ~/repos/my-app commit -m 'message'"</span>)
-Studio.github._exec(<span class="str">"git -C ~/repos/my-app log --oneline -5"</span>)
-      </div>
-
-      <h3>Creating New Projects</h3>
-      <div class="code-block">
-<span class="cm">// Create project folder and init git</span>
-Studio.github._exec(<span class="str">"mkdir -p ~/repos/new-project"</span>)
-Studio.github._exec(<span class="str">"git -C ~/repos/new-project init"</span>)
-
-<span class="cm">// Create and edit main file</span>
-<span class="fn">Lens.open</span>(<span class="str">"~/repos/new-project/app.js"</span>)
-<span class="fn">Lens.insertLine</span>(<span class="num">1</span>, <span class="str">"// My new app"</span>)
-<span class="fn">Lens.save</span>()
-      </div>
-
-      <div class="divider"></div>
-
-      <h2>One-Command GitHub Projects</h2>
-
-      <p>The <code>setupHappyPath()</code> function now handles the entire project creation workflow:</p>
-
-      <div class="code-block">
-<span class="cm">// Create a new project with full GitHub integration</span>
-<span class="fn">setupHappyPath</span>(<span class="str">"particle simulator"</span>)
-
-<span class="cm">// What happens automatically:</span>
-<span class="cm">// 1. Creates ~/repos/particle-simulator/</span>
-<span class="cm">// 2. Initializes git repo</span>
-<span class="cm">// 3. Creates skeleton app files (main.js, README.md)</span>
-<span class="cm">// 4. Commits: "Initial commit: particle simulator skeleton"</span>
-<span class="cm">// 5. If GitHub auth configured:</span>
-<span class="cm">//    - Creates github.com/username/particle-simulator</span>
-<span class="cm">//    - Sets origin and pushes</span>
-<span class="cm">// 6. Opens main.js in Studio, ready to edit</span>
-
-<span class="cm">// Call again to reopen existing project:</span>
-<span class="fn">setupHappyPath</span>(<span class="str">"particle simulator"</span>)  <span class="cm">// Idempotent - just opens it</span>
-      </div>
-
-      <p>From idea to GitHub repository in one command. No manual repo creation, no copy-pasting clone URLs, no git configuration.</p>
-
-      <div class="divider"></div>
-
-      <h2>GitHub OAuth Sign-In</h2>
-
-      <p>FunctionServer uses GitHub's Device Flow for easy authentication. No personal access tokens to copy.</p>
+      <p>Here's a full session: create a project, write code, debug, and ship to GitHub.</p>
 
       <div class="step">
         <span class="step-num">1</span>
-        <h4>Open GitHub Auth</h4>
-        <p>Load the authentication app from the launcher or directly:</p>
+        <h4>Create the project</h4>
         <div class="code-block">
-<span class="fn">getFileFromDisk</span>(<span class="str">"~/github-auth.js"</span>).then(code => <span class="fn">runApp</span>(code, <span class="str">"github-auth.js"</span>))
+<span class="fn">setupHappyPath</span>(<span class="str">"particle simulator"</span>)
+<span class="cm">// → Creates folder, git init, skeleton, GitHub repo, opens in Studio</span>
         </div>
       </div>
 
       <div class="step">
         <span class="step-num">2</span>
-        <h4>Click "Sign in with GitHub"</h4>
-        <p>You'll see a code (like <code>ABCD-1234</code>). GitHub opens in a new tab.</p>
+        <h4>Write code</h4>
+        <div class="code-block">
+<span class="fn">Lens.code</span>(<span class="num">1</span>, <span class="num">20</span>)                    <span class="cm">// See structure</span>
+<span class="fn">Lens.setLine</span>(<span class="num">10</span>, <span class="str">'const N = 200;'</span>)  <span class="cm">// Edit</span>
+<span class="fn">Lens.insertLine</span>(<span class="num">15</span>, <span class="str">'function update() {'</span>)
+<span class="cm">// ... build up the file</span>
+        </div>
       </div>
 
       <div class="step">
         <span class="step-num">3</span>
-        <h4>Enter the code on GitHub</h4>
-        <p>Paste the code, authorize FunctionServer for repo access. Done.</p>
+        <h4>Run and debug</h4>
+        <div class="code-block">
+<span class="fn">Lens.run</span>()                        <span class="cm">// Execute</span>
+<span class="cm">// See error in console</span>
+<span class="fn">Lens.grep</span>(<span class="str">'undefined'</span>)            <span class="cm">// Find issue</span>
+<span class="fn">Lens.code</span>(<span class="num">40</span>, <span class="num">5</span>)                  <span class="cm">// See context</span>
+<span class="fn">Lens.setLine</span>(<span class="num">42</span>, <span class="str">'fixed code'</span>)   <span class="cm">// Fix</span>
+<span class="fn">Lens.run</span>()                        <span class="cm">// Verify</span>
+        </div>
       </div>
 
-      <p>That's it. Now <code>setupHappyPath()</code> will automatically create repos on your GitHub account. Push and pull work without any configuration.</p>
+      <div class="step">
+        <span class="step-num">4</span>
+        <h4>Ship it</h4>
+        <div class="code-block">
+<span class="fn">Lens.save</span>()
+<span class="fn">Lens.commit</span>(<span class="str">"Add particle physics"</span>)
+<span class="fn">Lens.push</span>()
+<span class="cm">// → github.com/username/particle-simulator</span>
+        </div>
+      </div>
 
       <div class="callout">
-        <p><strong>Why Device Flow?</strong> It's the same flow GitHub CLI uses. No tokens to copy, no scopes to configure manually, and it works from any browser without installing anything.</p>
+        <p><strong>Key insight:</strong> At no point did we read an entire file. At no point did we rewrite an entire file. Every operation was surgical, verified, and cheap.</p>
       </div>
 
       <div class="divider"></div>
 
-      <h2>Building the Future</h2>
+      <h2>Best Practices</h2>
 
-      <p>FunctionServer is infrastructure for AI-native applications. The happy path is just the beginning.</p>
+      <h3>Use grep to find, not read</h3>
+      <p>Don't read entire files to find a function. Use <code>Lens.grep('pattern')</code> to get line numbers, then <code>Lens.code()</code> to see context.</p>
 
-      <p>What's working now:</p>
-      <ul>
-        <li><strong>GitHub OAuth</strong> - Sign in with Device Flow, automatic repo creation</li>
-        <li><strong>One-command projects</strong> - <code>setupHappyPath("name")</code> goes from idea to GitHub</li>
-        <li><strong>Surgical code editing</strong> - Lens API for token-efficient AI development</li>
-        <li><strong>Live browser debugging</strong> - Eye bridge for real-time DOM access</li>
-      </ul>
+      <h3>Save frequently</h3>
+      <p><code>Lens.save()</code> persists to disk. If the browser freezes, unsaved work is lost.</p>
 
-      <p>What we're building toward:</p>
-      <ul>
-        <li><strong>Real PTY terminals</strong> - Full shell access with color support for Claude Code</li>
-        <li><strong>Multi-agent coordination</strong> - Multiple AI agents working on the same codebase</li>
-        <li><strong>Atomic transactions</strong> - Batch edits that commit or rollback together</li>
-      </ul>
+      <h3>Batch operations when possible</h3>
+      <p><code>Lens.batch([['setLine', 42, 'x'], ['save'], ['run']])</code> chains operations in one call.</p>
 
-      <p>The old way treats AI as a code generator. The new way treats AI as a <em>developer</em>: one that can see, navigate, edit, run, debug, and iterate.</p>
+      <h3>Use Lens.state() to orient</h3>
+      <p>Start sessions with <code>Lens.state()</code> to see what's open, what errors exist, and who's logged in.</p>
+
+      <h3>Let Guardian help</h3>
+      <p>When users hit errors, Guardian offers AI help. The AI can investigate and fix problems proactively.</p>
+
+      <div class="divider"></div>
+
+      <h2>Welcome to the Happy Path</h2>
+
+      <p>The old way treats AI as a code generator: produces text, hopes it works.</p>
+
+      <p>The new way treats AI as a <em>developer</em>: one that can see, navigate, edit, run, debug, commit, and ship.</p>
+
+      <p>The feedback loop is closed. The tokens are minimal. The eyes are open.</p>
 
       <p>Welcome to the happy path.</p>
 

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lens: A Visual Interface Designed for AI</title>
-<meta name="description" content="What if we designed a UI for AI first? Lens is a token-efficient viewport that lets LLMs see, navigate, and edit code faster than traditional file operations.">
+<title>Lens - Token-Efficient Code Editing for AI</title>
+<meta name="description" content="Lens lets AI edit code surgically—grep, view context, edit specific lines, run, and verify. 60x fewer tokens than reading and rewriting files.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
@@ -401,13 +401,28 @@ footer a { color: var(--accent); text-decoration: none; }
 </nav>
 
 <article>
-  <h1>Lens: A Visual Interface Designed for AI</h1>
+  <h1>Lens: Surgical Code Editing</h1>
 
-  <p class="lead">What if we designed a UI for AI first? Not "AI-assisted" or "AI-compatible"—but <em>AI-native</em>. An interface where LLMs can see, navigate, and edit faster than traditional file operations. That's Lens.</p>
+  <p class="lead">AI editing code traditionally means reading entire files, generating replacements, and hoping the edit worked. Lens inverts this: grep to find, view context, edit one line, run to verify. <strong>60x fewer tokens.</strong></p>
+
+  <h2>The Core Workflow</h2>
+
+  <p>Three commands. No file reads. Surgical precision:</p>
+
+  <pre><code>Lens.grep(<span class="str">'fetchData'</span>)           <span class="cm">// Find the function</span>
+<span class="result">→ "42:async function fetchData"</span>
+
+Lens.setLine(<span class="num">42</span>, <span class="str">'async function fetchData(url) {'</span>)  <span class="cm">// Fix it</span>
+<span class="result">→ "✓ L42"</span>
+
+Lens.save()                        <span class="cm">// Save it</span>
+<span class="result">→ "✓ saved"</span></code></pre>
+
+  <p>Compare this to reading 847 lines, mentally parsing them, generating 847 new lines, and writing them back. <strong>Lens edits at line granularity.</strong></p>
 
   <h2>How AI Sees</h2>
 
-  <p>When you look at FunctionServer, you see a desktop with windows, icons, and buttons. When an AI looks through Lens, it sees something different:</p>
+  <p>When you look at FunctionServer's Studio, you see a desktop with windows, icons, and buttons. When AI looks through Lens, it sees something different:</p>
 
   <div class="vision-compare">
     <div class="human-view">
@@ -659,40 +674,62 @@ Lens.dash()
 
   <hr>
 
-  <h2>The Bridge: Real-Time Connection</h2>
+  <h2>Part of a Larger System</h2>
 
-  <p>Lens is powered by <strong>eye</strong>—a WebSocket bridge that gives AI direct access to the browser's JavaScript VM. No HTTP overhead. No JSON wrapping. Just raw JavaScript execution in ~25ms.</p>
+  <p>Lens doesn't work alone. It's part of FunctionServer's AI development environment:</p>
+
+  <h3>Eye: The Bridge</h3>
+
+  <p>Lens runs through <strong>eye</strong>—a WebSocket bridge that gives AI direct access to the browser's JavaScript VM. No HTTP overhead. Just raw JavaScript execution in ~25ms.</p>
 
   <pre><code><span class="cm">// From the terminal, execute JS in your browser</span>
-eye <span class="str">'document.title'</span>
-<span class="result">→ "FunctionServer"</span>
+eye <span class="str">'Lens.grep("fetchData")'</span>
+<span class="result">→ "42:async function fetchData"</span>
 
-eye <span class="str">'Lens.look("#desktop")'</span>
-<span class="result">→ "42 elements
-    01234567890123456789...
-   0│📁 Documents
-   1│📁 Projects
-   2│🎮 game.js
-   ..."</span>
+eye <span class="str">'Lens.setLine(42, "fixed")'</span>
+<span class="result">→ "✓ L42"</span></code></pre>
 
-eye <span class="str">'Lens.click(2, 0)'</span>
-<span class="result">→ "✓ clicked \"game.js\""</span></code></pre>
+  <h3>AI Eyes: Visual Feedback</h3>
 
-  <p>The connection is bidirectional. The AI can:</p>
-  <ul>
-    <li><strong>Read</strong> — Query DOM, check state, inspect elements</li>
-    <li><strong>Write</strong> — Click buttons, fill forms, modify content</li>
-    <li><strong>Execute</strong> — Run any JavaScript, define functions, patch code live</li>
-    <li><strong>Watch</strong> — See changes instantly as they happen</li>
-  </ul>
+  <p>When AI uses Lens, you see it working. <strong>Purple highlights</strong> show what the AI is inspecting. <strong>Green flashes</strong> indicate edits. Watch the AI's focus move across the screen as it searches, reads, and modifies code.</p>
 
-  <p>This isn't remote control through an API. The AI is <em>inside</em> the browser, with the same access as code running in the console.</p>
+  <h3>Guardian: Error Awareness</h3>
+
+  <p>Guardian monitors the console. When errors occur, it offers AI assistance. The AI can investigate, use Lens to navigate to the problem, fix it surgically, and verify the fix—all proactively.</p>
+
+  <h3>GitHub: Ship, Don't Just Generate</h3>
+
+  <p>After editing with Lens, AI can commit and push:</p>
+
+  <pre><code>Lens.save()                              <span class="cm">// Save changes</span>
+Studio.github.commit(<span class="str">"Fix fetchData"</span>)    <span class="cm">// Commit</span>
+GitHubAuth.push(projectPath)             <span class="cm">// Push to origin</span></code></pre>
+
+  <p>From edit to deployed in three calls.</p>
 
   <hr>
 
-  <h2>The Bigger Picture</h2>
+  <h2>The Complete Workflow</h2>
 
-  <p>Lens is part of <strong>Studio</strong>, a full IDE built for FunctionServer. But the ideas generalize:</p>
+  <p>Here's what AI-first development looks like:</p>
+
+  <ol>
+    <li><strong>Open project</strong> — <code>getFileFromDisk("~/repos/myapp/app.js")</code></li>
+    <li><strong>Find the code</strong> — <code>Lens.grep("handleSubmit")</code></li>
+    <li><strong>Understand context</strong> — <code>Lens.line(42, 10)</code></li>
+    <li><strong>Edit surgically</strong> — <code>Lens.setLine(45, "fixed code")</code></li>
+    <li><strong>Run and verify</strong> — <code>Lens.run()</code></li>
+    <li><strong>Save</strong> — <code>Lens.save()</code></li>
+    <li><strong>Commit and push</strong> — <code>Studio.github.commit("message")</code></li>
+  </ol>
+
+  <p>Each step is one call. Each call returns immediate confirmation. The debugging loop collapses from minutes to seconds.</p>
+
+  <hr>
+
+  <h2>Design Principles</h2>
+
+  <p>The ideas behind Lens generalize beyond code editing:</p>
 
   <ul>
     <li><strong>Addressable content</strong> — Everything has coordinates (line numbers, row/col positions)</li>
@@ -700,35 +737,18 @@ eye <span class="str">'Lens.click(2, 0)'</span>
     <li><strong>Surgical operations</strong> — Edit the smallest possible unit</li>
     <li><strong>Batch support</strong> — Multiple operations per call</li>
     <li><strong>Verification built-in</strong> — Every operation confirms success</li>
+    <li><strong>Visual feedback</strong> — Humans see what AI is doing</li>
   </ul>
 
-  <p>These principles could apply to any interface. What would an AI-first spreadsheet look like? An AI-first design tool? An AI-first terminal?</p>
-
-  <p>We're just getting started.</p>
-
-  <hr>
-
-  <h2>Try It</h2>
-
-  <p>Lens is built into FunctionServer Studio. To use it:</p>
-
-  <ol>
-    <li>Go to <a href="/app">functionserver.com/app</a></li>
-    <li>Open Studio from the Programs menu (or run <code>~/studio.js</code>)</li>
-    <li>Use Lens commands in the console or via <code>eye</code></li>
-  </ol>
-
-  <pre><code><span class="cm">// Via eye MCP tool</span>
-eye <span class="str">'Lens.code()'</span>
-eye <span class="str">'Lens.setLine(42, "fixed")'</span>
-eye <span class="str">'Lens.save()'</span></code></pre>
+  <p>These principles apply to any interface where AI and humans collaborate in real-time.</p>
 
   <hr>
 
   <div class="cta-section">
-    <p><strong>Launch:</strong> <a href="/app">functionserver.com/app</a></p>
+    <p><strong>Try it:</strong> <a href="/app">functionserver.com/app</a></p>
+    <p><strong>The Happy Path:</strong> <a href="/thehappypath.html">AI-first development guide</a></p>
+    <p><strong>The Door:</strong> <a href="/door.html">Architecture philosophy</a></p>
     <p><strong>Code:</strong> <a href="https://github.com/williamsharkey/functionserver">github.com/williamsharkey/functionserver</a></p>
-    <p><strong>Studio:</strong> <a href="https://github.com/williamsharkey/fs-studio">github.com/williamsharkey/fs-studio</a></p>
   </div>
 
 </article>

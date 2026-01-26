@@ -30,10 +30,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.serif {
-  font-family: 'Newsreader', 'New York', Georgia, serif;
-}
-
 .grid-bg {
   position: fixed;
   inset: 0;
@@ -65,13 +61,9 @@ nav {
   font-weight: 500;
   color: var(--text);
   text-decoration: none;
-  letter-spacing: -0.01em;
 }
 
-nav .links {
-  display: flex;
-  gap: 24px;
-}
+nav .links { display: flex; gap: 24px; }
 
 nav a {
   color: var(--text-secondary);
@@ -101,9 +93,7 @@ section { padding: 120px 24px; }
   padding-top: 60px;
 }
 
-#hero .container {
-  text-align: center;
-}
+#hero .container { text-align: center; }
 
 .hero-eyebrow {
   font-size: 12px;
@@ -167,9 +157,7 @@ section { padding: 120px 24px; }
   border-color: var(--text-tertiary);
 }
 
-#main {
-  border-top: 1px solid var(--border);
-}
+#main { border-top: 1px solid var(--border); }
 
 .prose {
   max-width: 640px;
@@ -191,14 +179,8 @@ section { padding: 120px 24px; }
   line-height: 1.8;
 }
 
-.prose strong {
-  color: var(--text);
-  font-weight: 500;
-}
-
-.prose em {
-  color: var(--text);
-}
+.prose strong { color: var(--text); font-weight: 500; }
+.prose em { color: var(--text); }
 
 .prose code {
   font-family: 'SF Mono', ui-monospace, monospace;
@@ -320,11 +302,7 @@ footer a {
 }
 
 footer a:hover { color: var(--text-secondary); }
-
-footer p {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
+footer p { color: var(--text-tertiary); font-size: 12px; }
 
 @media (max-width: 768px) {
   .cards { grid-template-columns: 1fr; }
@@ -352,12 +330,12 @@ footer p {
 
 <section id="hero">
   <div class="container">
-    <p class="hero-eyebrow">The first AI-native operating system</p>
+    <p class="hero-eyebrow">An AI-native operating system</p>
     <h1>Where AI <em>inhabits</em><br>the interface</h1>
     <p class="hero-desc">A cloud OS where apps are JavaScript artifacts in a shared VM. AI doesn't automate from outside—it lives in the same address space, sees the same pixels, edits the same DOM.</p>
     <div class="hero-actions">
       <a href="/app" class="btn btn-primary">Launch</a>
-      <a href="/lens.html" class="btn btn-ghost">Read about Lens</a>
+      <a href="/thehappypath.html" class="btn btn-ghost">The Happy Path</a>
     </div>
   </div>
 </section>
@@ -367,8 +345,8 @@ footer p {
     <div class="prose">
       <h2>Apps are artifacts in a shared VM</h2>
       <p>In most systems, apps are compiled binaries or isolated processes. You automate them from outside via WebDriver protocols. The AI is a client; the app is a server.</p>
-      <p>In FunctionServer, apps <em>are</em> the JavaScript. They're functions and objects living in the same VM that any AI agent can access via MCP.</p>
-      <p>When an AI calls <code>getBoundingClientRect()</code>, it's touching the same DOM element the user sees. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>. The AI doesn't automate the OS—it <strong>inhabits</strong> it.</p>
+      <p>In FunctionServer, apps <em>are</em> the JavaScript. They're functions and objects living in the same VM that AI can access directly. When AI calls <code>getBoundingClientRect()</code>, it touches the same DOM element you see. When it patches <code>window.openSubmenu</code>, that's the <strong>real running function</strong>.</p>
+      <p>The AI doesn't automate the OS—it <strong>inhabits</strong> it.</p>
 
       <div class="code-block">
 <span class="cm">// AI editing code via Lens - 3 calls, zero file reads</span>
@@ -382,24 +360,24 @@ Lens.save()                        <span class="cm">// → "✓ saved"</span>
 
     <div class="prose">
       <h2>Studio + Lens: AI-first development</h2>
-      <p>Studio is a full IDE built for FunctionServer. But unlike traditional IDEs, it's designed for <strong>AI first</strong>—every feature optimized for token efficiency and rapid navigation.</p>
+      <p>Studio is a full IDE built for FunctionServer. Unlike traditional IDEs, it's designed for <strong>AI first</strong>—every feature optimized for token efficiency and rapid navigation.</p>
 
       <div class="cards">
         <div class="card">
-          <h3>Lens viewport</h3>
-          <p>Renders any DOM element to a compact text grid. AI can "see" the UI without parsing verbose HTML.</p>
-        </div>
-        <div class="card">
           <h3>Surgical editing</h3>
-          <p><code>Lens.setLine(42, 'code')</code> edits one line. No reading 1000-line files. No full rewrites.</p>
+          <p><code>Lens.setLine(42, 'code')</code> edits one line. No reading 1000-line files. No full rewrites. 60x fewer tokens.</p>
         </div>
         <div class="card">
-          <h3>Pulse awareness</h3>
-          <p>Real-time error capture, window state, modified files—all in one compact status line.</p>
+          <h3>Visual feedback</h3>
+          <p>AI Eyes shows what AI is looking at and editing. Watch purple highlights saccade across the screen as AI works.</p>
+        </div>
+        <div class="card">
+          <h3>Error awareness</h3>
+          <p>Guardian monitors for errors and offers AI help. When something breaks, AI knows immediately—no user intervention needed.</p>
         </div>
         <div class="card">
           <h3>Batch operations</h3>
-          <p><code>Lens.batch([['save'], ['run']])</code> chains multiple operations in a single call.</p>
+          <p><code>Lens.batch([['save'], ['run']])</code> chains multiple operations in a single call. Minimal round-trips.</p>
         </div>
       </div>
     </div>
@@ -428,7 +406,7 @@ setupHappyPath(<span class="str">"particle simulator"</span>)
       <div class="cards">
         <div class="card">
           <h3>AI with eyes</h3>
-          <p>AI can query element positions, check computed styles, inject test fixes, and verify they worked—before touching source files.</p>
+          <p>Query element positions, check computed styles, inject test fixes, and verify they worked—before touching source files.</p>
         </div>
         <div class="card">
           <h3>Instant GitHub</h3>
@@ -436,11 +414,11 @@ setupHappyPath(<span class="str">"particle simulator"</span>)
         </div>
         <div class="card">
           <h3>Collapsed debug loop</h3>
-          <p>Inspect live → measure → test fix → verify → commit. The browser becomes a REPL you can poke from anywhere.</p>
+          <p>Write → run → see error → fix → verify. All in the same context. The browser becomes a REPL you can poke from anywhere.</p>
         </div>
         <div class="card">
-          <h3>Token-efficient workflows</h3>
-          <p>Traditional: read file → parse → edit → rewrite. Lens: grep → setLine → save. 90% fewer tokens.</p>
+          <h3>Proactive help</h3>
+          <p>Guardian watches for errors. When something breaks, a toast appears offering AI assistance. The AI can wake up and help.</p>
         </div>
       </div>
     </div>
@@ -455,7 +433,7 @@ setupHappyPath(<span class="str">"particle simulator"</span>)
       <a href="/app" class="btn btn-primary">Enter FunctionServer</a>
       <a href="/thehappypath.html" class="btn btn-ghost">The Happy Path</a>
       <a href="/lens.html" class="btn btn-ghost">Read about Lens</a>
-      <a href="/door.html" class="btn btn-ghost">The original story</a>
+      <a href="/door.html" class="btn btn-ghost">The story</a>
       <a href="https://github.com/williamsharkey/functionserver" class="btn btn-ghost">View source</a>
     </div>
     <p class="install-line">

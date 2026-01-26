@@ -1,200 +1,152 @@
-# Function Server
+# FunctionServer
 
-A multi-tenant cloud operating system that runs in the browser. Build apps visually, share publicly, run AI assistants.
+A cloud operating system where AI doesn't automate—it inhabits. Apps are JavaScript artifacts in a shared VM. AI lives in the same address space, sees the same pixels, edits the same DOM.
 
-![Function Server Desktop](www/screenshots/hero-desktop.png)
+**[Try the Live Demo](https://functionserver.com/app)** | **[The Happy Path](https://functionserver.com/thehappypath.html)** | **[Lens Docs](https://functionserver.com/lens.html)**
+
+## What Makes This Different
+
+In traditional systems, AI automates from outside via WebDriver protocols. The AI is a client; the app is a server.
+
+In FunctionServer:
+- **Apps are JavaScript** running in the browser's VM
+- **AI executes in the same VM** via the `eye` WebSocket bridge
+- **When AI calls `getBoundingClientRect()`**, it touches the same DOM element you see
+- **When AI edits code**, it sees the result instantly—no file round-trips
+
+This isn't remote control. The AI is *inside* the browser.
+
+## The Tools
+
+### Eye: Direct VM Access
+A WebSocket bridge that lets AI execute JavaScript in your browser in ~25ms.
+
+```javascript
+eye 'document.title'                      // Get page title
+eye 'ALGO.bridge.openApp("studio")'       // Open an app
+eye 'Lens.grep("fetchData")'              // Search code
+```
+
+### Lens: Surgical Code Editing
+Token-efficient operations designed for AI. Edit one line instead of rewriting entire files.
+
+```javascript
+Lens.grep('fetchData')                    // → "42:async function fetchData"
+Lens.setLine(42, 'async function fetchData(url) {')  // → "✓ L42"
+Lens.save()                               // → "✓ saved"
+```
+
+Three calls. Zero file reads. 60x fewer tokens than traditional file operations.
+
+### Guardian: Error Awareness
+Console monitoring that wakes up AI when errors occur.
+
+```javascript
+ALGO.guardian.watch(callback)             // Start monitoring
+// User hits an error...
+// Toast appears: "Error detected - Get AI help"
+// AI receives the error context automatically
+```
+
+### AI Eyes: Visual Feedback
+When AI looks at or edits something, humans see it happen. Purple highlights for inspection, green flashes for edits.
+
+### GitHub Integration
+OAuth Device Flow sign-in, one-command project creation:
+
+```javascript
+setupHappyPath("particle simulator")
+// Creates ~/repos/particle-simulator/
+// Initializes git, creates skeleton
+// Creates GitHub repo, pushes
+// Opens in Studio, ready to edit
+```
+
+From idea to GitHub repository in one command.
 
 ## Quick Start
 
-**[Try the Live Demo](https://functionserver.com/app)** - no install needed
+### Use the Hosted Version
+1. Go to [functionserver.com/app](https://functionserver.com/app)
+2. Register or continue as guest
+3. Open Studio from Programs menu
+4. Run `Lens.help()` for commands
 
-Or deploy your own:
+### Self-Host
 ```bash
-curl -fsSL https://functionserver.com/install | bash
-```
-
-## What is Function Server?
-
-Function Server is a complete operating system that runs in your browser. Every user gets:
-
-- **Persistent Storage** - localStorage disk image that persists like a real hard drive
-- **Desktop Environment** - Windows 98-style interface with draggable windows, taskbar, start menu
-- **Built-in Apps** - Notepad, Calculator, Terminal, File Manager, and more
-- **App Development** - JavaScript.IDE for building and running apps instantly
-- **AI Integration** - Claude, GPT, and Gemini wizards built-in
-- **Public Sharing** - Host files at `/username/` URLs
-
-## Features
-
-### JavaScript.IDE
-Write apps using the ALGO API. Create windows, handle files, show notifications. Apps run instantly in the browser.
-
-```javascript
-ALGO.app.name = 'My App';
-ALGO.app.icon = '🚀';
-
-ALGO.createWindow({
-  title: 'Hello World',
-  width: 400,
-  height: 300,
-  content: '<h1>Welcome!</h1>'
-});
-```
-
-### System Apps
-Pre-installed apps managed by admins:
-- **Shade Station** - WebGL shader editor
-- **Ticket Manager** - Issue tracking with AI agent support
-- **Photobooth** - Camera with word art effects
-- **Box Editor** - ASCII/Unicode art editor
-- **Chime Synth** - Sound effects synthesizer
-- **Video Player** - YouTube/Vimeo player
-
-### AI Wizards
-Built-in AI assistants:
-- **Claude Wizard** - Anthropic's Claude
-- **GPT Wizard** - OpenAI's GPT
-- **Gemini Wizard** - Google's Gemini
-
-Plus full Claude Code support in the terminal.
-
-### Ticket System
-Built-in issue tracking. Create tickets, assign to AI agents, copy instructions for external Claude sessions.
-
-### Public Folders
-Every registered user gets a public folder at `/username/`. Share files, host static sites, build your portfolio.
-
-## User Tiers
-
-| Feature | Guest | Registered | Admin |
-|---------|-------|------------|-------|
-| Desktop & Apps | ✅ | ✅ | ✅ |
-| AI Wizards | ✅ | ✅ | ✅ |
-| localStorage | ✅ | ✅ | ✅ |
-| Terminal | ❌ | ✅ | ✅ |
-| Public Folder | ❌ | ✅ | ✅ |
-| Claude Code | ❌ | ✅ | ✅ |
-| System Apps Mgmt | ❌ | ❌ | ✅ |
-| User Management | ❌ | ❌ | ✅ |
-
-## App Architecture
-
-Apps can be simple single-file scripts or complex multi-file projects:
-
-```
-my-app/
-├── main.js           # App entry point
-├── screens/
-│   ├── home.layout   # Screen layouts (coming soon)
-│   └── settings.layout
-├── components/
-│   ├── button.ui     # Reusable UI components
-│   └── card.ui
-└── app.json          # Metadata
-```
-
-### Designer Tool (Coming Soon)
-Visual constraints-based layout editor. Drag components, set constraints, preview on multiple sizes.
-
-### Craft Tool (Coming Soon)
-Build reusable UI components with props, styles, and behavior.
-
-## Installation
-
-### One-Line Install
-```bash
-curl -fsSL https://functionserver.com/install | bash
-```
-
-### Custom Branding
-```bash
-curl -fsSL https://functionserver.com/install | bash -s -- --name "MyOS" --icon "🚀"
-```
-
-### Manual Installation
-```bash
-git clone https://github.com/williamsharkey/functionserver.git
+git clone https://github.com/williamsharkey/functionserver
 cd functionserver/go
-go build -o functionserver .
-./functionserver
+go run .
+# Open http://localhost:8080/app
 ```
 
-## Configuration
+## For AI Agents
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OS_NAME` | Display name | Function Server |
-| `OS_ICON` | Emoji icon | ⚡ |
-| `PORT` | Server port | 8080 |
-| `DATA_DIR` | Data storage | ./data |
-| `HOMES_DIR` | User homes | /home |
+If you're Claude running inside FunctionServer's terminal, see [CLAUDE.md](CLAUDE.md) for the full guide.
+
+Quick start:
+```javascript
+// Load tools
+getFileFromDisk('~/studio.js').then(code => runApp(code, 'studio.js'))
+
+// Get command reference
+Lens.help()
+
+// Create a project
+setupHappyPath("my app")
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Browser (FunctionServer)              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │   Apps      │  │   Studio    │  │   Guardian      │  │
+│  │  (JS in VM) │  │  + Lens     │  │  (error watch)  │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+│                         │                                │
+│              ┌──────────┴──────────┐                    │
+│              │   ALGO.bridge       │                    │
+│              │   (WebSocket)       │                    │
+│              └──────────┬──────────┘                    │
+└─────────────────────────┼───────────────────────────────┘
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+        ┌─────▼─────┐          ┌──────▼──────┐
+        │  eye CLI  │          │  eye-mcp    │
+        │  (human)  │          │  (Claude)   │
+        └───────────┘          └─────────────┘
+```
 
 ## Project Structure
 
 ```
 functionserver/
 ├── core/
-│   ├── algo-os.html     # Main OS (~5,000 lines)
-│   ├── algo-os.css      # Extracted CSS (~1,400 lines)
-│   └── apps/            # System apps
-│       ├── shade-station.js
-│       ├── ticket-manager.js
-│       ├── photobooth.js
-│       ├── box-editor.js
-│       ├── chime-synth.js
-│       └── video-player.js
+│   ├── algo-os.html          # Main OS (~2500 lines)
+│   └── apps/                 # System apps
+│       ├── studio.js         # IDE with Lens
+│       ├── launcher.js       # Quick access menu
+│       └── github-auth.js    # OAuth sign-in
 ├── go/
-│   └── main.go          # Go backend
+│   └── main.go               # Go backend
 ├── www/
-│   ├── index.html       # Landing page
-│   └── screenshots/     # Marketing assets
-└── install/
-    └── install.sh       # Installer script
+│   ├── index.html            # Landing page
+│   ├── lens.html             # Lens documentation
+│   ├── thehappypath.html     # Developer guide
+│   └── door.html             # Philosophy/story
+├── CLAUDE.md                 # AI agent instructions
+└── README.md                 # This file
 ```
 
-## API Endpoints
+## Documentation
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /app` | Main OS interface |
-| `GET /api/system-apps` | List system apps |
-| `GET /core/apps/*.js` | System app code |
-| `GET /:username/` | Public folder |
-| `POST /api/terminal` | Terminal commands |
-| `POST /api/login` | Authentication |
-
-## Security
-
-- Commands sandboxed to user home directory
-- Dangerous commands blocked (sudo, chmod, etc.)
-- Sessions expire after 7 days
-- Passwords hashed with bcrypt
-- Only .md/.txt served from /core/apps/
-
-## Development
-
-```bash
-# Run locally
-cd go && go build -o functionserver . && ./functionserver
-
-# Run tests
-cd www && node test-comprehensive.js
-
-# Deploy to production
-scp core/* root@functionserver.com:/opt/functionserver/core/
-ssh root@functionserver.com "cd /opt/functionserver/go && go build && systemctl restart functionserver"
-```
-
-## Supported Platforms
-
-| Platform | Status |
-|----------|--------|
-| Ubuntu/Debian | ✅ |
-| CentOS/RHEL/Fedora | ✅ |
-| Alpine | ✅ |
-| Arch/Manjaro | ✅ |
-| macOS | ✅ |
-| WSL | ✅ |
+- **[The Happy Path](https://functionserver.com/thehappypath.html)** - Developer guide for AI-first development
+- **[Lens](https://functionserver.com/lens.html)** - Token-efficient editing API
+- **[The Door](https://functionserver.com/door.html)** - Philosophy and architecture
+- **[CLAUDE.md](CLAUDE.md)** - Instructions for AI agents
 
 ## License
 
@@ -202,6 +154,6 @@ MIT
 
 ## Links
 
-- **Live Demo**: https://functionserver.com/app
-- **GitHub**: https://github.com/williamsharkey/functionserver
-- **Issues**: https://github.com/williamsharkey/functionserver/issues
+- **Live Demo**: [functionserver.com/app](https://functionserver.com/app)
+- **GitHub**: [github.com/williamsharkey/functionserver](https://github.com/williamsharkey/functionserver)
+- **Issues**: [github.com/williamsharkey/functionserver/issues](https://github.com/williamsharkey/functionserver/issues)
