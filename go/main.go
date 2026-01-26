@@ -1461,6 +1461,43 @@ func handleFileDelete(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]interface{}{"success": true}, 200)
 }
 
+func handleFileMkdir(w http.ResponseWriter, r *http.Request) {
+	username := requireAuth(r)
+	if username == "" {
+		jsonResponse(w, map[string]string{"error": "Authorization required"}, 401)
+		return
+	}
+
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		jsonResponse(w, map[string]string{"error": "Path required"}, 400)
+		return
+	}
+
+	homeDir := filepath.Join(config.HomesDir, username)
+
+	// Resolve path
+	dirPath := path
+	if strings.HasPrefix(dirPath, "~/") {
+		dirPath = filepath.Join(homeDir, dirPath[2:])
+	} else if !filepath.IsAbs(dirPath) {
+		dirPath = filepath.Join(homeDir, dirPath)
+	}
+
+	resolved, err := filepath.Abs(dirPath)
+	if err != nil || !strings.HasPrefix(resolved, homeDir) {
+		jsonResponse(w, map[string]string{"error": "Access denied"}, 403)
+		return
+	}
+
+	if err := os.MkdirAll(resolved, 0755); err != nil {
+		jsonResponse(w, map[string]string{"error": "Failed to create directory"}, 500)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{"success": true}, 200)
+}
+
 func serveOS(w http.ResponseWriter, r *http.Request) {
 	// Try to find algo-os.html (full ALGO OS) or fallback to os.html
 	paths := []string{
@@ -1614,6 +1651,16 @@ func main() {
 			return
 		}
 		handleFileDelete(w, r)
+	})
+
+	mux.HandleFunc("/api/files/mkdir", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			return
+		}
+		handleFileMkdir(w, r)
 	})
 
 	// Tickets API

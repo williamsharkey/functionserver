@@ -57,7 +57,18 @@
 </div>
 
 <div id="user-indicator"></div>
-<div id="desktop"></div>
+<div id="desktop">
+  <div id="desktop-toolbar">
+    <div id="desktop-breadcrumbs">
+      <span class="breadcrumb" data-path="~" onclick="navigateToPath('~')">🏠 Desktop</span>
+    </div>
+    <div id="desktop-actions">
+      <span class="desktop-action" title="Toggle hidden files" onclick="toggleHiddenFiles()">👁</span>
+      <span class="desktop-action" title="New folder" onclick="createNewFolder()">📁+</span>
+    </div>
+  </div>
+  <div id="desktop-icons"></div>
+</div>
 <div id="toast-container"></div>
 
 <!-- macOS-style Menu Bar (Veil theme) -->
@@ -254,21 +265,27 @@ Object.defineProperty(window, 'systemApps', { get: () => systemApps });
 // ==================== FILE API ====================
 // Desktop files now live on disk at ~/
 
-async function fetchDesktopFiles() {
+async function fetchDesktopFiles(path = '~/') {
   if (!sessionToken) return [];
   try {
-    const res = await fetch(API_BASE + '/files/list?path=~/', {
+    const res = await fetch(API_BASE + '/files/list?path=' + encodeURIComponent(path), {
       headers: { 'Authorization': 'Bearer ' + sessionToken }
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.files || []).filter(f => f.type === 'file').map(f => ({
+    // Return both files and directories, sorted: folders first, then files
+    const items = (data.files || []).map(f => ({
       name: f.name,
-      path: '~/' + f.name,
+      path: (path === '~/' ? '~/' : path + '/') + f.name,
       size: f.size,
       modified: f.modified,
+      isDir: f.type === 'directory',
       type: 'disk'
     }));
+    return items.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
   } catch (e) {
     console.error('Failed to fetch files:', e);
     return [];
@@ -1520,46 +1537,217 @@ function handleContextMenu(e) {
 }
 
 // ==================== DESKTOP ICONS ====================
-// Desktop now shows files from disk (~/), not localStorage
+// Desktop shows app shortcuts + navigable folder view
 
 let desktopFiles = []; // Cache of files from disk
+let desktopPath = '~'; // Current path (~ = desktop view, other = folder view)
+let showHiddenFiles = false;
+const ICON_GRID_SIZE = 80; // Grid cell size for icons
+const ICON_COLS = 10; // Icons per row
+const TOOLBAR_HEIGHT = 36; // Height of desktop toolbar
+
+// Default desktop app icons (always shown on desktop view)
+const defaultDesktopIcons = [
+  { id: 'notepad', name: 'Notepad', icon: '📝', action: 'openNotepad' },
+  { id: 'jside', name: 'javascript.ide', icon: '💻', action: 'openJSIDE' },
+  { id: 'browser', name: 'Web Browser', icon: '🌐', action: 'openBrowser' },
+  { id: 'docs', name: 'Documentation', icon: '📕', action: 'openDocumentation' },
+  { id: 'home', name: 'Home', icon: '🏠', action: 'openHomeFolder', isFolder: true },
+];
+
+function getIconPosition(index) {
+  const col = index % ICON_COLS;
+  const row = Math.floor(index / ICON_COLS);
+  return { x: 20 + col * ICON_GRID_SIZE, y: 20 + row * ICON_GRID_SIZE };
+}
+
+function findNextEmptySlot(existingIcons) {
+  const occupied = new Set(existingIcons.map(ic => `${Math.floor(ic.x / ICON_GRID_SIZE)},${Math.floor(ic.y / ICON_GRID_SIZE)}`));
+  for (let i = 0; i < 100; i++) {
+    const pos = getIconPosition(i);
+    const key = `${Math.floor(pos.x / ICON_GRID_SIZE)},${Math.floor(pos.y / ICON_GRID_SIZE)}`;
+    if (!occupied.has(key)) return pos;
+  }
+  return getIconPosition(existingIcons.length);
+}
 
 async function createDesktopIcons() {
-  const desktop = document.getElementById('desktop');
-  desktop.innerHTML = '';
+  const container = document.getElementById('desktop-icons');
+  if (!container) return;
+  container.innerHTML = '';
 
-  // Default app icons
-  const defaultIcons = [
-    { id: 'notepad', name: 'Notepad', icon: '📝', x: 20, y: 20, action: 'openNotepad' },
-    { id: 'jside', name: 'javascript.ide', icon: '💻', x: 20, y: 100, action: 'openJSIDE' },
-    { id: 'browser', name: 'Web Browser', icon: '🌐', x: 20, y: 180, action: 'openBrowser' },
-    { id: 'docs', name: 'Documentation', icon: '📕', x: 20, y: 260, action: 'openDocumentation' },
-  ];
+  updateBreadcrumbs();
 
-  defaultIcons.forEach(ic => createDesktopIcon(ic));
-
-  // Fetch files from disk
-  desktopFiles = await fetchDesktopFiles();
-
-  // Create icons for disk files
-  desktopFiles.forEach((file, idx) => {
-    createDesktopIcon({
-      id: 'file-' + idx,
-      name: file.name,
-      icon: getFileIcon(file.name),
-      x: 120 + (idx % 5) * 80,
-      y: 20 + Math.floor(idx / 5) * 80,
-      action: 'openDiskFile',
-      filePath: file.path,
-      fileName: file.name
+  if (desktopPath === '~') {
+    // Desktop view: show app shortcuts + Home folder
+    defaultDesktopIcons.forEach((ic, idx) => {
+      const pos = getIconPosition(idx);
+      createDesktopIcon({ ...ic, x: pos.x, y: pos.y });
     });
+  } else {
+    // Folder view: show folder contents
+    desktopFiles = await fetchDesktopFiles(desktopPath);
+
+    // Filter hidden files if needed
+    const files = showHiddenFiles ? desktopFiles : desktopFiles.filter(f => !f.name.startsWith('.'));
+
+    files.forEach((file, idx) => {
+      const pos = getIconPosition(idx);
+      createDesktopIcon({
+        id: 'file-' + idx,
+        name: file.name,
+        icon: file.isDir ? '📁' : getFileIcon(file.name),
+        x: pos.x,
+        y: pos.y,
+        action: file.isDir ? 'openFolder' : 'openDiskFile',
+        filePath: file.path,
+        fileName: file.name,
+        isFolder: file.isDir
+      });
+    });
+  }
+
+  updateDesktopActions();
+}
+
+function updateBreadcrumbs() {
+  const breadcrumbs = document.getElementById('desktop-breadcrumbs');
+  if (!breadcrumbs) return;
+
+  if (desktopPath === '~') {
+    breadcrumbs.innerHTML = '<span class="breadcrumb active">🏠 Desktop</span>';
+    return;
+  }
+
+  // Build breadcrumb trail
+  const parts = desktopPath.split('/').filter(p => p);
+  let html = '<span class="breadcrumb" onclick="navigateToPath(\'~\')">🏠 Desktop</span>';
+  let path = '';
+
+  parts.forEach((part, i) => {
+    path += '/' + part;
+    const isLast = i === parts.length - 1;
+    html += '<span class="breadcrumb-sep">›</span>';
+    if (isLast) {
+      html += '<span class="breadcrumb active">' + escapeHtml(part) + '</span>';
+    } else {
+      html += '<span class="breadcrumb" onclick="navigateToPath(\'' + escapeHtml(path) + '\')">' + escapeHtml(part) + '</span>';
+    }
   });
+
+  breadcrumbs.innerHTML = html;
+}
+
+function updateDesktopActions() {
+  const hiddenBtn = document.querySelector('#desktop-actions .desktop-action[title="Toggle hidden files"]');
+  if (hiddenBtn) {
+    hiddenBtn.classList.toggle('active', showHiddenFiles);
+    hiddenBtn.innerHTML = showHiddenFiles ? '👁' : '👁‍🗨';
+  }
+}
+
+function navigateToPath(path) {
+  desktopPath = path;
+  createDesktopIcons();
+}
+
+function openHomeFolder() {
+  // Navigate to user's home directory
+  const homePath = '/home/' + (currentUser || 'guest');
+  // For root user, use /root
+  if (currentUser === 'root') {
+    navigateToPath('/root');
+  } else {
+    navigateToPath(homePath);
+  }
+}
+
+function openFolder(path) {
+  navigateToPath(path);
+}
+
+function toggleHiddenFiles() {
+  showHiddenFiles = !showHiddenFiles;
+  createDesktopIcons();
+  algoSpeak(showHiddenFiles ? 'Showing hidden files' : 'Hiding hidden files');
+}
+
+async function createNewFolder() {
+  if (desktopPath === '~') {
+    algoSpeak('Navigate to a folder first');
+    return;
+  }
+
+  // Find next empty slot
+  const container = document.getElementById('desktop-icons');
+  const existingIcons = Array.from(container.querySelectorAll('.desktop-icon')).map(el => ({
+    x: parseInt(el.style.left),
+    y: parseInt(el.style.top)
+  }));
+  const pos = findNextEmptySlot(existingIcons);
+
+  // Create placeholder icon with editable name
+  const icon = document.createElement('div');
+  icon.className = 'desktop-icon new-folder';
+  icon.style.left = pos.x + 'px';
+  icon.style.top = pos.y + 'px';
+  icon.innerHTML = '<div class="icon-img">📁</div><input type="text" class="icon-rename" value="New Folder" onkeydown="handleNewFolderKey(event, this)" onblur="cancelNewFolder(this)">';
+  container.appendChild(icon);
+
+  // Focus and select the input
+  const input = icon.querySelector('input');
+  input.focus();
+  input.select();
+}
+
+async function handleNewFolderKey(e, input) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) {
+      cancelNewFolder(input);
+      return;
+    }
+
+    const folderPath = desktopPath + '/' + name;
+    const success = await createFolderOnDisk(folderPath);
+
+    if (success) {
+      await createDesktopIcons();
+      algoSpeak('Created folder: ' + name);
+    } else {
+      algoSpeak('Failed to create folder');
+      cancelNewFolder(input);
+    }
+  } else if (e.key === 'Escape') {
+    cancelNewFolder(input);
+  }
+}
+
+function cancelNewFolder(input) {
+  const icon = input.closest('.desktop-icon');
+  if (icon) icon.remove();
+}
+
+async function createFolderOnDisk(path) {
+  if (!sessionToken) return false;
+  try {
+    const res = await fetch(API_BASE + '/files/mkdir?path=' + encodeURIComponent(path), {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + sessionToken }
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 function createDesktopIcon(ic) {
-  const desktop = document.getElementById('desktop');
+  const container = document.getElementById('desktop-icons');
+  if (!container) return;
+
   const icon = document.createElement('div');
-  icon.className = 'desktop-icon';
+  icon.className = 'desktop-icon' + (ic.isFolder ? ' folder' : '');
   icon.id = 'icon-' + ic.id;
   icon.dataset.id = ic.id;
   icon.style.left = ic.x + 'px';
@@ -1567,7 +1755,9 @@ function createDesktopIcon(ic) {
   icon.innerHTML = '<div class="icon-img">' + ic.icon + '</div><div class="icon-label">' + escapeHtml(ic.name) + '</div>';
 
   icon.ondblclick = async () => {
-    if (ic.action === 'openDiskFile') {
+    if (ic.action === 'openFolder') {
+      navigateToPath(ic.filePath);
+    } else if (ic.action === 'openDiskFile') {
       const content = await getFileFromDisk(ic.filePath);
       if (content !== null) {
         openSavedFile({ name: ic.fileName, content: content }, ic.filePath);
@@ -1575,31 +1765,40 @@ function createDesktopIcon(ic) {
         algoSpeak('Failed to open file');
       }
     } else if (typeof window[ic.action] === 'function') {
-      window[ic.action]();
+      window[ic.action](ic.filePath);
     }
   };
 
-  // Right-click context menu for files
-  if (ic.action === 'openDiskFile') {
+  // Right-click context menu for files/folders
+  if (ic.action === 'openDiskFile' || ic.action === 'openFolder') {
     icon.oncontextmenu = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      showFileContextMenu(e, ic.filePath, ic.fileName);
+      showFileContextMenu(e, ic.filePath, ic.fileName, ic.isFolder);
     };
   }
 
-  desktop.appendChild(icon);
+  container.appendChild(icon);
 }
 
-function showFileContextMenu(e, filePath, fileName) {
+function showFileContextMenu(e, filePath, fileName, isFolder) {
   const menu = document.getElementById('context-menu');
-  const isJS = fileName.endsWith('.js');
-  menu.innerHTML =
-    (isJS ? '<div class="ctx-item" onclick="runDiskFile(\'' + filePath + '\', \'' + fileName + '\')">▶ Run</div>' : '') +
-    '<div class="ctx-item" onclick="openDiskFileByPath(\'' + filePath + '\', \'' + fileName + '\')">📂 Open</div>' +
-    '<div class="ctx-item" onclick="renameDiskFile(\'' + filePath + '\', \'' + fileName + '\')">✏️ Rename</div>' +
-    '<div class="ctx-separator"></div>' +
-    '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + filePath + '\')">🗑️ Delete</div>';
+  const isJS = fileName && fileName.endsWith('.js');
+
+  if (isFolder) {
+    menu.innerHTML =
+      '<div class="ctx-item" onclick="navigateToPath(\'' + escapeHtml(filePath) + '\');hideContextMenu();">📂 Open</div>' +
+      '<div class="ctx-item" onclick="renameDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">✏️ Rename</div>' +
+      '<div class="ctx-separator"></div>' +
+      '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + escapeHtml(filePath) + '\')">🗑️ Delete</div>';
+  } else {
+    menu.innerHTML =
+      (isJS ? '<div class="ctx-item" onclick="runDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">▶ Run</div>' : '') +
+      '<div class="ctx-item" onclick="openDiskFileByPath(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">📂 Open</div>' +
+      '<div class="ctx-item" onclick="renameDiskFile(\'' + escapeHtml(filePath) + '\', \'' + escapeHtml(fileName) + '\')">✏️ Rename</div>' +
+      '<div class="ctx-separator"></div>' +
+      '<div class="ctx-item" style="color:#f66;" onclick="deleteDiskFile(\'' + escapeHtml(filePath) + '\')">🗑️ Delete</div>';
+  }
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   menu.classList.add('visible');
