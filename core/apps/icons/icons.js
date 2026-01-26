@@ -101,7 +101,7 @@ ALGO.app.icon = '🎭';
       localStorage.removeItem('fs-icons');
       if (typeof refreshAllIcons === 'function') refreshAllIcons();
       createIconsApp(container);
-      if (typeof showToast === 'function') showToast('Icons reset to defaults');
+      if (typeof algoSpeak === 'function') algoSpeak('Icons reset to defaults');
     };
   }
 
