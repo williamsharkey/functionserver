@@ -60,6 +60,23 @@
 <div id="desktop"></div>
 <div id="toast-container"></div>
 
+<!-- macOS-style Menu Bar (Veil theme) -->
+<div id="menubar">
+  <div id="menubar-left">
+    <div id="system-icon" onclick="toggleStartMenu()">ƒ</div>
+    <div id="active-app-name">Finder</div>
+    <div id="app-menus"></div>
+  </div>
+  <div id="menubar-right">
+    <div id="menubar-status">
+      <span class="status-icon" id="status-eye" title="Eye Bridge">👁</span>
+      <span class="status-icon" id="status-shadow" style="display:none;" title="Shadow Tabs">👻</span>
+    </div>
+    <div id="menubar-clock"></div>
+  </div>
+</div>
+
+<!-- Legacy taskbar (Classic theme) -->
 <div id="taskbar">
   <div id="start-btn" onclick="toggleStartMenu()">
     <span style="font-size:14px;">🖥️</span> Start
@@ -119,6 +136,7 @@ let topZIndex = 100;  // Track highest z-index for window stacking
 // ==================== ICON SYSTEM ====================
 // Customizable icons with theme-aware colors for unicode characters
 const ICON_DEFS = {
+  system:        { default: 'ƒ', alts: ['λ', '⬡', '◈', '❖', '✦', '⌘', '☰', '⊞', '◆', '●'] },
   programs:      { default: '📁', alts: ['📂', '🗂️', '▤', '☰', '⊞', '▦', '❖', '◈', '⬡', '⎔'] },
   documentation: { default: '📕', alts: ['📖', '📚', '📒', '📓', '📔', '🕮', '☷', '≡', '☲', '❡'] },
   help:          { default: '📙', alts: ['📗', '📘', '❓', '❔', '?', '¿', '⁇', '⍰', '☉', '◎'] },
@@ -127,6 +145,7 @@ const ICON_DEFS = {
   logout:        { default: '🚪', alts: ['🔓', '🚶', '➜', '⏏', '↩', '⇤', '⎋', '✕', '◁', '⬅'] },
   login:         { default: '🔑', alts: ['🔐', '🗝️', '⚿', '➜', '⇥', '▷', '⊳', '►', '◇', '✦'] },
   user:          { default: '👤', alts: ['👨', '👩', '🧑', '☺', '☻', '◉', '●', '○', '◯', '⬤'] },
+  eye:           { default: '👁', alts: ['👀', '🔍', '◉', '◎', '●', '○', '⊙', '☉', '⦿', '◯'] },
   shadow:        { default: '👻', alts: ['🫥', '💨', '🌫️', '◌', '◍', '◎', '○', '◯', '⬚', '▢'] },
   notepad:       { default: '📝', alts: ['📄', '📃', '🗒️', '✎', '✏', '✐', '☰', '≡', '▤', '⊟'] },
   ide:           { default: '💻', alts: ['🖥️', '⌨️', '🖳', '⌘', '⟨⟩', '<>', '{}', '⌥', '⎇', '⏣'] },
@@ -180,6 +199,14 @@ function setCustomIcon(key, icon) {
 }
 
 function refreshAllIcons() {
+  // Update menubar icons (Veil theme)
+  const systemIcon = document.getElementById('system-icon');
+  if (systemIcon) systemIcon.innerHTML = getIcon('system');
+  const statusEye = document.getElementById('status-eye');
+  if (statusEye) statusEye.innerHTML = getIcon('eye');
+  const statusShadow = document.getElementById('status-shadow');
+  if (statusShadow) statusShadow.innerHTML = getIcon('shadow');
+
   // Update start menu icons
   const authEl = document.getElementById('start-menu-auth');
   if (authEl && sessionToken) {
@@ -1364,6 +1391,7 @@ async function init() {
   updateTaskbar();
   updateClock();
   setInterval(updateClock, 1000);
+  refreshAllIcons();
 
   // Global event listeners
   document.addEventListener('click', globalClick);
@@ -1648,19 +1676,18 @@ function createWindow(opts) {
 function renderWindow(win) {
   const desktop = document.getElementById('desktop');
   const el = document.createElement('div');
-  el.className = 'window';
+  el.className = 'window inactive';
   el.id = 'win-' + win.id;
   el.style.cssText = 'left:' + win.x + 'px;top:' + win.y + 'px;width:' + win.width + 'px;height:' + win.height + 'px;';
 
   el.innerHTML =
     '<div class="window-titlebar" onmousedown="startDrag(event,' + win.id + ')">' +
-      '<span class="window-icon">' + win.icon + '</span>' +
-      '<span class="window-title">' + escapeHtml(win.title) + '</span>' +
       '<div class="window-controls">' +
-        '<button class="win-btn minimize" onclick="minimizeWindow(' + win.id + ')">_</button>' +
-        '<button class="win-btn maximize" onclick="maximizeWindow(' + win.id + ')">□</button>' +
-        '<button class="win-btn close" onclick="closeWindow(' + win.id + ')">×</button>' +
+        '<button class="window-btn close" onclick="event.stopPropagation();closeWindow(' + win.id + ')"></button>' +
+        '<button class="window-btn minimize" onclick="event.stopPropagation();minimizeWindow(' + win.id + ')"></button>' +
+        '<button class="window-btn maximize" onclick="event.stopPropagation();maximizeWindow(' + win.id + ')"></button>' +
       '</div>' +
+      '<span class="window-title">' + escapeHtml(win.title) + '</span>' +
     '</div>' +
     '<div class="window-content">' + win.content + '</div>';
 
@@ -1671,14 +1698,19 @@ function renderWindow(win) {
 function focusWindow(id) {
   windows.forEach(w => {
     const el = document.getElementById('win-' + w.id);
-    if (el) el.classList.remove('active');
+    if (el) {
+      el.classList.remove('active');
+      el.classList.add('inactive');
+    }
   });
   const el = document.getElementById('win-' + id);
   if (el) {
     el.classList.add('active');
-    el.style.zIndex = ++topZIndex;  // Increment z-index so focused window is always on top
+    el.classList.remove('inactive');
+    el.style.zIndex = ++topZIndex;
   }
   activeWin = id;
+  updateMenubarAppName();
 }
 
 function minimizeWindow(id) {
@@ -1717,7 +1749,7 @@ function maximizeWindow(id) {
     el.style.left = '0';
     el.style.top = '0';
     el.style.width = '100%';
-    el.style.height = 'calc(100% - 28px)';
+    el.style.height = '100%';
     win.maximized = true;
   }
 }
@@ -1728,6 +1760,16 @@ function closeWindow(id) {
   const el = document.getElementById('win-' + id);
   if (el) el.remove();
   windows = windows.filter(w => w.id !== id);
+  // Focus next window or clear active
+  if (activeWin === id) {
+    const nextWin = windows.find(w => !w.minimized);
+    if (nextWin) {
+      focusWindow(nextWin.id);
+    } else {
+      activeWin = null;
+      updateMenubarAppName();
+    }
+  }
   updateTaskbar();
 }
 
@@ -2276,8 +2318,36 @@ function globalClick(e) {
 
 function updateClock() {
   const now = new Date();
-  document.getElementById('clock').textContent =
-    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const legacyClock = document.getElementById('clock');
+  if (legacyClock) legacyClock.textContent = timeStr;
+
+  // Menubar clock with full format: Mon Jan 26 10:41 AM
+  const menubarClock = document.getElementById('menubar-clock');
+  if (menubarClock) {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = days[now.getDay()];
+    const month = months[now.getMonth()];
+    const date = now.getDate();
+    const hour = now.getHours();
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    menubarClock.textContent = `${day} ${month} ${date} ${hour12}:${minute} ${ampm}`;
+  }
+}
+
+function updateMenubarAppName() {
+  const appNameEl = document.getElementById('active-app-name');
+  if (!appNameEl) return;
+
+  const activeWindow = windows.find(w => w.id === activeWin);
+  if (activeWindow) {
+    appNameEl.textContent = activeWindow.title || activeWindow.appName || 'Window';
+  } else {
+    appNameEl.textContent = 'Finder';
+  }
 }
 
 function escapeHtml(s) {

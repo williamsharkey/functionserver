@@ -16,28 +16,34 @@
   --green: #86efac;
   --green-dim: #22c55e;
 
-  /* Window button colors (not Mac-like) */
+  /* Window button colors */
   --btn-close: #e94560;
   --btn-minimize: #a78bfa;
   --btn-maximize: #86efac;
 
-  /* Legacy Windows-style colors (for compatibility) */
+  /* Window styles */
   --win-bg: var(--surface);
   --win-border: var(--border);
-  --titlebar-active: linear-gradient(90deg, var(--accent-dim), var(--accent));
-  --titlebar-inactive: linear-gradient(90deg, #3f3f46, #52525b);
+  --titlebar-active: transparent;
+  --titlebar-inactive: transparent;
+  --win-btn-position: left; /* left or right */
+  --win-titlebar-height: 38px;
 
   /* Desktop */
   --desktop-bg: var(--bg);
 
-  /* Taskbar */
-  --taskbar-bg: var(--surface);
-  --taskbar-border: var(--border);
+  /* Menu bar (macOS-style for Veil) */
+  --menubar-position: top;
+  --menubar-bg: rgba(24, 24, 27, 0.85);
+  --menubar-blur: blur(20px);
+  --menubar-height: 28px;
+  --menubar-border: var(--border);
 
   /* Start menu */
   --menu-bg: var(--surface);
   --menu-hover: var(--accent-dim);
   --menu-sidebar: linear-gradient(var(--accent-dim), var(--accent));
+  --menu-sidebar-display: none; /* hidden in Veil */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -54,7 +60,7 @@ body {
 
 #desktop {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 32px;
+  top: var(--menubar-height); left: 0; right: 0; bottom: 0;
   background: var(--desktop-bg);
   background-size: cover;
   background-position: center;
@@ -122,38 +128,45 @@ body {
 
 .window-titlebar {
   background: var(--titlebar-active);
-  color: white;
-  padding: 8px 12px;
+  color: var(--text);
+  padding: 0 12px;
+  height: var(--win-titlebar-height);
   display: flex;
   align-items: center;
   cursor: move;
   font-weight: 500;
   font-size: 13px;
   border-bottom: 1px solid var(--border-subtle);
+  flex-direction: row;
 }
 .window.inactive .window-titlebar {
   background: var(--titlebar-inactive);
   color: var(--text-secondary);
 }
+.window.inactive .window-btn {
+  opacity: 0.5;
+}
 .window-title {
   flex: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .window-controls {
-  margin-left: auto;
   display: flex;
   gap: 8px;
+  order: -1; /* Move to left side */
+  margin-right: 12px;
 }
 
 /* Window buttons - circles with custom colors */
 .window-btn {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   border: none;
   font-size: 0;
@@ -164,8 +177,7 @@ body {
   justify-content: center;
 }
 .window-btn:hover {
-  opacity: 0.8;
-  transform: scale(1.1);
+  opacity: 0.9;
 }
 .window-btn.close { background: var(--btn-close); }
 .window-btn.minimize { background: var(--btn-minimize); }
@@ -173,8 +185,8 @@ body {
 
 /* Show symbols on hover */
 .window:hover .window-btn {
-  font-size: 10px;
-  color: rgba(0,0,0,0.6);
+  font-size: 9px;
+  color: rgba(0,0,0,0.7);
   font-weight: bold;
 }
 .window-btn.close::after { content: '×'; }
@@ -236,37 +248,90 @@ body {
   color: white;
 }
 
-/* Taskbar */
-#taskbar {
+/* Menu Bar (macOS-style for Veil theme) */
+#menubar {
   position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: 32px;
-  background: var(--taskbar-bg);
-  border-top: 1px solid var(--border);
+  top: 0; left: 0; right: 0;
+  height: var(--menubar-height);
+  background: var(--menubar-bg);
+  backdrop-filter: var(--menubar-blur);
+  -webkit-backdrop-filter: var(--menubar-blur);
+  border-bottom: 1px solid var(--menubar-border);
   display: flex;
   align-items: center;
-  padding: 0 4px;
+  padding: 0 8px;
   z-index: 90000;
-  backdrop-filter: blur(12px);
+  font-size: 13px;
 }
 
-#start-btn {
-  background: transparent;
-  border: none;
-  padding: 4px 12px;
-  font-weight: 500;
-  cursor: pointer;
+#menubar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text);
-  border-radius: 4px;
-  transition: background 0.15s;
+  gap: 0;
 }
-#start-btn:hover { background: var(--surface-raised); }
-#start-btn:active, #start-btn.active { background: var(--accent-dim); }
 
+#menubar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+#system-icon {
+  font-size: 16px;
+  padding: 0 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+}
+#system-icon:hover { color: var(--accent); }
+
+#active-app-name {
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 12px 0 4px;
+  white-space: nowrap;
+}
+
+.menubar-menu {
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.menubar-menu:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+#menubar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-icon {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.status-icon:hover { background: var(--surface-raised); }
+
+#menubar-clock {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Legacy taskbar (hidden in Veil, shown in Classic) */
+#taskbar {
+  display: none;
+}
+
+/* Taskbar items (for Classic theme) */
 #taskbar-windows {
   flex: 1;
   display: flex;
@@ -364,34 +429,34 @@ body {
   color: var(--text-secondary);
 }
 
-/* Start Menu */
+/* Start Menu (dropdown from menubar) */
 #start-menu {
   position: fixed;
-  bottom: 32px;
+  top: var(--menubar-height);
   left: 0;
   background: var(--menu-bg);
   border: 1px solid var(--border);
-  border-radius: 8px 8px 0 0;
+  border-radius: 0 0 8px 8px;
   display: none;
   z-index: 99999;
-  min-width: 240px;
-  max-height: calc(100vh - 40px);
+  min-width: 220px;
+  max-height: calc(100vh - var(--menubar-height) - 20px);
   overflow: visible;
-  box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
 #start-menu.visible { display: block !important; }
 
 .start-sidebar {
+  display: var(--menu-sidebar-display);
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 28px;
   background: var(--menu-sidebar);
-  border-radius: 8px 0 0 0;
+  border-radius: 0 0 0 8px;
   writing-mode: vertical-rl;
   color: white;
   font-weight: 600;
   font-size: 14px;
-  display: flex;
   align-items: center;
   justify-content: flex-end;
   padding-bottom: 12px;

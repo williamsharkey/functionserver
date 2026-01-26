@@ -6,6 +6,7 @@ ALGO.app.category = 'graphics';
 (function() {
   // Icon categories with friendly names
   const CATEGORIES = {
+    system: 'FunctionServer',
     programs: 'Programs Menu',
     documentation: 'Documentation',
     help: 'Help',
@@ -14,6 +15,7 @@ ALGO.app.category = 'graphics';
     logout: 'Log Out',
     login: 'Login',
     user: 'User',
+    eye: 'Eye Bridge',
     shadow: 'Shadow Tabs',
     notepad: 'Notepad',
     ide: 'Code Editor',
