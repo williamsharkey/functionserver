@@ -7,3 +7,6 @@
 [submodule "core/apps/simpwave"]
 	path = core/apps/simpwave
 	url = https://github.com/williamsharkey/fs-simpwave
+[submodule "core/apps/ivory"]
+	path = core/apps/ivory
+	url = https://github.com/williamsharkey/fs-ivory

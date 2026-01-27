@@ -104,14 +104,24 @@ function _aw_renderOctaveButtons(instId, idx, currentOctave) {
 
 function _aw_renderVoicePanel(instId, idx, voice) {
   const presets = Object.keys(_aw_state.voicePresets);
+  // Voice 0 uses browser TTS and needs voice selector
+  const voiceSelector = idx === 0 ?
+    '<div style="display:grid;grid-template-columns:50px 1fr;gap:4px 8px;align-items:center;margin-bottom:4px;">' +
+      '<span style="color:#999;">Voice</span>' +
+      '<select id="aw-sysvoice-' + instId + '" onchange="_aw_setSysVoice(\'' + instId + '\',this.value)" style="padding:2px;background:#c0c0c0;border:1px inset #808080;font-size:9px;max-width:160px;">' +
+        '<option>Loading...</option>' +
+      '</select>' +
+    '</div>' : '';
+
   return '<div id="aw-voice-' + idx + '-' + instId + '" style="background:#2a2a3a;border:1px solid ' + (voice.enabled ? '#5a5a7a' : '#333') + ';padding:6px;font-size:10px;opacity:' + (voice.enabled ? '1' : '0.5') + ';">' +
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;border-bottom:1px solid #444;padding-bottom:4px;">' +
       '<input type="checkbox" id="aw-enable-' + idx + '-' + instId + '" ' + (voice.enabled ? 'checked' : '') + ' onchange="_aw_toggleVoice(\'' + instId + '\',' + idx + ',this.checked)" style="margin:0;">' +
-      '<span style="font-weight:bold;color:#ffd700;min-width:42px;">Voice ' + (idx + 1) + '</span>' +
+      '<span style="font-weight:bold;color:#ffd700;min-width:42px;">Voice ' + (idx + 1) + (idx === 0 ? ' (Lead)' : '') + '</span>' +
       '<select id="aw-preset-' + idx + '-' + instId + '" onchange="_aw_setPreset(\'' + instId + '\',' + idx + ',this.value)" style="padding:2px;background:#c0c0c0;border:1px inset #808080;font-size:9px;">' +
         presets.map(p => '<option value="' + p + '"' + (voice.preset === p ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>').join('') +
       '</select>' +
     '</div>' +
+    voiceSelector +
     '<div style="display:grid;grid-template-columns:50px 1fr;gap:4px 8px;align-items:center;">' +
       '<span style="color:#999;">Octave</span>' +
       '<div id="aw-octave-btns-' + idx + '-' + instId + '">' + _aw_renderOctaveButtons(instId, idx, voice.octave) + '</div>' +
@@ -219,7 +229,28 @@ function _aw_open() {
     onClose: () => delete _aw_state.instances[instId]
   });
 
-  _aw_getVoices().then(voices => { inst.availableVoices = voices; });
+  _aw_getVoices().then(voices => {
+    inst.availableVoices = voices;
+    _aw_updateVoiceSelect(instId);
+  });
+}
+
+function _aw_updateVoiceSelect(instId) {
+  const inst = _aw_state.instances[instId];
+  if (!inst || !inst.availableVoices.length) return;
+  const select = document.getElementById('aw-sysvoice-' + instId);
+  if (select) {
+    select.innerHTML = inst.availableVoices.map((v, i) =>
+      '<option value="' + i + '"' + (i === (inst.voiceIdx || 0) ? ' selected' : '') + '>' +
+      v.name.substring(0, 25) + '</option>'
+    ).join('');
+  }
+}
+
+function _aw_setSysVoice(instId, val) {
+  const inst = _aw_state.instances[instId];
+  if (!inst) return;
+  inst.voiceIdx = parseInt(val);
 }
 
 function _aw_renderGlobalOctaveButtons(instId, currentOctave) {
@@ -283,6 +314,7 @@ function _aw_randomize(instId) {
   const container = document.getElementById('aw-voices-' + instId);
   if (container) container.innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
   _aw_updateStatus(instId);
+  _aw_updateVoiceSelect(instId);
 }
 
 async function _aw_singWord(instId, word, midiPitchMod, velocityMod) {
@@ -308,7 +340,8 @@ async function _aw_singWord(instId, word, midiPitchMod, velocityMod) {
       setTimeout(() => {
         if (!window.speechSynthesis) return;
         const utt = new SpeechSynthesisUtterance(word);
-        if (inst.availableVoices.length > 0) utt.voice = inst.availableVoices[0];
+        const vIdx = inst.voiceIdx || 0;
+        if (inst.availableVoices.length > vIdx) utt.voice = inst.availableVoices[vIdx];
         utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
         utt.rate = voice.rate;
         utt.volume = voiceVol;
@@ -349,6 +382,7 @@ function _aw_tightChorus(instId) {
   const container = document.getElementById('aw-voices-' + instId);
   if (container) container.innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
   _aw_updateStatus(instId);
+  _aw_updateVoiceSelect(instId);
 }
 
 function _aw_updateCurrentWord(instId) {
@@ -392,6 +426,7 @@ function _aw_setPreset(instId, idx, preset) {
     // Re-render this voice panel
     const container = document.getElementById('aw-voices-' + instId);
     if (container) container.innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
+    _aw_updateVoiceSelect(instId);
   }
 }
 
@@ -522,6 +557,7 @@ function _aw_loadAngel(instId) {
     document.getElementById('aw-voices-' + instId).innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
     _aw_updateCurrentWord(instId);
     _aw_updateStatus(instId);
+    _aw_updateVoiceSelect(instId);
     ALGO.notify('Loaded ' + fileName);
   } catch (e) {
     ALGO.notify('Error: ' + e.message);
@@ -557,6 +593,7 @@ window._aw_setCents = _aw_setCents;
 window._aw_setRate = _aw_setRate;
 window._aw_setVolume = _aw_setVolume;
 window._aw_setOffset = _aw_setOffset;
+window._aw_setSysVoice = _aw_setSysVoice;
 window._aw_setGlobalVolume = _aw_setGlobalVolume;
 window._aw_setGlobalOctave = _aw_setGlobalOctave;
 window._aw_setLyrics = _aw_setLyrics;
