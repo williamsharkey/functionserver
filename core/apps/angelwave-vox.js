@@ -96,6 +96,7 @@ function _aw_open() {
       '<div style="display:flex;gap:4px;padding:4px 8px;background:#c0c0c0;border-bottom:2px groove #fff;">' +
         '<button onclick="_aw_testChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">▶ Test</button>' +
         '<button onclick="_aw_stopChoir()" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">■ Stop</button>' +
+        '<button onclick="_aw_tightChorus(\'' + instId + '\')" style="padding:3px 8px;background:#ffe4b5;border:2px outset #fff;font-size:10px;cursor:pointer;" title="Enable all voices with tight 25ms offsets for chorus effect">🎶 Tight Chorus</button>' +
         '<div style="width:1px;height:20px;background:#808080;margin:0 4px;"></div>' +
         '<button onclick="_aw_saveChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">💾 Save</button>' +
         '<button onclick="_aw_loadChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">📂 Load</button>' +
@@ -138,54 +139,49 @@ function _aw_updateVoiceSelects(instId) {
   });
 }
 
-// Polyphonic speech using iframes - each iframe has its own speechSynthesis!
-function _aw_getVoiceFrame(instId, idx) {
-  const frameId = 'aw-voice-frame-' + instId + '-' + idx;
-  let frame = document.getElementById(frameId);
-  if (!frame) {
-    frame = document.createElement('iframe');
-    frame.id = frameId;
-    frame.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
-    document.body.appendChild(frame);
-    // Initialize voices in the iframe
-    frame.contentWindow.document.open();
-    frame.contentWindow.document.write('<html><body></body></html>');
-    frame.contentWindow.document.close();
-  }
-  return frame;
-}
-
-function _aw_speakInFrame(frame, word, voice, pitchMod, velocityMod, availableVoices) {
-  const win = frame.contentWindow;
-  if (!win || !win.speechSynthesis) return;
-
-  const utterance = new win.SpeechSynthesisUtterance(word);
-
-  // Try to find matching voice in iframe's voice list
-  const frameVoices = win.speechSynthesis.getVoices();
-  if (frameVoices.length > 0 && availableVoices.length > voice.voiceIdx) {
-    const targetVoiceName = availableVoices[voice.voiceIdx]?.name;
-    const matchingVoice = frameVoices.find(v => v.name === targetVoiceName);
-    if (matchingVoice) utterance.voice = matchingVoice;
-  }
-
-  utterance.pitch = Math.min(2, Math.max(0, voice.pitch * (pitchMod || 1)));
-  utterance.rate = voice.rate;
-  utterance.volume = voice.volume * (velocityMod || 1);
-  win.speechSynthesis.speak(utterance);
-}
-
+// Note: Browser speechSynthesis is single-threaded and queues utterances.
+// True simultaneous speech is not possible. Use tight offsets (20-30ms) for
+// a "doubling" effect that creates the illusion of a fuller choir.
 function _aw_singWord(instId, word, pitchMod, velocityMod) {
   const inst = _aw_state.instances[instId];
-  if (!inst) return;
+  if (!inst || !window.speechSynthesis) return;
 
   inst.voices.forEach((voice, idx) => {
     if (!voice.enabled) return;
     setTimeout(() => {
-      const frame = _aw_getVoiceFrame(instId, idx);
-      _aw_speakInFrame(frame, word, voice, pitchMod, velocityMod, inst.availableVoices);
+      const utterance = new SpeechSynthesisUtterance(word);
+      if (inst.availableVoices.length > 0 && voice.voiceIdx < inst.availableVoices.length) {
+        utterance.voice = inst.availableVoices[voice.voiceIdx];
+      }
+      utterance.pitch = Math.min(2, Math.max(0, voice.pitch * (pitchMod || 1)));
+      utterance.rate = voice.rate;
+      utterance.volume = voice.volume * (velocityMod || 1);
+      speechSynthesis.speak(utterance);
     }, voice.offset);
   });
+}
+
+// Apply tight chorus preset - minimal offsets for "doubling" effect
+function _aw_tightChorus(instId) {
+  const inst = _aw_state.instances[instId];
+  if (!inst) return;
+  // Enable all voices with tight 25ms staggered offsets
+  const tightOffsets = [0, 25, 50, 75, 100, 125];
+  inst.voices.forEach((voice, idx) => {
+    voice.enabled = true;
+    voice.offset = tightOffsets[idx] || 0;
+    const panel = document.getElementById('aw-voice-' + idx + '-' + instId);
+    if (panel) {
+      panel.style.opacity = '1';
+      panel.style.borderColor = '#5a5a7a';
+    }
+    const checkbox = document.getElementById('aw-enable-' + idx + '-' + instId);
+    if (checkbox) checkbox.checked = true;
+    const offsetEl = document.getElementById('aw-offset-val-' + idx + '-' + instId);
+    if (offsetEl) offsetEl.textContent = voice.offset + 'ms';
+  });
+  _aw_updateStatus(instId);
+  if (typeof algoSpeak === 'function') algoSpeak('Tight chorus mode - all voices enabled with minimal offsets');
 }
 
 function _aw_updateCurrentWord(instId) {
@@ -299,14 +295,7 @@ function _aw_testChoir(instId) {
 }
 
 function _aw_stopChoir() {
-  // Stop main speechSynthesis
   speechSynthesis.cancel();
-  // Stop all voice iframes
-  document.querySelectorAll('[id^="aw-voice-frame-"]').forEach(frame => {
-    if (frame.contentWindow && frame.contentWindow.speechSynthesis) {
-      frame.contentWindow.speechSynthesis.cancel();
-    }
-  });
 }
 
 function _aw_saveChoir(instId) {
@@ -422,5 +411,6 @@ window._aw_stopChoir = _aw_stopChoir;
 window._aw_saveChoir = _aw_saveChoir;
 window._aw_loadChoir = _aw_loadChoir;
 window._aw_handleMidiInput = _aw_handleMidiInput;
+window._aw_tightChorus = _aw_tightChorus;
 
 _aw_open();
