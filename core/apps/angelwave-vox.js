@@ -138,21 +138,52 @@ function _aw_updateVoiceSelects(instId) {
   });
 }
 
+// Polyphonic speech using iframes - each iframe has its own speechSynthesis!
+function _aw_getVoiceFrame(instId, idx) {
+  const frameId = 'aw-voice-frame-' + instId + '-' + idx;
+  let frame = document.getElementById(frameId);
+  if (!frame) {
+    frame = document.createElement('iframe');
+    frame.id = frameId;
+    frame.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(frame);
+    // Initialize voices in the iframe
+    frame.contentWindow.document.open();
+    frame.contentWindow.document.write('<html><body></body></html>');
+    frame.contentWindow.document.close();
+  }
+  return frame;
+}
+
+function _aw_speakInFrame(frame, word, voice, pitchMod, velocityMod, availableVoices) {
+  const win = frame.contentWindow;
+  if (!win || !win.speechSynthesis) return;
+
+  const utterance = new win.SpeechSynthesisUtterance(word);
+
+  // Try to find matching voice in iframe's voice list
+  const frameVoices = win.speechSynthesis.getVoices();
+  if (frameVoices.length > 0 && availableVoices.length > voice.voiceIdx) {
+    const targetVoiceName = availableVoices[voice.voiceIdx]?.name;
+    const matchingVoice = frameVoices.find(v => v.name === targetVoiceName);
+    if (matchingVoice) utterance.voice = matchingVoice;
+  }
+
+  utterance.pitch = Math.min(2, Math.max(0, voice.pitch * (pitchMod || 1)));
+  utterance.rate = voice.rate;
+  utterance.volume = voice.volume * (velocityMod || 1);
+  win.speechSynthesis.speak(utterance);
+}
+
 function _aw_singWord(instId, word, pitchMod, velocityMod) {
   const inst = _aw_state.instances[instId];
-  if (!inst || !window.speechSynthesis) return;
+  if (!inst) return;
 
   inst.voices.forEach((voice, idx) => {
     if (!voice.enabled) return;
     setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(word);
-      if (inst.availableVoices.length > 0 && voice.voiceIdx < inst.availableVoices.length) {
-        utterance.voice = inst.availableVoices[voice.voiceIdx];
-      }
-      utterance.pitch = Math.min(2, Math.max(0, voice.pitch * (pitchMod || 1)));
-      utterance.rate = voice.rate;
-      utterance.volume = voice.volume * (velocityMod || 1);
-      speechSynthesis.speak(utterance);
+      const frame = _aw_getVoiceFrame(instId, idx);
+      _aw_speakInFrame(frame, word, voice, pitchMod, velocityMod, inst.availableVoices);
     }, voice.offset);
   });
 }
@@ -268,7 +299,14 @@ function _aw_testChoir(instId) {
 }
 
 function _aw_stopChoir() {
+  // Stop main speechSynthesis
   speechSynthesis.cancel();
+  // Stop all voice iframes
+  document.querySelectorAll('[id^="aw-voice-frame-"]').forEach(frame => {
+    if (frame.contentWindow && frame.contentWindow.speechSynthesis) {
+      frame.contentWindow.speechSynthesis.cancel();
+    }
+  });
 }
 
 function _aw_saveChoir(instId) {
