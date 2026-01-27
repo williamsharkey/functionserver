@@ -16,7 +16,7 @@ const _aw_state = {
   },
   audioCtx: null,
   meSpeakLoaded: false,
-  useMeSpeak: true // Use meSpeak for true polyphony
+  useMeSpeak: true
 };
 
 // Load meSpeak.js for true polyphonic TTS
@@ -44,7 +44,6 @@ function _aw_loadMeSpeak() {
   });
 }
 
-// Get or create AudioContext
 function _aw_getAudioCtx() {
   if (!_aw_state.audioCtx) {
     _aw_state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -55,24 +54,17 @@ function _aw_getAudioCtx() {
   return _aw_state.audioCtx;
 }
 
-// Speak using meSpeak - returns AudioBuffer
 async function _aw_meSpeakToBuffer(text, pitch, speed, volume) {
   if (!_aw_state.meSpeakLoaded) return null;
-
-  // meSpeak pitch: 0-99 (default 50), speed: 80-450 (default 175)
-  const msPitch = Math.round(pitch * 50); // Convert our 0.5-2.0 to 25-100
-  const msSpeed = Math.round(175 * speed); // Convert rate to speed
-
+  const msPitch = Math.round(pitch * 50);
+  const msSpeed = Math.round(175 * speed);
   const dataUrl = meSpeak.speak(text, {
-    rawdata: 'data-url', // Get as base64 data URL
+    rawdata: 'data-url',
     pitch: msPitch,
     speed: msSpeed,
     volume: Math.round(volume * 100)
   });
-
   if (!dataUrl) return null;
-
-  // Decode base64 data URL to ArrayBuffer
   try {
     const base64 = dataUrl.split(',')[1];
     const binary = atob(base64);
@@ -88,23 +80,17 @@ async function _aw_meSpeakToBuffer(text, pitch, speed, volume) {
   }
 }
 
-// Play multiple AudioBuffers simultaneously
 function _aw_playBuffersSimultaneously(buffers, offsets, volumes) {
   const audioCtx = _aw_getAudioCtx();
   const now = audioCtx.currentTime;
-
   buffers.forEach((buffer, i) => {
     if (!buffer) return;
-
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
-
     const gainNode = audioCtx.createGain();
     gainNode.gain.value = volumes[i] || 1;
-
     source.connect(gainNode);
     gainNode.connect(audioCtx.destination);
-
     source.start(now + (offsets[i] || 0) / 1000);
   });
 }
@@ -119,43 +105,25 @@ function _aw_getVoices() {
 
 function _aw_renderVoicePanel(instId, idx, voice) {
   const presets = Object.keys(_aw_state.voicePresets);
-  return '<div id="aw-voice-' + idx + '-' + instId + '" style="background:#2a2a3a;border:2px outset #444;padding:8px;' + (voice.enabled ? 'border-color:#5a5a7a;' : 'opacity:0.5;') + '">' +
-    '<div style="display:flex;align-items:center;gap:6px;padding-bottom:6px;border-bottom:1px solid #444;margin-bottom:6px;">' +
-      '<input type="checkbox" id="aw-enable-' + idx + '-' + instId + '" ' + (voice.enabled ? 'checked' : '') + ' onchange="_aw_toggleVoice(\'' + instId + '\',' + idx + ',this.checked)">' +
-      '<label style="font-weight:bold;color:#ffd700;">Voice ' + (idx + 1) + '</label>' +
-      '<select id="aw-preset-' + idx + '-' + instId + '" onchange="_aw_setPreset(\'' + instId + '\',' + idx + ',this.value)" style="padding:2px 4px;background:#c0c0c0;border:2px inset #808080;font-size:10px;">' +
-        presets.map(p => '<option value="' + p + '"' + (voice.preset === p ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>').join('') +
+  return '<div id="aw-voice-' + idx + '-' + instId + '" style="background:#2a2a3a;border:1px solid #444;padding:4px;font-size:9px;' + (voice.enabled ? 'border-color:#5a5a7a;' : 'opacity:0.5;') + '">' +
+    '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">' +
+      '<input type="checkbox" id="aw-enable-' + idx + '-' + instId + '" ' + (voice.enabled ? 'checked' : '') + ' onchange="_aw_toggleVoice(\'' + instId + '\',' + idx + ',this.checked)" style="margin:0;">' +
+      '<span style="font-weight:bold;color:#ffd700;">V' + (idx + 1) + '</span>' +
+      '<select id="aw-preset-' + idx + '-' + instId + '" onchange="_aw_setPreset(\'' + instId + '\',' + idx + ',this.value)" style="padding:1px;background:#c0c0c0;border:1px inset #808080;font-size:8px;flex:1;">' +
+        presets.map(p => '<option value="' + p + '"' + (voice.preset === p ? ' selected' : '') + '>' + p.slice(0,3) + '</option>').join('') +
       '</select>' +
     '</div>' +
-    '<div style="display:flex;flex-direction:column;gap:4px;">' +
-      '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<label style="min-width:80px;font-size:10px;color:#aaa;">System Voice:</label>' +
-        '<select id="aw-sysvoice-' + idx + '-' + instId + '" onchange="_aw_setSysVoice(\'' + instId + '\',' + idx + ',this.value)" style="flex:1;padding:2px;background:#c0c0c0;border:2px inset #808080;font-size:9px;max-width:140px;"><option>Loading...</option></select>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<label style="min-width:80px;font-size:10px;color:#aaa;">Pitch: <span id="aw-pitch-val-' + idx + '-' + instId + '" style="color:#ffd700;font-weight:bold;">' + voice.pitch.toFixed(1) + '</span></label>' +
-        '<input type="range" min="0.5" max="2.0" step="0.1" value="' + voice.pitch + '" onchange="_aw_setPitch(\'' + instId + '\',' + idx + ',this.value)" style="flex:1;height:16px;">' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<label style="min-width:80px;font-size:10px;color:#aaa;">Rate: <span id="aw-rate-val-' + idx + '-' + instId + '" style="color:#ffd700;font-weight:bold;">' + voice.rate.toFixed(2) + '</span></label>' +
-        '<input type="range" min="0.5" max="1.5" step="0.05" value="' + voice.rate + '" onchange="_aw_setRate(\'' + instId + '\',' + idx + ',this.value)" style="flex:1;height:16px;">' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<label style="min-width:80px;font-size:10px;color:#aaa;">Volume: <span id="aw-vol-val-' + idx + '-' + instId + '" style="color:#ffd700;font-weight:bold;">' + Math.round(voice.volume * 100) + '%</span></label>' +
-        '<input type="range" min="0" max="1" step="0.05" value="' + voice.volume + '" onchange="_aw_setVolume(\'' + instId + '\',' + idx + ',this.value)" style="flex:1;height:16px;">' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<label style="min-width:80px;font-size:10px;color:#aaa;">Offset: <span id="aw-offset-val-' + idx + '-' + instId + '" style="color:#ffd700;font-weight:bold;">' + voice.offset + 'ms</span></label>' +
-        '<input type="range" min="0" max="500" step="10" value="' + voice.offset + '" onchange="_aw_setOffset(\'' + instId + '\',' + idx + ',this.value)" style="flex:1;height:16px;">' +
-      '</div>' +
+    '<div style="display:grid;grid-template-columns:28px 1fr 24px;gap:2px;align-items:center;">' +
+      '<span style="color:#888;">Pit</span><input type="range" min="0.5" max="2.0" step="0.1" value="' + voice.pitch + '" onchange="_aw_setPitch(\'' + instId + '\',' + idx + ',this.value)" style="width:100%;height:12px;"><span id="aw-pitch-val-' + idx + '-' + instId + '" style="color:#ffd700;font-size:8px;">' + voice.pitch.toFixed(1) + '</span>' +
+      '<span style="color:#888;">Spd</span><input type="range" min="0.5" max="1.5" step="0.05" value="' + voice.rate + '" onchange="_aw_setRate(\'' + instId + '\',' + idx + ',this.value)" style="width:100%;height:12px;"><span id="aw-rate-val-' + idx + '-' + instId + '" style="color:#ffd700;font-size:8px;">' + voice.rate.toFixed(1) + '</span>' +
+      '<span style="color:#888;">Vol</span><input type="range" min="0" max="1" step="0.05" value="' + voice.volume + '" onchange="_aw_setVolume(\'' + instId + '\',' + idx + ',this.value)" style="width:100%;height:12px;"><span id="aw-vol-val-' + idx + '-' + instId + '" style="color:#ffd700;font-size:8px;">' + Math.round(voice.volume * 100) + '</span>' +
+      '<span style="color:#888;">Off</span><input type="range" min="0" max="300" step="10" value="' + voice.offset + '" onchange="_aw_setOffset(\'' + instId + '\',' + idx + ',this.value)" style="width:100%;height:12px;"><span id="aw-offset-val-' + idx + '-' + instId + '" style="color:#ffd700;font-size:8px;">' + voice.offset + '</span>' +
     '</div>' +
   '</div>';
 }
 
 function _aw_open() {
   if (typeof hideStartMenu === 'function') hideStartMenu();
-
-  // Load meSpeak for polyphonic backing choir (voices 1-5)
   _aw_loadMeSpeak().catch(e => console.warn('meSpeak failed to load, using fallback:', e));
 
   _aw_state.counter++;
@@ -166,10 +134,10 @@ function _aw_open() {
     voices: [
       { enabled: true, preset: 'soprano', pitch: 1.4, rate: 0.9, volume: 0.8, offset: 0, voiceIdx: 0 },
       { enabled: true, preset: 'alto', pitch: 1.1, rate: 0.95, volume: 0.8, offset: 50, voiceIdx: 0 },
-      { enabled: false, preset: 'tenor', pitch: 0.9, rate: 1.0, volume: 0.7, offset: 100, voiceIdx: 0 },
-      { enabled: false, preset: 'bass', pitch: 0.7, rate: 1.0, volume: 0.7, offset: 150, voiceIdx: 0 },
-      { enabled: false, preset: 'child', pitch: 1.6, rate: 1.1, volume: 0.6, offset: 0, voiceIdx: 0 },
-      { enabled: false, preset: 'whisper', pitch: 1.0, rate: 0.8, volume: 0.5, offset: 200, voiceIdx: 0 }
+      { enabled: true, preset: 'tenor', pitch: 0.9, rate: 1.0, volume: 0.7, offset: 100, voiceIdx: 0 },
+      { enabled: true, preset: 'bass', pitch: 0.7, rate: 1.0, volume: 0.7, offset: 150, voiceIdx: 0 },
+      { enabled: true, preset: 'child', pitch: 1.6, rate: 1.1, volume: 0.6, offset: 0, voiceIdx: 0 },
+      { enabled: true, preset: 'whisper', pitch: 1.0, rate: 0.8, volume: 0.5, offset: 200, voiceIdx: 0 }
     ],
     lyrics: 'Ah La Lu Alleluia Amen Oh Holy Light Divine',
     currentWordIndex: 0,
@@ -179,38 +147,33 @@ function _aw_open() {
   _aw_state.instances[instId] = inst;
 
   ALGO.createWindow({
-    title: 'Angelwave VOX - Choir Synthesizer',
+    title: 'Angelwave VOX',
     icon: '👼',
-    width: 650,
-    height: 500,
-    content: '<div style="display:flex;flex-direction:column;height:100%;background:linear-gradient(180deg,#1a1a2e 0%,#16213e 100%);color:#e0e0e0;font-size:11px;">' +
-      '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:linear-gradient(180deg,#2a2a4a 0%,#1a1a3a 100%);border-bottom:2px groove #444;">' +
-        '<span style="font-size:24px;">👼</span>' +
-        '<span style="font-size:14px;font-weight:bold;color:#ffd700;text-shadow:1px 1px 2px #000;">ANGELWAVE VOX</span>' +
-        '<span style="font-size:10px;color:#aaa;font-style:italic;">Celestial Choir Synthesizer</span>' +
+    width: 420,
+    height: 340,
+    content: '<div style="display:flex;flex-direction:column;height:100%;background:linear-gradient(180deg,#1a1a2e 0%,#16213e 100%);color:#e0e0e0;font-size:10px;">' +
+      '<div style="display:flex;flex-wrap:wrap;gap:2px;padding:3px 6px;background:#c0c0c0;border-bottom:2px groove #fff;">' +
+        '<button onclick="_aw_testChoir(\'' + instId + '\')" style="padding:2px 6px;background:#c0c0c0;border:2px outset #fff;font-size:9px;cursor:pointer;">▶Test</button>' +
+        '<button onclick="_aw_stopChoir()" style="padding:2px 6px;background:#c0c0c0;border:2px outset #fff;font-size:9px;cursor:pointer;">■Stop</button>' +
+        '<button onclick="_aw_randomize(\'' + instId + '\')" style="padding:2px 6px;background:#e0ffe0;border:2px outset #fff;font-size:9px;cursor:pointer;" title="Randomize all voice parameters">🎲Rand</button>' +
+        '<button onclick="_aw_tightChorus(\'' + instId + '\')" style="padding:2px 6px;background:#ffe4b5;border:2px outset #fff;font-size:9px;cursor:pointer;" title="Tight offsets">🎶Tight</button>' +
+        '<button onclick="_aw_saveAngel(\'' + instId + '\')" style="padding:2px 6px;background:#c0c0c0;border:2px outset #fff;font-size:9px;cursor:pointer;">💾Save</button>' +
+        '<button onclick="_aw_loadAngel(\'' + instId + '\')" style="padding:2px 6px;background:#c0c0c0;border:2px outset #fff;font-size:9px;cursor:pointer;">📂Load</button>' +
       '</div>' +
-      '<div style="display:flex;gap:4px;padding:4px 8px;background:#c0c0c0;border-bottom:2px groove #fff;">' +
-        '<button onclick="_aw_testChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">▶ Test</button>' +
-        '<button onclick="_aw_stopChoir()" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">■ Stop</button>' +
-        '<button onclick="_aw_tightChorus(\'' + instId + '\')" style="padding:3px 8px;background:#ffe4b5;border:2px outset #fff;font-size:10px;cursor:pointer;" title="Enable all voices with tight 25ms offsets for chorus effect">🎶 Tight Chorus</button>' +
-        '<div style="width:1px;height:20px;background:#808080;margin:0 4px;"></div>' +
-        '<button onclick="_aw_saveChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">💾 Save</button>' +
-        '<button onclick="_aw_loadChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">📂 Load</button>' +
-      '</div>' +
-      '<div style="padding:8px;background:#2a2a3a;border-bottom:1px solid #444;">' +
-        '<label style="display:block;margin-bottom:4px;color:#aaa;font-size:10px;">📜 Lyrics (space-separated - click Test to hear each word):</label>' +
-        '<input type="text" id="aw-lyrics-' + instId + '" value="' + inst.lyrics + '" onchange="_aw_setLyrics(\'' + instId + '\',this.value)" style="width:100%;padding:6px;background:#1a1a2a;color:#fff;border:2px inset #333;font-size:12px;font-family:Georgia,serif;box-sizing:border-box;">' +
-        '<div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:11px;">' +
-          'Current word: <span id="aw-current-word-' + instId + '" style="background:#ffd700;color:#000;padding:2px 8px;font-weight:bold;border-radius:2px;">Ah</span>' +
-          '<button onclick="_aw_resetWord(\'' + instId + '\')" style="padding:2px 6px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">↺ Reset</button>' +
-          '<button onclick="_aw_nextWord(\'' + instId + '\')" style="padding:2px 6px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">Next ▶</button>' +
+      '<div style="padding:4px 6px;background:#2a2a3a;border-bottom:1px solid #444;">' +
+        '<div style="display:flex;align-items:center;gap:4px;">' +
+          '<span style="color:#aaa;font-size:9px;">Lyrics:</span>' +
+          '<input type="text" id="aw-lyrics-' + instId + '" value="' + inst.lyrics + '" onchange="_aw_setLyrics(\'' + instId + '\',this.value)" style="flex:1;padding:3px;background:#1a1a2a;color:#fff;border:1px inset #333;font-size:10px;">' +
+        '</div>' +
+        '<div style="margin-top:3px;display:flex;align-items:center;gap:6px;font-size:9px;">' +
+          '<span id="aw-current-word-' + instId + '" style="background:#ffd700;color:#000;padding:1px 6px;font-weight:bold;">Ah</span>' +
+          '<button onclick="_aw_resetWord(\'' + instId + '\')" style="padding:1px 4px;background:#c0c0c0;border:1px outset #fff;font-size:8px;cursor:pointer;">↺</button>' +
+          '<button onclick="_aw_nextWord(\'' + instId + '\')" style="padding:1px 4px;background:#c0c0c0;border:1px outset #fff;font-size:8px;cursor:pointer;">▶</button>' +
+          '<span id="aw-status-' + instId + '" style="color:#888;margin-left:auto;">' + inst.voices.filter(v => v.enabled).length + ' voices</span>' +
         '</div>' +
       '</div>' +
-      '<div id="aw-voices-' + instId + '" style="flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">' +
+      '<div id="aw-voices-' + instId + '" style="flex:1;overflow-y:auto;padding:4px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">' +
         inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('') +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;background:#c0c0c0;border-top:2px groove #fff;font-size:10px;color:#000;">' +
-        '<span id="aw-status-' + instId + '">Ready - ' + inst.voices.filter(v => v.enabled).length + ' voices active</span>' +
       '</div>' +
     '</div>',
     onClose: () => delete _aw_state.instances[instId]
@@ -218,35 +181,54 @@ function _aw_open() {
 
   _aw_getVoices().then(voices => {
     inst.availableVoices = voices;
-    _aw_updateVoiceSelects(instId);
   });
 }
 
-function _aw_updateVoiceSelects(instId) {
+// Randomize all voice parameters while keeping voices enabled
+function _aw_randomize(instId) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
+
   inst.voices.forEach((voice, idx) => {
-    const select = document.getElementById('aw-sysvoice-' + idx + '-' + instId);
-    if (select && inst.availableVoices.length > 0) {
-      select.innerHTML = inst.availableVoices.map((v, i) =>
-        '<option value="' + i + '"' + (i === voice.voiceIdx ? ' selected' : '') + '>' + v.name + ' (' + v.lang + ')</option>'
-      ).join('');
+    voice.enabled = true;
+    voice.pitch = 0.5 + Math.random() * 1.5; // 0.5 to 2.0
+    voice.rate = 0.5 + Math.random() * 1.0;  // 0.5 to 1.5
+    voice.volume = 0.3 + Math.random() * 0.7; // 0.3 to 1.0
+    voice.offset = Math.floor(Math.random() * 200); // 0 to 200ms
+
+    // Update UI
+    const panel = document.getElementById('aw-voice-' + idx + '-' + instId);
+    if (panel) {
+      panel.style.opacity = '1';
+      panel.style.borderColor = '#5a5a7a';
     }
+    const checkbox = document.getElementById('aw-enable-' + idx + '-' + instId);
+    if (checkbox) checkbox.checked = true;
+
+    const pitchEl = document.getElementById('aw-pitch-val-' + idx + '-' + instId);
+    if (pitchEl) pitchEl.textContent = voice.pitch.toFixed(1);
+    const rateEl = document.getElementById('aw-rate-val-' + idx + '-' + instId);
+    if (rateEl) rateEl.textContent = voice.rate.toFixed(1);
+    const volEl = document.getElementById('aw-vol-val-' + idx + '-' + instId);
+    if (volEl) volEl.textContent = Math.round(voice.volume * 100);
+    const offsetEl = document.getElementById('aw-offset-val-' + idx + '-' + instId);
+    if (offsetEl) offsetEl.textContent = voice.offset;
   });
+
+  // Re-render to update sliders
+  const container = document.getElementById('aw-voices-' + instId);
+  if (container) {
+    container.innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
+  }
+  _aw_updateStatus(instId);
 }
 
-// Note: Browser speechSynthesis is single-threaded and queues utterances.
-// True simultaneous speech is not possible. Use tight offsets (20-30ms) for
-// a "doubling" effect that creates the illusion of a fuller choir.
-// Hybrid polyphonic choir: Voice 0 uses browser TTS, voices 1-5 use meSpeak
 async function _aw_singWord(instId, word, pitchMod, velocityMod) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
 
   const pm = pitchMod || 1;
   const vm = velocityMod || 1;
-
-  // Collect meSpeak voices (1-5) for simultaneous playback
   const meSpeakBuffers = [];
   const meSpeakOffsets = [];
   const meSpeakVolumes = [];
@@ -255,7 +237,6 @@ async function _aw_singWord(instId, word, pitchMod, velocityMod) {
     const voice = inst.voices[idx];
     if (!voice.enabled) continue;
 
-    // Voice 0: Use browser speechSynthesis (better quality lead voice)
     if (idx === 0) {
       setTimeout(() => {
         if (!window.speechSynthesis) return;
@@ -263,16 +244,12 @@ async function _aw_singWord(instId, word, pitchMod, velocityMod) {
         if (inst.availableVoices.length > 0 && voice.voiceIdx < inst.availableVoices.length) {
           utterance.voice = inst.availableVoices[voice.voiceIdx];
         }
-        // Apply both slider pitch AND midi pitch modifier
         utterance.pitch = Math.min(2, Math.max(0.1, voice.pitch * pm));
         utterance.rate = voice.rate;
         utterance.volume = Math.min(1, voice.volume * vm);
         speechSynthesis.speak(utterance);
       }, voice.offset);
-    }
-    // Voices 1-5: Use meSpeak for true polyphony
-    else if (_aw_state.meSpeakLoaded) {
-      // Apply both slider pitch AND midi pitch modifier
+    } else if (_aw_state.meSpeakLoaded) {
       const finalPitch = voice.pitch * pm;
       const buffer = await _aw_meSpeakToBuffer(word, finalPitch, voice.rate, voice.volume * vm);
       if (buffer) {
@@ -280,9 +257,7 @@ async function _aw_singWord(instId, word, pitchMod, velocityMod) {
         meSpeakOffsets.push(voice.offset);
         meSpeakVolumes.push(voice.volume * vm);
       }
-    }
-    // Fallback if meSpeak not loaded: use browser TTS (sequential)
-    else {
+    } else {
       setTimeout(() => {
         if (!window.speechSynthesis) return;
         const utterance = new SpeechSynthesisUtterance(word);
@@ -297,17 +272,14 @@ async function _aw_singWord(instId, word, pitchMod, velocityMod) {
     }
   }
 
-  // Play all meSpeak voices simultaneously
   if (meSpeakBuffers.length > 0) {
     _aw_playBuffersSimultaneously(meSpeakBuffers, meSpeakOffsets, meSpeakVolumes);
   }
 }
 
-// Apply tight chorus preset - minimal offsets for "doubling" effect
 function _aw_tightChorus(instId) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
-  // Enable all voices with tight 25ms staggered offsets
   const tightOffsets = [0, 25, 50, 75, 100, 125];
   inst.voices.forEach((voice, idx) => {
     voice.enabled = true;
@@ -320,10 +292,13 @@ function _aw_tightChorus(instId) {
     const checkbox = document.getElementById('aw-enable-' + idx + '-' + instId);
     if (checkbox) checkbox.checked = true;
     const offsetEl = document.getElementById('aw-offset-val-' + idx + '-' + instId);
-    if (offsetEl) offsetEl.textContent = voice.offset + 'ms';
+    if (offsetEl) offsetEl.textContent = voice.offset;
   });
+  const container = document.getElementById('aw-voices-' + instId);
+  if (container) {
+    container.innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
+  }
   _aw_updateStatus(instId);
-  if (typeof algoSpeak === 'function') algoSpeak('Tight chorus mode - all voices enabled with minimal offsets');
 }
 
 function _aw_updateCurrentWord(instId) {
@@ -340,7 +315,7 @@ function _aw_updateStatus(instId) {
   if (!inst) return;
   const activeCount = inst.voices.filter(v => v.enabled).length;
   const el = document.getElementById('aw-status-' + instId);
-  if (el) el.textContent = 'Ready - ' + activeCount + ' voice' + (activeCount !== 1 ? 's' : '') + ' active';
+  if (el) el.textContent = activeCount + ' voices';
 }
 
 function _aw_toggleVoice(instId, idx, enabled) {
@@ -364,7 +339,7 @@ function _aw_setPreset(instId, idx, preset) {
     inst.voices[idx].pitch = p.pitch;
     inst.voices[idx].rate = p.rate;
     document.getElementById('aw-pitch-val-' + idx + '-' + instId).textContent = p.pitch.toFixed(1);
-    document.getElementById('aw-rate-val-' + idx + '-' + instId).textContent = p.rate.toFixed(2);
+    document.getElementById('aw-rate-val-' + idx + '-' + instId).textContent = p.rate.toFixed(1);
   }
 }
 
@@ -379,21 +354,21 @@ function _aw_setRate(instId, idx, val) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
   inst.voices[idx].rate = parseFloat(val);
-  document.getElementById('aw-rate-val-' + idx + '-' + instId).textContent = parseFloat(val).toFixed(2);
+  document.getElementById('aw-rate-val-' + idx + '-' + instId).textContent = parseFloat(val).toFixed(1);
 }
 
 function _aw_setVolume(instId, idx, val) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
   inst.voices[idx].volume = parseFloat(val);
-  document.getElementById('aw-vol-val-' + idx + '-' + instId).textContent = Math.round(parseFloat(val) * 100) + '%';
+  document.getElementById('aw-vol-val-' + idx + '-' + instId).textContent = Math.round(parseFloat(val) * 100);
 }
 
 function _aw_setOffset(instId, idx, val) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
   inst.voices[idx].offset = parseInt(val);
-  document.getElementById('aw-offset-val-' + idx + '-' + instId).textContent = val + 'ms';
+  document.getElementById('aw-offset-val-' + idx + '-' + instId).textContent = val;
 }
 
 function _aw_setSysVoice(instId, idx, val) {
@@ -440,46 +415,48 @@ function _aw_stopChoir() {
   speechSynthesis.cancel();
 }
 
-function _aw_saveChoir(instId) {
+function _aw_saveAngel(instId) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
-  const name = prompt('Save choir as:', 'my-choir.choir');
+  const name = prompt('Save preset as:', 'choir.angel');
   if (!name) return;
-  const choirData = {
-    format: 'angelwave-choir-v1',
+  const data = {
+    format: 'angelwave-v1',
     lyrics: inst.lyrics,
     voices: inst.voices.map(v => ({
       enabled: v.enabled, preset: v.preset, pitch: v.pitch,
       rate: v.rate, volume: v.volume, offset: v.offset, voiceIdx: v.voiceIdx
     }))
   };
-  const fileName = name.endsWith('.choir') ? name : name + '.choir';
+  const fileName = name.endsWith('.angel') ? name : name + '.angel';
   if (typeof savedFiles !== 'undefined') {
-    savedFiles.push({ name: fileName, content: JSON.stringify(choirData, null, 2), type: 'text', icon: '👼' });
+    const existing = savedFiles.findIndex(f => f.name === fileName);
+    if (existing >= 0) savedFiles[existing].content = JSON.stringify(data, null, 2);
+    else savedFiles.push({ name: fileName, content: JSON.stringify(data, null, 2), type: 'text', icon: '👼' });
     if (typeof saveState === 'function') saveState();
     if (typeof createDesktopIcons === 'function') createDesktopIcons();
   }
   ALGO.notify('Saved ' + fileName);
 }
 
-function _aw_loadChoir(instId) {
+function _aw_loadAngel(instId) {
   const inst = _aw_state.instances[instId];
   if (!inst || typeof savedFiles === 'undefined') return;
-  const choirFiles = savedFiles.filter(f => f.name.endsWith('.choir'));
-  if (choirFiles.length === 0) {
-    ALGO.notify('No .choir files found');
+  const angelFiles = savedFiles.filter(f => f.name.endsWith('.angel') || f.name.endsWith('.choir'));
+  if (angelFiles.length === 0) {
+    ALGO.notify('No .angel files found');
     return;
   }
-  const fileName = prompt('Load choir file:\n' + choirFiles.map(f => '• ' + f.name).join('\n'), choirFiles[0].name);
+  const fileName = prompt('Load preset:\n' + angelFiles.map(f => '• ' + f.name).join('\n'), angelFiles[0].name);
   if (!fileName) return;
-  const file = savedFiles.find(f => f.name === fileName || f.name === fileName + '.choir');
+  const file = savedFiles.find(f => f.name === fileName || f.name === fileName + '.angel');
   if (!file) {
     ALGO.notify('File not found: ' + fileName);
     return;
   }
   try {
     const data = JSON.parse(file.content);
-    if (data.format !== 'angelwave-choir-v1') throw new Error('Invalid format');
+    if (data.format !== 'angelwave-v1' && data.format !== 'angelwave-choir-v1') throw new Error('Invalid format');
     inst.lyrics = data.lyrics || 'Ah';
     inst.currentWordIndex = 0;
     if (data.voices && data.voices.length === 6) inst.voices = data.voices;
@@ -487,51 +464,32 @@ function _aw_loadChoir(instId) {
     const container = document.getElementById('aw-voices-' + instId);
     if (container) {
       container.innerHTML = inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('');
-      _aw_updateVoiceSelects(instId);
     }
     _aw_updateCurrentWord(instId);
     _aw_updateStatus(instId);
     ALGO.notify('Loaded ' + fileName);
   } catch (e) {
-    ALGO.notify('Error loading choir: ' + e.message);
+    ALGO.notify('Error loading: ' + e.message);
   }
 }
 
-// Handle incoming MIDI messages from Joy or other apps
 function _aw_handleMidiInput(message, opts, from) {
-  // Find the first active instance to play the note
   const instId = Object.keys(_aw_state.instances)[0];
   if (!instId) return;
-
   const inst = _aw_state.instances[instId];
   if (!inst) return;
 
-  // Flash MIDI indicator
-  const indicator = document.getElementById('aw-midi-indicator-' + instId);
-  if (indicator) {
-    indicator.style.background = '#00ff00';
-    setTimeout(() => { if (indicator) indicator.style.background = '#004400'; }, 100);
-  }
-
   if (message.type === 'noteOn' || message.type === 'note') {
-    // Map MIDI note to pitch modifier (middle C = 60 = 1.0)
     const pitchMod = Math.pow(2, (message.note - 60) / 12);
     const velocityMod = (message.velocity || 100) / 127;
-
-    // Get the current word from lyrics
     const words = inst.lyrics.split(/\s+/).filter(w => w.length > 0);
     const word = words[inst.currentWordIndex % words.length] || 'Ah';
-
     _aw_singWord(instId, word, pitchMod, velocityMod);
     inst.currentWordIndex++;
     _aw_updateCurrentWord(instId);
   }
 }
 
-// Register with pubsub to receive MIDI from Joy and other apps
-// Note: Browser speechSynthesis can only speak one utterance at a time,
-// so true simultaneous chorus is not possible. Voices will be staggered
-// by their offset values for a "call and response" style choir effect.
 if (window.ALGO && ALGO.pubsub) {
   ALGO.pubsub.register('Angelwave VOX', { autoOpen: false });
   ALGO.pubsub.subscribe('Angelwave VOX', _aw_handleMidiInput);
@@ -550,9 +508,10 @@ window._aw_resetWord = _aw_resetWord;
 window._aw_nextWord = _aw_nextWord;
 window._aw_testChoir = _aw_testChoir;
 window._aw_stopChoir = _aw_stopChoir;
-window._aw_saveChoir = _aw_saveChoir;
-window._aw_loadChoir = _aw_loadChoir;
+window._aw_saveAngel = _aw_saveAngel;
+window._aw_loadAngel = _aw_loadAngel;
 window._aw_handleMidiInput = _aw_handleMidiInput;
 window._aw_tightChorus = _aw_tightChorus;
+window._aw_randomize = _aw_randomize;
 
 _aw_open();
