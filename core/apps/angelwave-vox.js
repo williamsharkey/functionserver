@@ -13,8 +13,101 @@ const _aw_state = {
     bass: { octave: -1, cents: 0, rate: 1.0 },
     child: { octave: 1, cents: 50, rate: 1.1 },
     whisper: { octave: 0, cents: 0, rate: 0.8 }
-  }
+  },
+  audioCtx: null,
+  meSpeakLoaded: false,
+  meSpeakOwner: null  // Only one instance uses mespeak to prevent conflicts
 };
+
+// Load fs-mespeak.js (FunctionServer's vanilla JS fork)
+function _aw_loadMeSpeak() {
+  if (window.meSpeak && typeof meSpeak.speak === 'function') {
+    _aw_state.meSpeakLoaded = true;
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/lib/fs-mespeak.js';
+    script.onload = () => {
+      // fs-mespeak.js auto-loads config and en-us voice
+      // Wait a tick for initialization
+      setTimeout(() => {
+        if (window.meSpeak && meSpeak.isConfigLoaded && meSpeak.isConfigLoaded()) {
+          _aw_state.meSpeakLoaded = true;
+          resolve();
+        } else {
+          // Config loading is async, poll for ready
+          let attempts = 0;
+          const checkReady = setInterval(() => {
+            attempts++;
+            if (window.meSpeak && meSpeak.isConfigLoaded && meSpeak.isConfigLoaded()) {
+              clearInterval(checkReady);
+              _aw_state.meSpeakLoaded = true;
+              resolve();
+            } else if (attempts > 50) {
+              clearInterval(checkReady);
+              reject(new Error('meSpeak config timeout'));
+            }
+          }, 100);
+        }
+      }, 50);
+    };
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+function _aw_getAudioCtx() {
+  if (!_aw_state.audioCtx) {
+    _aw_state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_aw_state.audioCtx.state === 'suspended') _aw_state.audioCtx.resume();
+  return _aw_state.audioCtx;
+}
+
+// Generate speech audio buffer using meSpeak
+function _aw_meSpeakToBuffer(text, pitch, speed, volume) {
+  if (!_aw_state.meSpeakLoaded || !window.meSpeak) return Promise.resolve(null);
+
+  // meSpeak pitch: 0-99 (50 = normal)
+  // Our pitch is a multiplier where 1.0 = normal
+  // Convert: pitch 0.5 -> 25, pitch 1.0 -> 50, pitch 2.0 -> 100
+  const msPitch = Math.max(0, Math.min(99, Math.round(50 * pitch)));
+  const msSpeed = Math.max(80, Math.min(450, Math.round(175 * speed)));
+  const msVolume = Math.max(0, Math.min(200, Math.round(volume * 100)));
+
+  try {
+    const wavData = meSpeak.speak(text, {
+      rawdata: 'arraybuffer',
+      pitch: msPitch,
+      speed: msSpeed,
+      amplitude: msVolume
+    });
+
+    if (!wavData) return Promise.resolve(null);
+
+    return _aw_getAudioCtx().decodeAudioData(wavData);
+  } catch(e) {
+    console.warn('meSpeak error:', e);
+    return Promise.resolve(null);
+  }
+}
+
+// Play multiple audio buffers with offsets
+function _aw_playBuffersSimultaneously(buffers, offsets, volumes) {
+  const ctx = _aw_getAudioCtx();
+  const now = ctx.currentTime;
+  buffers.forEach((buffer, i) => {
+    if (!buffer) return;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = ctx.createGain();
+    gain.gain.value = volumes[i] || 1;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(now + (offsets[i] || 0) / 1000);
+  });
+}
 
 function _aw_getVoices() {
   return new Promise(resolve => {
@@ -100,6 +193,13 @@ function _aw_open() {
   _aw_state.counter++;
   const instId = 'aw-' + _aw_state.counter;
 
+  // Only the first instance loads and owns mespeak to prevent conflicts
+  const canUseMeSpeak = !_aw_state.meSpeakOwner;
+  if (canUseMeSpeak) {
+    _aw_state.meSpeakOwner = instId;
+    _aw_loadMeSpeak().catch(e => console.warn('meSpeak load failed:', e));
+  }
+
   const inst = {
     instId,
     globalVolume: 0.8,
@@ -167,6 +267,10 @@ function _aw_open() {
       '</div>' +
     '</div>',
     onClose: () => {
+      // Release mespeak ownership if this instance owned it
+      if (_aw_state.meSpeakOwner === instId) {
+        _aw_state.meSpeakOwner = null;
+      }
       delete _aw_state.instances[instId];
     }
   });
@@ -259,13 +363,17 @@ function _aw_randomize(instId) {
   _aw_updateVoiceSelect(instId);
 }
 
-function _aw_singWord(instId, word, midiPitchMod, velocityMod) {
+async function _aw_singWord(instId, word, midiPitchMod, velocityMod) {
   const inst = _aw_state.instances[instId];
-  if (!inst || !window.speechSynthesis) return;
+  if (!inst) return;
 
   const pm = midiPitchMod || 1;
   const vm = (velocityMod || 1) * inst.globalVolume;
   const globalOctMult = Math.pow(2, inst.globalOctave);
+
+  const meSpeakBuffers = [];
+  const meSpeakOffsets = [];
+  const meSpeakVolumes = [];
 
   for (let idx = 0; idx < inst.voices.length; idx++) {
     const voice = inst.voices[idx];
@@ -273,22 +381,44 @@ function _aw_singWord(instId, word, midiPitchMod, velocityMod) {
 
     // Calculate pitch: combine voice octave, cents, global octave, and MIDI pitch
     const voicePitch = _aw_calcPitch(voice.octave, voice.cents) * globalOctMult * pm;
-    // SpeechSynthesis pitch is 0.1-2.0, so we clamp it
-    const clampedPitch = Math.min(2, Math.max(0.1, voicePitch));
     const voiceVol = Math.min(1, voice.volume * vm);
 
-    setTimeout(() => {
-      const utt = new SpeechSynthesisUtterance(word);
-      // Voice 0 (lead) uses the selected system voice
-      if (idx === 0) {
+    // Voice 0 (lead) uses browser SpeechSynthesis with selected voice
+    if (idx === 0) {
+      setTimeout(() => {
+        if (!window.speechSynthesis) return;
+        const utt = new SpeechSynthesisUtterance(word);
         const vIdx = inst.voiceIdx || 0;
         if (inst.availableVoices.length > vIdx) utt.voice = inst.availableVoices[vIdx];
+        utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
+        utt.rate = voice.rate;
+        utt.volume = voiceVol;
+        speechSynthesis.speak(utt);
+      }, voice.offset);
+    } else if (_aw_state.meSpeakLoaded && _aw_state.meSpeakOwner === instId) {
+      // Other voices use meSpeak (only if this instance owns it)
+      const buffer = await _aw_meSpeakToBuffer(word, voicePitch, voice.rate, voiceVol);
+      if (buffer) {
+        meSpeakBuffers.push(buffer);
+        meSpeakOffsets.push(voice.offset);
+        meSpeakVolumes.push(voiceVol);
       }
-      utt.pitch = clampedPitch;
-      utt.rate = voice.rate;
-      utt.volume = voiceVol;
-      speechSynthesis.speak(utt);
-    }, voice.offset);
+    } else {
+      // Fallback to browser SpeechSynthesis
+      setTimeout(() => {
+        if (!window.speechSynthesis) return;
+        const utt = new SpeechSynthesisUtterance(word);
+        utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
+        utt.rate = voice.rate;
+        utt.volume = voiceVol;
+        speechSynthesis.speak(utt);
+      }, voice.offset);
+    }
+  }
+
+  // Play all meSpeak buffers simultaneously with their offsets
+  if (meSpeakBuffers.length > 0) {
+    _aw_playBuffersSimultaneously(meSpeakBuffers, meSpeakOffsets, meSpeakVolumes);
   }
 }
 
@@ -335,9 +465,9 @@ function _aw_toggleVoice(instId, idx, enabled) {
   _aw_updateStatus(instId);
 }
 
-function _aw_previewVoice(instId, idx) {
+async function _aw_previewVoice(instId, idx) {
   const inst = _aw_state.instances[instId];
-  if (!inst || !window.speechSynthesis) return;
+  if (!inst) return;
   const voice = inst.voices[idx];
   if (!voice) return;
 
@@ -345,19 +475,33 @@ function _aw_previewVoice(instId, idx) {
   const word = words[inst.currentWordIndex % words.length] || 'Ah';
   const globalOctMult = Math.pow(2, inst.globalOctave);
   const voicePitch = _aw_calcPitch(voice.octave, voice.cents) * globalOctMult;
-  const clampedPitch = Math.min(2, Math.max(0.1, voicePitch));
   const voiceVol = Math.min(1, voice.volume * inst.globalVolume);
 
-  const utt = new SpeechSynthesisUtterance(word);
-  // Voice 0 (lead) uses the selected system voice
+  // Voice 0 (lead) uses browser SpeechSynthesis
   if (idx === 0) {
+    if (!window.speechSynthesis) return;
+    const utt = new SpeechSynthesisUtterance(word);
     const vIdx = inst.voiceIdx || 0;
     if (inst.availableVoices.length > vIdx) utt.voice = inst.availableVoices[vIdx];
+    utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
+    utt.rate = voice.rate;
+    utt.volume = voiceVol;
+    speechSynthesis.speak(utt);
+  } else if (_aw_state.meSpeakLoaded && _aw_state.meSpeakOwner === instId) {
+    // Other voices use meSpeak (only if this instance owns it)
+    const buffer = await _aw_meSpeakToBuffer(word, voicePitch, voice.rate, voiceVol);
+    if (buffer) {
+      _aw_playBuffersSimultaneously([buffer], [0], [voiceVol]);
+    }
+  } else {
+    // Fallback to browser SpeechSynthesis
+    if (!window.speechSynthesis) return;
+    const utt = new SpeechSynthesisUtterance(word);
+    utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
+    utt.rate = voice.rate;
+    utt.volume = voiceVol;
+    speechSynthesis.speak(utt);
   }
-  utt.pitch = clampedPitch;
-  utt.rate = voice.rate;
-  utt.volume = voiceVol;
-  speechSynthesis.speak(utt);
 }
 
 function _aw_setPreset(instId, idx, preset) {
