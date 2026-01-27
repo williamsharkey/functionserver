@@ -13,8 +13,91 @@ const _aw_state = {
     bass: { pitch: 0.7, rate: 1.0 },
     child: { pitch: 1.6, rate: 1.1 },
     whisper: { pitch: 1.0, rate: 0.8 }
-  }
+  },
+  audioCtx: null,
+  meSpeakLoaded: false,
+  useMeSpeak: true // Use meSpeak for true polyphony
 };
+
+// Load meSpeak.js for true polyphonic TTS
+function _aw_loadMeSpeak() {
+  if (window.meSpeak) {
+    _aw_state.meSpeakLoaded = true;
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://www.masswerk.at/mespeak/mespeak.js';
+    script.onload = () => {
+      meSpeak.loadConfig('https://www.masswerk.at/mespeak/mespeak_config.json');
+      meSpeak.loadVoice('https://www.masswerk.at/mespeak/voices/en/en-us.json', () => {
+        _aw_state.meSpeakLoaded = true;
+        console.log('meSpeak loaded for polyphonic choir');
+        resolve();
+      });
+    };
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+// Get or create AudioContext
+function _aw_getAudioCtx() {
+  if (!_aw_state.audioCtx) {
+    _aw_state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_aw_state.audioCtx.state === 'suspended') {
+    _aw_state.audioCtx.resume();
+  }
+  return _aw_state.audioCtx;
+}
+
+// Speak using meSpeak - returns AudioBuffer
+async function _aw_meSpeakToBuffer(text, pitch, speed, volume) {
+  if (!_aw_state.meSpeakLoaded) return null;
+
+  // meSpeak pitch: 0-99 (default 50), speed: 80-450 (default 175)
+  const msPitch = Math.round(pitch * 50); // Convert our 0.5-2.0 to 25-100
+  const msSpeed = Math.round(175 / speed); // Convert rate to speed
+
+  const wavData = meSpeak.speak(text, {
+    rawdata: 'buffer', // Get as ArrayBuffer
+    pitch: msPitch,
+    speed: msSpeed,
+    volume: Math.round(volume * 100)
+  });
+
+  if (!wavData) return null;
+
+  const audioCtx = _aw_getAudioCtx();
+  try {
+    return await audioCtx.decodeAudioData(wavData.buffer || wavData);
+  } catch(e) {
+    console.error('Failed to decode meSpeak audio:', e);
+    return null;
+  }
+}
+
+// Play multiple AudioBuffers simultaneously
+function _aw_playBuffersSimultaneously(buffers, offsets, volumes) {
+  const audioCtx = _aw_getAudioCtx();
+  const now = audioCtx.currentTime;
+
+  buffers.forEach((buffer, i) => {
+    if (!buffer) return;
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = volumes[i] || 1;
+
+    source.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    source.start(now + (offsets[i] || 0) / 1000);
+  });
+}
 
 function _aw_getVoices() {
   return new Promise(resolve => {
@@ -61,6 +144,9 @@ function _aw_renderVoicePanel(instId, idx, voice) {
 
 function _aw_open() {
   if (typeof hideStartMenu === 'function') hideStartMenu();
+
+  // Load meSpeak for polyphonic backing choir (voices 1-5)
+  _aw_loadMeSpeak().catch(e => console.warn('meSpeak failed to load, using fallback:', e));
 
   _aw_state.counter++;
   const instId = 'aw-' + _aw_state.counter;
@@ -142,23 +228,69 @@ function _aw_updateVoiceSelects(instId) {
 // Note: Browser speechSynthesis is single-threaded and queues utterances.
 // True simultaneous speech is not possible. Use tight offsets (20-30ms) for
 // a "doubling" effect that creates the illusion of a fuller choir.
-function _aw_singWord(instId, word, pitchMod, velocityMod) {
+// Hybrid polyphonic choir: Voice 0 uses browser TTS, voices 1-5 use meSpeak
+async function _aw_singWord(instId, word, pitchMod, velocityMod) {
   const inst = _aw_state.instances[instId];
-  if (!inst || !window.speechSynthesis) return;
+  if (!inst) return;
 
-  inst.voices.forEach((voice, idx) => {
-    if (!voice.enabled) return;
-    setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(word);
-      if (inst.availableVoices.length > 0 && voice.voiceIdx < inst.availableVoices.length) {
-        utterance.voice = inst.availableVoices[voice.voiceIdx];
+  const pm = pitchMod || 1;
+  const vm = velocityMod || 1;
+
+  // Collect meSpeak voices (1-5) for simultaneous playback
+  const meSpeakBuffers = [];
+  const meSpeakOffsets = [];
+  const meSpeakVolumes = [];
+
+  for (let idx = 0; idx < inst.voices.length; idx++) {
+    const voice = inst.voices[idx];
+    if (!voice.enabled) continue;
+
+    // Voice 0: Use browser speechSynthesis (better quality lead voice)
+    if (idx === 0) {
+      setTimeout(() => {
+        if (!window.speechSynthesis) return;
+        const utterance = new SpeechSynthesisUtterance(word);
+        if (inst.availableVoices.length > 0 && voice.voiceIdx < inst.availableVoices.length) {
+          utterance.voice = inst.availableVoices[voice.voiceIdx];
+        }
+        // Apply both slider pitch AND midi pitch modifier
+        utterance.pitch = Math.min(2, Math.max(0.1, voice.pitch * pm));
+        utterance.rate = voice.rate;
+        utterance.volume = Math.min(1, voice.volume * vm);
+        speechSynthesis.speak(utterance);
+      }, voice.offset);
+    }
+    // Voices 1-5: Use meSpeak for true polyphony
+    else if (_aw_state.meSpeakLoaded) {
+      // Apply both slider pitch AND midi pitch modifier
+      const finalPitch = voice.pitch * pm;
+      const buffer = await _aw_meSpeakToBuffer(word, finalPitch, voice.rate, voice.volume * vm);
+      if (buffer) {
+        meSpeakBuffers.push(buffer);
+        meSpeakOffsets.push(voice.offset);
+        meSpeakVolumes.push(voice.volume * vm);
       }
-      utterance.pitch = Math.min(2, Math.max(0, voice.pitch * (pitchMod || 1)));
-      utterance.rate = voice.rate;
-      utterance.volume = voice.volume * (velocityMod || 1);
-      speechSynthesis.speak(utterance);
-    }, voice.offset);
-  });
+    }
+    // Fallback if meSpeak not loaded: use browser TTS (sequential)
+    else {
+      setTimeout(() => {
+        if (!window.speechSynthesis) return;
+        const utterance = new SpeechSynthesisUtterance(word);
+        if (inst.availableVoices.length > 0 && voice.voiceIdx < inst.availableVoices.length) {
+          utterance.voice = inst.availableVoices[voice.voiceIdx];
+        }
+        utterance.pitch = Math.min(2, Math.max(0.1, voice.pitch * pm));
+        utterance.rate = voice.rate;
+        utterance.volume = Math.min(1, voice.volume * vm);
+        speechSynthesis.speak(utterance);
+      }, voice.offset);
+    }
+  }
+
+  // Play all meSpeak voices simultaneously
+  if (meSpeakBuffers.length > 0) {
+    _aw_playBuffersSimultaneously(meSpeakBuffers, meSpeakOffsets, meSpeakVolumes);
+  }
 }
 
 // Apply tight chorus preset - minimal offsets for "doubling" effect
