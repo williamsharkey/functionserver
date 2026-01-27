@@ -15,7 +15,8 @@ const _aw_state = {
     whisper: { octave: 0, cents: 0, rate: 0.8 }
   },
   audioCtx: null,
-  meSpeakLoaded: false
+  meSpeakLoaded: false,
+  meSpeakOwner: null  // Only one instance uses mespeak to prevent conflicts
 };
 
 function _aw_loadMeSpeak() {
@@ -156,10 +157,16 @@ function _aw_renderVoicePanel(instId, idx, voice) {
 
 function _aw_open() {
   if (typeof hideStartMenu === 'function') hideStartMenu();
-  _aw_loadMeSpeak().catch(() => {});
 
   _aw_state.counter++;
   const instId = 'aw-' + _aw_state.counter;
+
+  // Only the first instance loads and owns mespeak to prevent conflicts
+  const canUseMeSpeak = !_aw_state.meSpeakOwner;
+  if (canUseMeSpeak) {
+    _aw_state.meSpeakOwner = instId;
+    _aw_loadMeSpeak().catch(() => {});
+  }
 
   const inst = {
     instId,
@@ -227,7 +234,13 @@ function _aw_open() {
         inst.voices.map((v, i) => _aw_renderVoicePanel(instId, i, v)).join('') +
       '</div>' +
     '</div>',
-    onClose: () => delete _aw_state.instances[instId]
+    onClose: () => {
+      // Release mespeak ownership if this instance owned it
+      if (_aw_state.meSpeakOwner === instId) {
+        _aw_state.meSpeakOwner = null;
+      }
+      delete _aw_state.instances[instId];
+    }
   });
 
   _aw_getVoices().then(voices => {
@@ -348,7 +361,8 @@ async function _aw_singWord(instId, word, midiPitchMod, velocityMod) {
         utt.volume = voiceVol;
         speechSynthesis.speak(utt);
       }, voice.offset);
-    } else if (_aw_state.meSpeakLoaded) {
+    } else if (_aw_state.meSpeakLoaded && _aw_state.meSpeakOwner === instId) {
+      // Only use mespeak if this instance owns it (prevents conflicts with multiple instances)
       const buffer = await _aw_meSpeakToBuffer(word, voicePitch, voice.rate, voiceVol);
       if (buffer) {
         meSpeakBuffers.push(buffer);
@@ -437,14 +451,14 @@ async function _aw_previewVoice(instId, idx) {
     utt.rate = voice.rate;
     utt.volume = voiceVol;
     speechSynthesis.speak(utt);
-  } else if (_aw_state.meSpeakLoaded) {
-    // Other voices use meSpeak
+  } else if (_aw_state.meSpeakLoaded && _aw_state.meSpeakOwner === instId) {
+    // Other voices use meSpeak (only if this instance owns it)
     const buffer = await _aw_meSpeakToBuffer(word, voicePitch, voice.rate, voiceVol);
     if (buffer) {
       _aw_playBuffersSimultaneously([buffer], [0], [voiceVol]);
     }
   } else {
-    // Fallback to browser TTS
+    // Fallback to browser TTS (no mespeak ownership or not loaded)
     if (!window.speechSynthesis) return;
     const utt = new SpeechSynthesisUtterance(word);
     utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
