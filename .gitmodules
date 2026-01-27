@@ -4,3 +4,6 @@
 [submodule "core/apps/windchime-dad"]
 	path = core/apps/windchime-dad
 	url = https://github.com/williamsharkey/fs-windchime-dad
+[submodule "core/apps/simpwave"]
+	path = core/apps/simpwave
+	url = https://github.com/williamsharkey/fs-simpwave

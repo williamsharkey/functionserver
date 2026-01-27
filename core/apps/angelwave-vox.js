@@ -328,6 +328,46 @@ function _aw_loadChoir(instId) {
   }
 }
 
+// Handle incoming MIDI messages from Joy or other apps
+function _aw_handleMidiInput(message, opts, from) {
+  // Find the first active instance to play the note
+  const instId = Object.keys(_aw_state.instances)[0];
+  if (!instId) return;
+
+  const inst = _aw_state.instances[instId];
+  if (!inst) return;
+
+  // Flash MIDI indicator
+  const indicator = document.getElementById('aw-midi-indicator-' + instId);
+  if (indicator) {
+    indicator.style.background = '#00ff00';
+    setTimeout(() => { if (indicator) indicator.style.background = '#004400'; }, 100);
+  }
+
+  if (message.type === 'noteOn' || message.type === 'note') {
+    // Map MIDI note to pitch modifier (middle C = 60 = 1.0)
+    const pitchMod = Math.pow(2, (message.note - 60) / 12);
+    const velocityMod = (message.velocity || 100) / 127;
+
+    // Get the current word from lyrics
+    const words = inst.lyrics.split(/\s+/).filter(w => w.length > 0);
+    const word = words[inst.currentWordIndex % words.length] || 'Ah';
+
+    _aw_singWord(instId, word, pitchMod, velocityMod);
+    inst.currentWordIndex++;
+    _aw_updateCurrentWord(instId);
+  }
+}
+
+// Register with pubsub to receive MIDI from Joy and other apps
+// Note: Browser speechSynthesis can only speak one utterance at a time,
+// so true simultaneous chorus is not possible. Voices will be staggered
+// by their offset values for a "call and response" style choir effect.
+if (window.ALGO && ALGO.pubsub) {
+  ALGO.pubsub.register('Angelwave VOX', { autoOpen: false });
+  ALGO.pubsub.subscribe('Angelwave VOX', _aw_handleMidiInput);
+}
+
 window._aw_open = _aw_open;
 window._aw_toggleVoice = _aw_toggleVoice;
 window._aw_setPreset = _aw_setPreset;
@@ -343,5 +383,6 @@ window._aw_testChoir = _aw_testChoir;
 window._aw_stopChoir = _aw_stopChoir;
 window._aw_saveChoir = _aw_saveChoir;
 window._aw_loadChoir = _aw_loadChoir;
+window._aw_handleMidiInput = _aw_handleMidiInput;
 
 _aw_open();
