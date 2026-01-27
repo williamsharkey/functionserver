@@ -120,6 +120,7 @@ function _aw_renderVoicePanel(instId, idx, voice) {
       '<select id="aw-preset-' + idx + '-' + instId + '" onchange="_aw_setPreset(\'' + instId + '\',' + idx + ',this.value)" style="padding:2px;background:#c0c0c0;border:1px inset #808080;font-size:9px;">' +
         presets.map(p => '<option value="' + p + '"' + (voice.preset === p ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>').join('') +
       '</select>' +
+      '<button onclick="_aw_previewVoice(\'' + instId + '\',' + idx + ')" style="margin-left:auto;width:18px;height:18px;padding:0;background:#ffd700;border:1px solid #b8860b;cursor:pointer;font-size:10px;line-height:16px;" title="Preview this voice">▶</button>' +
     '</div>' +
     voiceSelector +
     '<div style="display:grid;grid-template-columns:50px 1fr;gap:4px 8px;align-items:center;">' +
@@ -414,6 +415,45 @@ function _aw_toggleVoice(instId, idx, enabled) {
   _aw_updateStatus(instId);
 }
 
+async function _aw_previewVoice(instId, idx) {
+  const inst = _aw_state.instances[instId];
+  if (!inst) return;
+  const voice = inst.voices[idx];
+  if (!voice) return;
+
+  const words = inst.lyrics.split(/\s+/).filter(w => w.length > 0);
+  const word = words[inst.currentWordIndex % words.length] || 'Ah';
+  const globalOctMult = Math.pow(2, inst.globalOctave);
+  const voicePitch = _aw_calcPitch(voice.octave, voice.cents) * globalOctMult;
+  const voiceVol = Math.min(1, voice.volume * inst.globalVolume);
+
+  // Voice 0 uses browser TTS
+  if (idx === 0) {
+    if (!window.speechSynthesis) return;
+    const utt = new SpeechSynthesisUtterance(word);
+    const vIdx = inst.voiceIdx || 0;
+    if (inst.availableVoices.length > vIdx) utt.voice = inst.availableVoices[vIdx];
+    utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
+    utt.rate = voice.rate;
+    utt.volume = voiceVol;
+    speechSynthesis.speak(utt);
+  } else if (_aw_state.meSpeakLoaded) {
+    // Other voices use meSpeak
+    const buffer = await _aw_meSpeakToBuffer(word, voicePitch, voice.rate, voiceVol);
+    if (buffer) {
+      _aw_playBuffersSimultaneously([buffer], [0], [voiceVol]);
+    }
+  } else {
+    // Fallback to browser TTS
+    if (!window.speechSynthesis) return;
+    const utt = new SpeechSynthesisUtterance(word);
+    utt.pitch = Math.min(2, Math.max(0.1, voicePitch));
+    utt.rate = voice.rate;
+    utt.volume = voiceVol;
+    speechSynthesis.speak(utt);
+  }
+}
+
 function _aw_setPreset(instId, idx, preset) {
   const inst = _aw_state.instances[instId];
   if (!inst) return;
@@ -587,6 +627,7 @@ if (window.ALGO && ALGO.pubsub) {
 
 window._aw_open = _aw_open;
 window._aw_toggleVoice = _aw_toggleVoice;
+window._aw_previewVoice = _aw_previewVoice;
 window._aw_setPreset = _aw_setPreset;
 window._aw_setOctave = _aw_setOctave;
 window._aw_setCents = _aw_setCents;
