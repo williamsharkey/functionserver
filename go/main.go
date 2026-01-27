@@ -2163,6 +2163,25 @@ func main() {
 		http.NotFound(w, r)
 	})
 
+	// Serve JavaScript libraries from /lib/
+	mux.HandleFunc("/lib/", func(w http.ResponseWriter, r *http.Request) {
+		filename := strings.TrimPrefix(r.URL.Path, "/lib/")
+		// Security: only allow .js files, no path traversal
+		if !strings.HasSuffix(filename, ".js") || strings.Contains(filename, "..") || strings.Contains(filename, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		paths := []string{"../core/lib/" + filename, "./core/lib/" + filename}
+		for _, p := range paths {
+			if content, err := os.ReadFile(p); err == nil {
+				w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+				w.Write(content)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	// Serve static files from www directory (screenshots, etc)
 	wwwPaths := []string{"../www", "./www"}
 	var wwwDir string
