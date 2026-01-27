@@ -21,22 +21,25 @@ const _aw_state = {
 
 // Load meSpeak.js for true polyphonic TTS
 function _aw_loadMeSpeak() {
-  if (window.meSpeak) {
+  if (window.meSpeak && meSpeak.isConfigLoaded && meSpeak.isConfigLoaded()) {
     _aw_state.meSpeakLoaded = true;
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://www.masswerk.at/mespeak/mespeak.js';
+    script.src = 'https://unpkg.com/mespeak@1.9.6/mespeak.full.js';
     script.onload = () => {
-      meSpeak.loadConfig('https://www.masswerk.at/mespeak/mespeak_config.json');
-      meSpeak.loadVoice('https://www.masswerk.at/mespeak/voices/en/en-us.json', () => {
+      meSpeak.loadConfig('https://unpkg.com/mespeak@1.9.6/mespeak_config.json');
+      meSpeak.loadVoice('https://unpkg.com/mespeak@1.9.6/voices/en/en-us.json', () => {
         _aw_state.meSpeakLoaded = true;
-        console.log('meSpeak loaded for polyphonic choir');
+        console.log('meSpeak 1.9.6 loaded for polyphonic choir');
         resolve();
       });
     };
-    script.onerror = reject;
+    script.onerror = (e) => {
+      console.warn('meSpeak failed to load:', e);
+      reject(e);
+    };
     document.head.appendChild(script);
   });
 }
@@ -58,20 +61,27 @@ async function _aw_meSpeakToBuffer(text, pitch, speed, volume) {
 
   // meSpeak pitch: 0-99 (default 50), speed: 80-450 (default 175)
   const msPitch = Math.round(pitch * 50); // Convert our 0.5-2.0 to 25-100
-  const msSpeed = Math.round(175 / speed); // Convert rate to speed
+  const msSpeed = Math.round(175 * speed); // Convert rate to speed
 
-  const wavData = meSpeak.speak(text, {
-    rawdata: 'buffer', // Get as ArrayBuffer
+  const dataUrl = meSpeak.speak(text, {
+    rawdata: 'data-url', // Get as base64 data URL
     pitch: msPitch,
     speed: msSpeed,
     volume: Math.round(volume * 100)
   });
 
-  if (!wavData) return null;
+  if (!dataUrl) return null;
 
-  const audioCtx = _aw_getAudioCtx();
+  // Decode base64 data URL to ArrayBuffer
   try {
-    return await audioCtx.decodeAudioData(wavData.buffer || wavData);
+    const base64 = dataUrl.split(',')[1];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const audioCtx = _aw_getAudioCtx();
+    return await audioCtx.decodeAudioData(bytes.buffer);
   } catch(e) {
     console.error('Failed to decode meSpeak audio:', e);
     return null;
