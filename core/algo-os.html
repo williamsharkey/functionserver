@@ -1690,6 +1690,7 @@ async function init() {
   setInterval(updateClock, 1000);
   refreshAllIcons();
   updateMenubarUser();
+  updateFaviconAndTitle();
 
   // Global event listeners
   document.addEventListener('click', globalClick);
@@ -3088,6 +3089,33 @@ function updateMenubarAppName() {
   } else {
     appNameEl.textContent = 'Desktop';
   }
+  updateFaviconAndTitle();
+}
+
+function updateFaviconAndTitle() {
+  const activeWindow = windows.find(w => w.id === activeWin);
+  const appName = activeWindow ? (activeWindow.title || activeWindow.appName || 'Window') : 'Desktop';
+  const icon = activeWindow?.icon || 'ƒ';
+
+  // Update document title
+  document.title = appName + ' — Function Server';
+
+  // Create dynamic SVG favicon
+  const isEmoji = /\p{Emoji}/u.test(icon);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="30" fill="#7c3aed"/>
+    <circle cx="32" cy="32" r="26" fill="#09090b"/>
+    <text x="32" y="${isEmoji ? '44' : '42'}" text-anchor="middle" font-size="${isEmoji ? '32' : '36'}" font-family="system-ui, sans-serif" font-weight="bold" fill="#a78bfa">${icon}</text>
+  </svg>`;
+
+  // Update or create favicon link
+  let link = document.querySelector('link[rel="icon"]');
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
 function updateMenubarUser() {
