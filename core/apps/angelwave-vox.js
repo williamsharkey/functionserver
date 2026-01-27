@@ -13,158 +13,8 @@ const _aw_state = {
     bass: { pitch: 0.7, rate: 1.0 },
     child: { pitch: 1.6, rate: 1.1 },
     whisper: { pitch: 1.0, rate: 0.8 }
-  },
-  audioCache: {}, // Cache of pre-recorded audio: { "word_voiceIdx_pitch": AudioBuffer }
-  audioCtx: null,
-  isRecording: false,
-  usePrerecorded: false
+  }
 };
-
-// Get or create AudioContext
-function _aw_getAudioCtx() {
-  if (!_aw_state.audioCtx) {
-    _aw_state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (_aw_state.audioCtx.state === 'suspended') {
-    _aw_state.audioCtx.resume();
-  }
-  return _aw_state.audioCtx;
-}
-
-// Record a single utterance to AudioBuffer
-async function _aw_recordUtterance(word, voice, availableVoices) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      // Request tab audio capture (user must select the tab)
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: 1, height: 1 }, // Minimal video
-        audio: true
-      });
-
-      const audioTracks = stream.getAudioTracks();
-      if (audioTracks.length === 0) {
-        stream.getTracks().forEach(t => t.stop());
-        reject(new Error('No audio track - make sure to select "Share tab audio"'));
-        return;
-      }
-
-      const audioStream = new MediaStream(audioTracks);
-      const mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
-      const chunks = [];
-
-      mediaRecorder.ondataavailable = e => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioCtx = _aw_getAudioCtx();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        resolve(audioBuffer);
-      };
-
-      // Start recording
-      mediaRecorder.start();
-
-      // Speak the word
-      const utterance = new SpeechSynthesisUtterance(word);
-      if (availableVoices.length > 0 && voice.voiceIdx < availableVoices.length) {
-        utterance.voice = availableVoices[voice.voiceIdx];
-      }
-      utterance.pitch = voice.pitch;
-      utterance.rate = voice.rate;
-      utterance.volume = voice.volume;
-
-      utterance.onend = () => {
-        // Small delay to capture tail
-        setTimeout(() => mediaRecorder.stop(), 100);
-      };
-      utterance.onerror = () => {
-        mediaRecorder.stop();
-        reject(new Error('Speech synthesis error'));
-      };
-
-      speechSynthesis.speak(utterance);
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
-// Pre-record all voices for current lyrics
-async function _aw_prerecordAll(instId) {
-  const inst = _aw_state.instances[instId];
-  if (!inst) return;
-
-  if (_aw_state.isRecording) {
-    ALGO.notify('Already recording...');
-    return;
-  }
-
-  const words = inst.lyrics.split(/\s+/).filter(w => w.length > 0);
-  const enabledVoices = inst.voices.map((v, i) => ({ ...v, idx: i })).filter(v => v.enabled);
-
-  if (enabledVoices.length === 0) {
-    ALGO.notify('Enable at least one voice first');
-    return;
-  }
-
-  ALGO.notify('Starting pre-record. Select THIS TAB and check "Share tab audio"');
-  _aw_state.isRecording = true;
-
-  try {
-    for (const word of words) {
-      for (const voice of enabledVoices) {
-        const key = `${word}_${voice.idx}_${voice.pitch.toFixed(1)}`;
-        if (_aw_state.audioCache[key]) continue; // Already cached
-
-        ALGO.notify(`Recording: "${word}" voice ${voice.idx + 1}`);
-        const buffer = await _aw_recordUtterance(word, voice, inst.availableVoices);
-        _aw_state.audioCache[key] = buffer;
-      }
-    }
-    _aw_state.usePrerecorded = true;
-    ALGO.notify('Pre-recording complete! Chorus mode enabled.');
-  } catch (e) {
-    ALGO.notify('Recording failed: ' + e.message);
-  }
-
-  _aw_state.isRecording = false;
-}
-
-// Play pre-recorded samples simultaneously
-function _aw_playPrerecorded(instId, word, pitchMod, velocityMod) {
-  const inst = _aw_state.instances[instId];
-  if (!inst) return false;
-
-  const audioCtx = _aw_getAudioCtx();
-  let played = false;
-
-  inst.voices.forEach((voice, idx) => {
-    if (!voice.enabled) return;
-    const key = `${word}_${idx}_${voice.pitch.toFixed(1)}`;
-    const buffer = _aw_state.audioCache[key];
-    if (!buffer) return;
-
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-
-    // Apply pitch modification via playbackRate
-    source.playbackRate.value = pitchMod || 1;
-
-    // Apply volume
-    const gainNode = audioCtx.createGain();
-    gainNode.gain.value = voice.volume * (velocityMod || 1);
-
-    source.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-
-    // Start with voice offset
-    source.start(audioCtx.currentTime + voice.offset / 1000);
-    played = true;
-  });
-
-  return played;
-}
 
 function _aw_getVoices() {
   return new Promise(resolve => {
@@ -247,7 +97,6 @@ function _aw_open() {
         '<button onclick="_aw_testChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">▶ Test</button>' +
         '<button onclick="_aw_stopChoir()" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">■ Stop</button>' +
         '<button onclick="_aw_tightChorus(\'' + instId + '\')" style="padding:3px 8px;background:#ffe4b5;border:2px outset #fff;font-size:10px;cursor:pointer;" title="Enable all voices with tight 25ms offsets for chorus effect">🎶 Tight Chorus</button>' +
-        '<button onclick="_aw_prerecordAll(\'' + instId + '\')" style="padding:3px 8px;background:#ffd0d0;border:2px outset #fff;font-size:10px;cursor:pointer;" title="Pre-record all voices for true simultaneous playback">🎙️ Pre-record</button>' +
         '<div style="width:1px;height:20px;background:#808080;margin:0 4px;"></div>' +
         '<button onclick="_aw_saveChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">💾 Save</button>' +
         '<button onclick="_aw_loadChoir(\'' + instId + '\')" style="padding:3px 8px;background:#c0c0c0;border:2px outset #fff;font-size:10px;cursor:pointer;">📂 Load</button>' +
@@ -290,19 +139,12 @@ function _aw_updateVoiceSelects(instId) {
   });
 }
 
-// Sing a word - uses pre-recorded audio if available for true polyphony,
-// otherwise falls back to speechSynthesis (sequential)
+// Note: Browser speechSynthesis is single-threaded and queues utterances.
+// True simultaneous speech is not possible. Use tight offsets (20-30ms) for
+// a "doubling" effect that creates the illusion of a fuller choir.
 function _aw_singWord(instId, word, pitchMod, velocityMod) {
   const inst = _aw_state.instances[instId];
-  if (!inst) return;
-
-  // Try pre-recorded polyphonic playback first
-  if (_aw_state.usePrerecorded && _aw_playPrerecorded(instId, word, pitchMod, velocityMod)) {
-    return; // Successfully played pre-recorded
-  }
-
-  // Fallback to speechSynthesis (sequential)
-  if (!window.speechSynthesis) return;
+  if (!inst || !window.speechSynthesis) return;
 
   inst.voices.forEach((voice, idx) => {
     if (!voice.enabled) return;
@@ -570,6 +412,5 @@ window._aw_saveChoir = _aw_saveChoir;
 window._aw_loadChoir = _aw_loadChoir;
 window._aw_handleMidiInput = _aw_handleMidiInput;
 window._aw_tightChorus = _aw_tightChorus;
-window._aw_prerecordAll = _aw_prerecordAll;
 
 _aw_open();
