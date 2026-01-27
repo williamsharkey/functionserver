@@ -1,9 +1,21 @@
 // WINDCHIME DAD - MIDI Wind Chime Synthesizer
-// Self-contained ALGO OS App
+// Self-contained ALGO OS App - Updated for FunctionServer
 // Save as windchime-dad.app.js on ALGO OS desktop to auto-load
 
 (function() {
   'use strict';
+
+  // Audio context (create our own since getAudioContext may not exist)
+  let _wcAudioCtx = null;
+  function getAudioContext() {
+    if (!_wcAudioCtx) {
+      _wcAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (_wcAudioCtx.state === 'suspended') {
+      _wcAudioCtx.resume();
+    }
+    return _wcAudioCtx;
+  }
 
   // App state
   const windchimeInstances = {};
@@ -41,6 +53,9 @@
 .wc-track { transition: background 0.1s; }
 .wc-track:hover { background: #e0e0e0; }
 .wc-track.active { background: #000080; color: white; }
+.win95-btn { padding: 4px 8px; background: #c0c0c0; border: 2px outset #fff; cursor: pointer; font-size: 11px; }
+.win95-btn:active { border-style: inset; }
+.win95-btn.active { background: #000080; color: white; }
 `;
 
   // Handle incoming MIDI messages
@@ -120,9 +135,9 @@
       windSpeed: 0.5
     };
 
-    // Register MIDI channel
+    // Register MIDI channel (support both old _algoChannels and new ALGO.pubsub)
     window._algoChannels = window._algoChannels || {};
-    const channelId = 'ch-wc-' + instId + '-' + Date.now();
+    const channelId = 'windchime-dad';
     window._algoChannels[channelId] = {
       id: channelId,
       name: channelName,
@@ -135,13 +150,29 @@
     };
     windchimeInstances[instId].channelId = channelId;
 
+    // Also register with ALGO.pubsub if available
+    if (window.ALGO && ALGO.pubsub) {
+      ALGO.pubsub.register('windchime-dad', { autoOpen: false });
+      ALGO.pubsub.subscribe('windchime-dad', (msg, opts, from) => {
+        wcHandleMidiInput(instId, msg, { sender: from });
+      });
+    }
+
     const materialBtns = ['aluminum', 'brass', 'bamboo', 'glass', 'crystal'].map(m =>
       `<button onclick="window.wcSetMaterial(${id},'${m}')" id="wc-mat-${m}-${id}" class="win95-btn${m === 'aluminum' ? ' active' : ''}" style="font-size:10px;padding:4px 8px;">
         <span style="color:${windchimeState.materials[m].color};">●</span> ${m.charAt(0).toUpperCase() + m.slice(1)}
       </button>`
     ).join('');
 
-    createWindow({
+    // Use ALGO.createWindow if available, otherwise fall back to createWindow
+    const createWin = (typeof ALGO !== 'undefined' && ALGO.createWindow) ? ALGO.createWindow : (typeof createWindow === 'function' ? createWindow : null);
+
+    if (!createWin) {
+      console.error('Windchime Dad: No window creation function available');
+      return;
+    }
+
+    createWin({
       title: channelName,
       stateKey: 'Windchime Dad',
       icon: '⛲',
@@ -152,6 +183,7 @@
             <div style="display:flex;align-items:center;gap:8px;">
               <span style="font-size:14px;font-weight:bold;">⛲ ${channelName}</span>
               <span id="wc-midi-indicator-${id}" style="width:10px;height:10px;background:#004400;border-radius:50%;border:1px solid #002200;" title="MIDI Input"></span>
+              <span style="font-size:10px;color:#aaa;margin-left:auto;">Channel: windchime-dad</span>
             </div>
             <div id="wc-track-${id}" style="font-size:11px;margin-top:4px;">No track loaded</div>
             <div id="wc-time-${id}" style="font-size:11px;font-family:monospace;">--:-- / --:--</div>
@@ -217,6 +249,9 @@
           if (inst.channelId && window._algoChannels) {
             delete window._algoChannels[inst.channelId];
           }
+          if (window.ALGO && ALGO.pubsub && ALGO.pubsub.unregister) {
+            ALGO.pubsub.unregister('windchime-dad');
+          }
           delete windchimeInstances[inst.instId];
         }
       }
@@ -227,7 +262,7 @@
   }
 
   function wcLoadTracks(winId) {
-    const midFiles = (typeof savedFiles !== 'undefined' ? savedFiles : []).filter(f => f.name.endsWith('.mid') || f.name.endsWith('.midi'));
+    const midFiles = (typeof savedFiles !== 'undefined' ? savedFiles : (window.savedFiles || [])).filter(f => f.name.endsWith('.mid') || f.name.endsWith('.midi'));
     windchimeState.tracks = midFiles;
 
     const playlist = document.getElementById('wc-playlist-' + winId);
@@ -252,6 +287,8 @@
       { name: 'wind-dance.mid', notes: [72, 74, 76, 79, 81, 79, 76, 74, 72, 74, 76, 74, 72, 69, 67] }
     ];
 
+    const files = window.savedFiles || (typeof savedFiles !== 'undefined' ? savedFiles : []);
+
     samples.forEach(sample => {
       const content = JSON.stringify({
         format: 'windchime-midi',
@@ -265,13 +302,16 @@
         }))
       });
 
-      (window.savedFiles || savedFiles).push({ name: sample.name, content, type: 'midi', icon: '🎵' });
+      files.push({ name: sample.name, content, type: 'midi', icon: '🎵' });
     });
 
     if (typeof saveState === 'function') saveState();
     if (typeof createDesktopIcons === 'function') createDesktopIcons();
     wcLoadTracks(winId);
-    if (typeof algoSpeak === 'function') algoSpeak('Created sample MIDI files!');
+
+    const notify = (typeof algoSpeak === 'function') ? algoSpeak :
+                   (typeof ALGO !== 'undefined' && ALGO.notify) ? ALGO.notify : console.log;
+    notify('Created sample MIDI files!');
   }
 
   function wcSelectTrack(idx, winId) {
@@ -430,7 +470,6 @@
 
   function wcSetMaterial(winId, material) {
     windchimeState.material = material;
-    // Update instance if exists
     const inst = Object.values(windchimeInstances).find(i => i.winId === winId);
     if (inst) inst.material = material;
 
@@ -471,7 +510,9 @@
 
   function wcExport(winId) {
     if (!windchimeState.midiData || !windchimeState.midiData.notes) {
-      if (typeof algoSpeak === 'function') algoSpeak('Select a MIDI file first!');
+      const notify = (typeof algoSpeak === 'function') ? algoSpeak :
+                     (typeof ALGO !== 'undefined' && ALGO.notify) ? ALGO.notify : alert;
+      notify('Select a MIDI file first!');
       return;
     }
 
@@ -522,11 +563,15 @@
 
       const reader = new FileReader();
       reader.onload = function() {
-        window.savedFiles.push({ name: exportName, content: reader.result, type: 'audio', icon: '🔊' });
+        const files = window.savedFiles || (typeof savedFiles !== 'undefined' ? savedFiles : []);
+        files.push({ name: exportName, content: reader.result, type: 'audio', icon: '🔊' });
         if (typeof saveState === 'function') saveState();
         if (typeof createDesktopIcons === 'function') createDesktopIcons();
         if (statusEl) statusEl.textContent = '✓ Exported: ' + exportName;
-        if (typeof algoSpeak === 'function') algoSpeak('Exported ' + exportName);
+
+        const notify = (typeof algoSpeak === 'function') ? algoSpeak :
+                       (typeof ALGO !== 'undefined' && ALGO.notify) ? ALGO.notify : console.log;
+        notify('Exported ' + exportName);
       };
       reader.readAsDataURL(blob);
     }).catch(e => {
@@ -641,20 +686,21 @@
   window.wcLoadTracks = wcLoadTracks;
   window.wcCreateSampleMidi = wcCreateSampleMidi;
 
-  // Register with ALGO OS
+  // Inject CSS
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
+
+  // Register with ALGO OS if available
   if (window.algoRegisterApp) {
     window.algoRegisterApp({
       id: 'windchime-dad',
       name: 'Windchime Dad',
       icon: '⛲',
-      css: css,
+      category: 'media',
       open: openWindchimeDad
     });
-  } else {
-    const style = document.createElement('style');
-    style.textContent = css;
-    document.head.appendChild(style);
-    console.log('Windchime Dad loaded (fallback mode)');
   }
 
+  console.log('Windchime Dad loaded - MIDI channel: windchime-dad');
 })();
