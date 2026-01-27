@@ -1,0 +1,6 @@
+[submodule "core/apps/joy"]
+	path = core/apps/joy
+	url = https://github.com/williamsharkey/fs-joy
+[submodule "core/apps/windchime-dad"]
+	path = core/apps/windchime-dad
+	url = https://github.com/williamsharkey/fs-windchime-dad
