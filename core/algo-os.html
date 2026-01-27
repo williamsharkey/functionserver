@@ -122,6 +122,7 @@
     <div class="start-separator"></div>
     <div class="start-item" onclick="showAbout()"><span>ℹ️</span> About</div>
     <div class="start-item" onclick="openSettings()"><span>⚙️</span> Settings</div>
+    <div class="start-item" onclick="hardRefresh()"><span>🔄</span> Refresh</div>
     <div class="start-separator"></div>
     <div class="start-item" id="start-menu-auth" onclick="logout()"><span>🚪</span> Log Out</div>
   </div>
@@ -785,6 +786,108 @@ ALGO.bridge = {
     } catch(e) {
       return { success: false, error: e.message };
     }
+  }
+};
+
+// ==================== DOCK MANAGER ====================
+// Central orchestration for dockable app instances (Ivory keyboards, etc.)
+ALGO.dockManager = {
+  docks: new Map(),  // id -> { element, height, compactHeight, order, compact, visible, onResize }
+  nextId: 0,
+  reservedHeight: 0,
+
+  // Register a dock element with the manager
+  register: function(element, options = {}) {
+    const id = 'dock-' + this.nextId++;
+    const dock = {
+      id: id,
+      element: element,
+      height: options.height || 150,
+      compactHeight: options.compactHeight || 80,
+      order: this.docks.size,
+      compact: false,
+      visible: true,
+      onResize: options.onResize || null
+    };
+    this.docks.set(id, dock);
+    element.dataset.dockId = id;
+    this.repositionAll();
+    return id;
+  },
+
+  // Unregister and remove a dock
+  unregister: function(id) {
+    const dock = this.docks.get(id);
+    if (dock) {
+      if (dock.element && dock.element.parentNode) {
+        dock.element.parentNode.removeChild(dock.element);
+      }
+      this.docks.delete(id);
+      // Reorder remaining docks
+      let order = 0;
+      this.docks.forEach(d => { d.order = order++; });
+      this.repositionAll();
+    }
+  },
+
+  // Toggle compact mode for a dock
+  setCompact: function(id, isCompact) {
+    const dock = this.docks.get(id);
+    if (!dock) return;
+    dock.compact = isCompact;
+    const height = isCompact ? dock.compactHeight : dock.height;
+    dock.element.style.height = height + 'px';
+    dock.element.classList.toggle('compact', isCompact);
+    if (dock.onResize) {
+      dock.onResize(height, isCompact);
+    }
+    this.repositionAll();
+  },
+
+  // Toggle visibility of a dock
+  setVisible: function(id, visible) {
+    const dock = this.docks.get(id);
+    if (!dock) return;
+    dock.visible = visible;
+    dock.element.style.display = visible ? 'flex' : 'none';
+    this.repositionAll();
+  },
+
+  // Reposition all docks from bottom up
+  repositionAll: function() {
+    // Sort by order
+    const sorted = Array.from(this.docks.values())
+      .filter(d => d.visible)
+      .sort((a, b) => a.order - b.order);
+
+    let bottom = 0;
+    sorted.forEach(dock => {
+      const height = dock.compact ? dock.compactHeight : dock.height;
+      dock.element.style.bottom = bottom + 'px';
+      bottom += height;
+    });
+
+    // Update CSS variable for desktop/window constraints
+    this.reservedHeight = bottom;
+    document.documentElement.style.setProperty('--dock-reserved-height', bottom + 'px');
+
+    // Dispatch event for other components to react
+    window.dispatchEvent(new CustomEvent('dockResize', { detail: { height: bottom } }));
+  },
+
+  // Get total height of all visible docks
+  getTotalHeight: function() {
+    return this.reservedHeight;
+  },
+
+  // Get dock by ID
+  get: function(id) {
+    return this.docks.get(id);
+  },
+
+  // Get all dock IDs
+  getAll: function() {
+    return Array.from(this.docks.keys());
   }
 };
 
@@ -3036,6 +3139,12 @@ function showAbout() {
     height: 220,
     content: '<div style="padding:20px;text-align:center;"><div style="font-size:48px;">🖥️</div><h2>Function Server</h2><p style="color:#666;">A Cloud Operating System</p><p style="font-size:11px;margin-top:15px;">MIT License • Open Source</p></div>'
   });
+}
+
+function hardRefresh() {
+  hideStartMenu();
+  // Cache-busting reload
+  location.href = location.href.split('?')[0] + '?v=' + Date.now();
 }
 
 function openSettings() {
